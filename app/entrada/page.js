@@ -1,4 +1,5 @@
 'use client';
+import { colorHex } from '@/utils/colores';
 import { useState } from 'react';
 import Shell from '@/components/Shell';
 import ProductSearch from '@/components/ProductSearch';
@@ -19,6 +20,7 @@ export default function EntradaPage() {
   const [contacto, setContacto]   = useState('');
   const [guardando, setGuardando] = useState(false);
   const [msg, setMsg]             = useState(null);
+  const [confirmar, setConfirmar] = useState(false);
   const [catalogo, setCatalogo]   = useState(false);
 
   function addToCart(p) {
@@ -102,11 +104,49 @@ export default function EntradaPage() {
             </div>
             <div style={{display:'flex',gap:'9px'}}>
               <button className="btn btn-ghost" onClick={()=>setCart([])}>Limpiar</button>
-              <button className="btn btn-green" onClick={registrar} disabled={guardando} style={{minWidth:'200px'}}>{guardando?'⏳ Guardando...':'✓ Registrar Entrada'}</button>
+              <button className="btn btn-green" onClick={()=>setConfirmar(true)} disabled={guardando||!cart.length} style={{minWidth:'200px'}}>✓ Registrar Entrada</button>
             </div>
           </div>
         </div>
       </div>
+
+      {/* ── Modal de confirmación ── */}
+      {confirmar && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}
+          onClick={e=>{if(e.target===e.currentTarget)setConfirmar(false);}}>
+          <div style={{background:'var(--bg)',border:'1px solid var(--border-strong)',width:'100%',maxWidth:'460px',borderTop:'3px solid var(--green)'}}>
+            <div style={{padding:'16px 20px',borderBottom:'1px solid var(--border)'}}>
+              <div style={{fontFamily:'Playfair Display,serif',fontSize:'17px',fontWeight:700}}>Confirmar Entrada</div>
+              <div style={{fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#666',marginTop:'3px'}}>Revisá el resumen antes de confirmar</div>
+            </div>
+            <div style={{padding:'16px 20px',maxHeight:'280px',overflowY:'auto'}}>
+              {cart.map(item=>(
+                <div key={item.sku} style={{display:'flex',alignItems:'center',gap:'12px',padding:'8px 0',borderBottom:'1px solid var(--border)'}}>
+                  <span style={{width:'10px',height:'10px',borderRadius:'50%',background:colorHex(item.color),border:'1px solid rgba(0,0,0,.12)',flexShrink:0}}/>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:'13px',fontWeight:600}}>{item.modelo} — {item.color}</div>
+                    <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888'}}>{item.sku}</div>
+                  </div>
+                  <div style={{fontFamily:'DM Mono,monospace',fontSize:'15px',fontWeight:700,color:'var(--green)'}}>+{item.qty} uds</div>
+                </div>
+              ))}
+            </div>
+            <div style={{padding:'14px 20px',background:'var(--bg2)',borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+              <div>
+                <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#555',textTransform:'uppercase',letterSpacing:'.12em'}}>Total unidades</div>
+                <div style={{fontFamily:'Playfair Display,serif',fontSize:'26px',fontWeight:700,color:'var(--green)'}}>{totalUds} uds</div>
+              </div>
+              <div style={{display:'flex',gap:'9px'}}>
+                <button onClick={()=>setConfirmar(false)} style={{padding:'9px 16px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:600,textTransform:'uppercase'}}>Cancelar</button>
+                <button onClick={()=>{setConfirmar(false);registrar();}} disabled={guardando}
+                  style={{padding:'9px 20px',background:'var(--green)',color:'#fff',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'12px',fontWeight:700,textTransform:'uppercase',letterSpacing:'.05em'}}>
+                  {guardando?'⏳ Guardando...':'✓ Confirmar Entrada'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </Shell>
   );
 }

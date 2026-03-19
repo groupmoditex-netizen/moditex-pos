@@ -1,0 +1,142 @@
+// ═══════════════════════════════════════════════════════════════════════════
+//  MODITEX GROUP — 02_Validaciones.gs
+//  Funciones de validación de datos de entrada.
+//  Retornan { ok: true } o { ok: false, error: '...' }
+//  Depende de: 00_Config.gs, 01_Utils.gs
+// ═══════════════════════════════════════════════════════════════════════════
+
+
+// ───────────────────────────────────────────────────────────────────────────
+//  VALIDACIONES DE MOVIMIENTO
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * Valida los campos básicos de un movimiento (sin cruzar con Sheets).
+ * @param {Object} datos - { sku, fecha, tipo, cantidad }
+ * @returns {{ ok: boolean, error?: string, tipoUp?: string, cantidad?: number }}
+ */
+function validarDatosMovimiento(datos) {
+  if (!datos.sku)   return respError('SKU requerido');
+  if (!datos.fecha) return respError('Fecha requerida');
+
+  var tipoUp = (datos.tipo || '').toUpperCase();
+  if (tipoUp !== TIPO_ENTRADA && tipoUp !== TIPO_SALIDA)
+    return respError('Tipo debe ser ENTRADA o SALIDA');
+
+  var cantidad = parseInt(datos.cantidad);
+  if (!cantidad || cantidad < 1) return respError('Cantidad inválida');
+
+  return { ok: true, tipoUp: tipoUp, cantidad: cantidad };
+}
+
+/**
+ * Verifica que el SKU exista en la hoja PRODUCTOS.
+ * @param {string} sku
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} shProd
+ * @returns {{ ok: boolean, error?: string }}
+ */
+function validarSkuExiste(sku, shProd) {
+  var lastRowP = shProd.getLastRow();
+  if (lastRowP < 2) return respError('No hay productos registrados');
+
+  var skus = shProd.getRange(2, 1, lastRowP - 1, 1).getValues().flat().map(String);
+  if (skus.indexOf(sku.trim()) === -1)
+    return respError('SKU "' + sku + '" no encontrado en PRODUCTOS');
+
+  return respOk();
+}
+
+/**
+ * Verifica que haya stock suficiente para una SALIDA.
+ * @param {string} sku
+ * @param {number} cantidad
+ * @returns {{ ok: boolean, error?: string }}
+ */
+function validarStockSuficiente(sku, cantidad) {
+  var productos = getProductos();
+  var prod = null;
+  for (var i = 0; i < productos.length; i++) {
+    if (productos[i].sku === sku.trim()) { prod = productos[i]; break; }
+  }
+  if (prod && prod.disponible < cantidad)
+    return respError('Stock insuficiente. Disponible: ' + prod.disponible);
+
+  return respOk();
+}
+
+
+// ───────────────────────────────────────────────────────────────────────────
+//  VALIDACIONES DE PRODUCTO
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * Valida los campos básicos de un producto nuevo.
+ * @param {Object} datos - { categoria, modelo, precioDetal, colores }
+ * @returns {{ ok: boolean, error?: string }}
+ */
+function validarDatosProducto(datos) {
+  if (!datos.categoria)
+    return respError('Categoría requerida');
+  if (!datos.modelo)
+    return respError('Modelo requerido');
+  if (!datos.precioDetal || parseFloat(datos.precioDetal) <= 0)
+    return respError('Precio de detal requerido');
+  if (!datos.colores || !datos.colores.length)
+    return respError('Agrega al menos un color');
+
+  return respOk();
+}
+
+/**
+ * Verifica que un color tenga los campos mínimos requeridos.
+ * @param {Object} c - { color, sku }
+ * @returns {boolean}
+ */
+function colorEsValido(c) {
+  return !!(c.color && c.sku);
+}
+
+/**
+ * Verifica que un SKU no exista ya en la lista de SKUs existentes.
+ * @param {string} sku
+ * @param {string[]} skusExistentes
+ * @returns {boolean}
+ */
+function skuEsDuplicado(sku, skusExistentes) {
+  return skusExistentes.indexOf(sku) !== -1;
+}
+
+
+// ───────────────────────────────────────────────────────────────────────────
+//  VALIDACIONES DE CLIENTE
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * Valida los campos básicos de un cliente nuevo.
+ * @param {Object} datos - { nombre }
+ * @returns {{ ok: boolean, error?: string }}
+ */
+function validarDatosCliente(datos) {
+  if (!datos.nombre || !datos.nombre.trim())
+    return respError('El nombre del cliente es requerido');
+  if (!datos.cedula || !datos.cedula.trim())
+    return respError('La cédula del cliente es requerida');
+
+  return respOk();
+}
+
+
+// ───────────────────────────────────────────────────────────────────────────
+//  VALIDACIONES DE HOJAS
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * Verifica que una hoja exista. Retorna error con mensaje si no existe.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet|null} sh
+ * @param {string} nombre - Nombre de la hoja para el mensaje de error
+ * @returns {{ ok: boolean, error?: string }}
+ */
+function validarHojaExiste(sh, nombre) {
+  if (!sh) return respError('No existe la hoja ' + nombre + '. Ejecuta "Inicializar hojas" desde el menú.');
+  return respOk();
+}

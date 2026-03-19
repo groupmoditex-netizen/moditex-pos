@@ -1,4 +1,5 @@
 'use client';
+import { colorHex } from '@/utils/colores';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Shell from '@/components/Shell';
 import ProductSearch from '@/components/ProductSearch';
@@ -27,6 +28,7 @@ export default function SalidaPage() {
   const [cliOpen, setCliOpen]     = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [msg, setMsg]             = useState(null);
+  const [confirmar, setConfirmar] = useState(false);
   const [catalogo, setCatalogo]   = useState(false);
   const [ventaDirecta, setVD]     = useState(false);
 
@@ -114,8 +116,6 @@ export default function SalidaPage() {
 
   function showMsg(type,text){setMsg({type,text});setTimeout(()=>setMsg(null),5000);}
 
-  const COLOR_MAP={BLANCO:'#d0d0d0',NEGRO:'#1a1a1a',AZUL:'#3b6fd4',ROJO:'#d63b3b',VERDE:'#2d9e4a',ROSA:'#f07aa0',GRIS:'#6b7280',AMARILLO:'#f5c842',NARANJA:'#f57c42',MORADO:'#7c4fd4',VINOTINTO:'#8b2035',BEIGE:'#d4b896',CORAL:'#f26e5b',CELESTE:'#7ec8e3'};
-  function colorHex(n){const k=(n||'').toUpperCase().trim();return COLOR_MAP[k]||COLOR_MAP[k.split(' ')[0]]||'#9ca3af';}
 
   return (
     <Shell title="Nueva Salida">
@@ -266,7 +266,7 @@ export default function SalidaPage() {
               </div>
               <div style={{display:'flex',gap:'9px'}}>
                 <button onClick={()=>setCart([])} style={{padding:'8px 14px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:600,textTransform:'uppercase',letterSpacing:'.06em'}}>Limpiar</button>
-                <button onClick={registrar} disabled={guardando}
+                <button onClick={()=>{if(!cart.length){showMsg('error','Agrega al menos un producto');return;}if(!ventaDirecta&&!cliNombre.trim()){showMsg('error','Indica el cliente');return;}setConfirmar(true);}} disabled={guardando||!cart.length}
                   style={{padding:'9px 22px',background:ventaDirecta?'var(--green)':'var(--red)',color:'#fff',border:'none',cursor:guardando?'not-allowed':'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase',minWidth:'200px',opacity:guardando?.6:1}}>
                   {guardando?'⏳ Guardando...':`${ventaDirecta?'⚡ Venta Directa':'✓ Registrar Salida'}`}
                 </button>
@@ -275,6 +275,59 @@ export default function SalidaPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Modal de confirmación ── */}
+      {confirmar && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}
+          onClick={e=>{if(e.target===e.currentTarget)setConfirmar(false);}}>
+          <div style={{background:'var(--bg)',border:'1px solid var(--border-strong)',width:'100%',maxWidth:'500px',borderTop:'3px solid var(--red)'}}>
+            <div style={{padding:'16px 20px',borderBottom:'1px solid var(--border)'}}>
+              <div style={{fontFamily:'Playfair Display,serif',fontSize:'17px',fontWeight:700}}>{ventaDirecta?'⚡ Confirmar Venta Directa':'Confirmar Salida'}</div>
+              <div style={{fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#666',marginTop:'3px'}}>
+                {ventaDirecta?'Consumidor final':'Cliente: '+(cliNombre||'—')}
+              </div>
+            </div>
+            <div style={{padding:'16px 20px',maxHeight:'280px',overflowY:'auto'}}>
+              {cart.map(item=>{
+                const precio=precioItem(item,item.tipoVenta);
+                return(
+                  <div key={item.sku} style={{display:'flex',alignItems:'center',gap:'12px',padding:'8px 0',borderBottom:'1px solid var(--border)'}}>
+                    <span style={{width:'10px',height:'10px',borderRadius:'50%',background:colorHex(item.color),border:'1px solid rgba(0,0,0,.12)',flexShrink:0}}/>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:'13px',fontWeight:600}}>{item.modelo} — {item.color}</div>
+                      <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888'}}>{item.sku} · {item.tipoVenta}</div>
+                    </div>
+                    <div style={{textAlign:'right',flexShrink:0}}>
+                      <div style={{fontFamily:'DM Mono,monospace',fontSize:'13px',fontWeight:700,color:'var(--red)'}}>-{item.qty} uds</div>
+                      <div style={{fontFamily:'DM Mono,monospace',fontSize:'11px',color:'#666'}}>€ {(precio*item.qty).toFixed(2)}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{padding:'14px 20px',background:'var(--bg2)',borderTop:'1px solid var(--border)'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
+                <div>
+                  <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#555',textTransform:'uppercase',letterSpacing:'.12em'}}>Total venta</div>
+                  <div style={{fontFamily:'Playfair Display,serif',fontSize:'26px',fontWeight:700}}>€ {totalVenta.toFixed(2)}</div>
+                </div>
+                <div style={{fontFamily:'DM Mono,monospace',fontSize:'11px',color:'#666',textAlign:'right'}}>
+                  <div>{totalUds} unidades</div>
+                  {totalDetal>0&&<div style={{color:'var(--blue)'}}>Detal: €{totalDetal.toFixed(2)}</div>}
+                  {totalMayor>0&&<div style={{color:'var(--warn)'}}>Mayor: €{totalMayor.toFixed(2)}</div>}
+                </div>
+              </div>
+              <div style={{display:'flex',gap:'9px',justifyContent:'flex-end'}}>
+                <button onClick={()=>setConfirmar(false)} style={{padding:'9px 16px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:600,textTransform:'uppercase'}}>Cancelar</button>
+                <button onClick={()=>{setConfirmar(false);registrar();}} disabled={guardando}
+                  style={{padding:'9px 20px',background:ventaDirecta?'var(--green)':'var(--red)',color:'#fff',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'12px',fontWeight:700,textTransform:'uppercase',letterSpacing:'.05em'}}>
+                  {guardando?'⏳ Guardando...':(ventaDirecta?'⚡ Confirmar Venta':'✓ Confirmar Salida')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </Shell>
   );
 }

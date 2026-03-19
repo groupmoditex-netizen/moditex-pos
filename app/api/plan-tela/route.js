@@ -1,5 +1,5 @@
 export const dynamic = 'force-dynamic';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase-server';
 import { NextResponse } from 'next/server';
 
 const FACTOR_MERMA = 1.10;

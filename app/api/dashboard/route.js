@@ -1,7 +1,7 @@
 export const dynamic    = 'force-dynamic';
 export const revalidate = 0;  // ✅ Vercel Edge: nunca cachear esta ruta
 
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase-server';
 import { NextResponse } from 'next/server';
 
 export async function GET() {

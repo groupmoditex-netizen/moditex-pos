@@ -1,0 +1,223 @@
+// ═══════════════════════════════════════════════════════════════════════════
+//  MODITEX GROUP — 03_Productos.gs
+//  Depende de: 00_Config.gs, 01_Utils.gs, 02_Validaciones.gs, 06_Logs.gs
+// ═══════════════════════════════════════════════════════════════════════════
+
+function getProductos() {
+  try {
+    var ss     = getSS();
+    var shProd = ss.getSheetByName(SHEET_PRODUCTOS);
+    var shMov  = ss.getSheetByName(SHEET_MOVIMIENTOS);
+
+    if (!shProd) throw new Error('No se encontró la hoja ' + SHEET_PRODUCTOS);
+
+    var lastRow = shProd.getLastRow();
+    if (lastRow < 2) return [];
+
+    var prodData    = shProd.getRange(2, 1, lastRow - 1, NUM_COLS_PRODUCTOS).getValues();
+    var entradasMap = {}, salidasMap = {};
+
+    if (shMov && shMov.getLastRow() >= 2) {
+      var movData = shMov.getRange(2, 1, shMov.getLastRow() - 1, 5).getValues();
+      movData.forEach(function(row) {
+        var sku  = String(row[COL_MOV_SKU]  || '').trim();
+        var tipo = String(row[COL_MOV_TIPO] || '').trim().toUpperCase();
+        var cant = toInt(row[COL_MOV_CANTIDAD]);
+        if (!sku) return;
+        if (tipo === TIPO_ENTRADA) entradasMap[sku] = (entradasMap[sku] || 0) + cant;
+        else if (tipo === TIPO_SALIDA) salidasMap[sku] = (salidasMap[sku] || 0) + cant;
+      });
+    }
+
+    return prodData
+      .filter(function(row) { return row[COL_PROD_SKU] && String(row[COL_PROD_SKU]).trim(); })
+      .map(function(row) {
+        var sku = String(row[COL_PROD_SKU]).trim();
+        var ent = entradasMap[sku] || 0;
+        var sal = salidasMap[sku]  || 0;
+
+        // USA_VARIANTES: si la celda está vacía se asume 'SI' (retrocompatibilidad).
+        // Cualquier valor que no sea explícitamente 'NO' se trata como 'SI'.
+        var rawVariantes   = normalizeUpper(row[COL_PROD_USA_VARIANTES] || '');
+        var usaVariantes   = (rawVariantes === USA_VARIANTES_NO) ? false : true;
+
+        return {
+          sku:          sku,
+          categoria:    normalizeUpper(row[COL_PROD_CATEGORIA]),
+          modelo:       normalizeTrim(row[COL_PROD_MODELO]),
+          talla:        normalizeUpper(row[COL_PROD_TALLA]) || DEFAULT_TALLA,
+          color:        normalizeUpper(row[COL_PROD_COLOR]),
+          tela:         normalizeUpper(row[COL_PROD_TELA]),   // ← NUEVO
+          precioDetal:  toFloat(row[COL_PROD_PRECIO_DETAL]),
+          precioMayor:  toFloat(row[COL_PROD_PRECIO_MAYOR]),
+          precioCosto:  toFloat(row[COL_PROD_PRECIO_COSTO]),
+          stockInicial: toInt(row[COL_PROD_STOCK_INICIAL]),
+          entradas:     ent,
+          salidas:      sal,
+          disponible:   Math.max(0, toInt(row[COL_PROD_STOCK_INICIAL]) + ent - sal),
+          usaVariantes: usaVariantes,   // ← legacy: boolean
+          tipoSku: (function() {        // ← NUEVO: 'VARIANTE' | 'UNICO'
+            var raw = normalizeUpper(row[COL_PROD_TIPO_SKU] || '');
+            return raw === TIPO_SKU_UNICO ? TIPO_SKU_UNICO : TIPO_SKU_VARIANTE;
+          })()
+        };
+      });
+
+  } catch (e) {
+    logError('getProductos', e);
+    throw new Error('Error al leer productos: ' + e.message);
+  }
+}
+
+// ── Cache wrapper ────────────────────────────────────────────────────────────
+var _CACHE_KEY_PRODUCTOS = 'moditex_productos';
+var _CACHE_TTL           = 300;
+
+/**
+ * Versión con CacheService de getProductos(). TTL 300s.
+ * Úsala desde el frontend vía google.script.run cuando solo necesites leer.
+ */
+function getProductosCached() {
+  try {
+    var cache  = CacheService.getScriptCache();
+    var cached = cache.get(_CACHE_KEY_PRODUCTOS);
+    if (cached) return JSON.parse(cached);
+
+    var data = getProductos();
+    try { cache.put(_CACHE_KEY_PRODUCTOS, JSON.stringify(data), _CACHE_TTL); } catch(e) {}
+    return data;
+  } catch(e) {
+    logError('getProductosCached', e);
+    throw new Error('Error al leer productos (cache): ' + e.message);
+  }
+}
+
+/** Invalida el cache de productos. Llamar después de escrituras. */
+function invalidarCacheProductos() {
+  try { CacheService.getScriptCache().remove(_CACHE_KEY_PRODUCTOS); } catch(e) {}
+}
+
+// ── Agregar ──────────────────────────────────────────────────────────────────
+function agregarProducto(datos) {
+  try {
+    var valBasica = validarDatosProducto(datos);
+    if (!valBasica.ok) return valBasica;
+
+    var ss     = getSS();
+    var shProd = ss.getSheetByName(SHEET_PRODUCTOS);
+    var valHoja = validarHojaExiste(shProd, SHEET_PRODUCTOS);
+    if (!valHoja.ok) return valHoja;
+
+    var skusExistentes = [];
+    if (shProd.getLastRow() >= 2) {
+      skusExistentes = shProd.getRange(2, 1, shProd.getLastRow() - 1, 1)
+        .getValues().flat().map(function(s) { return String(s).trim(); });
+    }
+
+    var insertados  = [], duplicados  = [];
+    var precioCosto = toFloat(datos.precioCosto);
+    // Normalizar USA_VARIANTES: si no se pasa, o si es vacío, se guarda 'SI'
+    var usaVariantesVal = (normalizeUpper(datos.usaVariantes || '') === USA_VARIANTES_NO)
+      ? USA_VARIANTES_NO
+      : USA_VARIANTES_SI;
+
+    datos.colores.forEach(function(c) {
+      if (!colorEsValido(c)) return;
+      var sku = c.sku.trim().toUpperCase();
+      if (skuEsDuplicado(sku, skusExistentes)) { duplicados.push(sku); return; }
+
+      shProd.appendRow([
+        sku,
+        datos.categoria.trim().replace(/\s+/g, ' ').toUpperCase(),
+        datos.modelo.trim().replace(/\s+/g, ' '),
+        (datos.talla || DEFAULT_TALLA).trim().toUpperCase(),
+        c.color.trim().replace(/\s+/g, ' ').toUpperCase(),
+        toFloat(datos.precioDetal),
+        toFloat(datos.precioMayor),
+        toInt(c.stock),
+        precioCosto,
+        usaVariantesVal,   // ← col J
+        '',                // ← col K TIPO_SKU (vacío = VARIANTE por default)
+        (datos.tela || '').trim().toUpperCase()  // ← col L TELA ← NUEVO
+      ]);
+
+      var newRow = shProd.getLastRow();
+      aplicarFormatoPrecio(shProd, newRow, COL_PROD_PRECIO_DETAL + 1, 2);
+      if (precioCosto > 0) aplicarFormatoPrecio(shProd, newRow, COL_PROD_PRECIO_COSTO + 1);
+
+      skusExistentes.push(sku);
+      insertados.push(sku);
+    });
+
+    if (duplicados.length && !insertados.length)
+      return respError('SKU(s) ya existen: ' + duplicados.join(', '));
+
+    invalidarCacheProductos();
+    registrarLog('AGREGAR_PRODUCTO', 'Modelo: ' + datos.modelo + ' | SKUs: ' + insertados.join(','), 'OK');
+    return respOk({ insertados: insertados, duplicados: duplicados });
+
+  } catch (e) {
+    logError('agregarProducto', e);
+    registrarLog('AGREGAR_PRODUCTO', String(datos.modelo || ''), 'ERROR: ' + e.message);
+    return respError(e.message);
+  }
+}
+
+// ── Editar ───────────────────────────────────────────────────────────────────
+function editarProducto(datos) {
+  try {
+    if (!datos.sku) return respError('SKU requerido para edición');
+
+    var ss     = getSS();
+    var shProd = ss.getSheetByName(SHEET_PRODUCTOS);
+    var valHoja = validarHojaExiste(shProd, SHEET_PRODUCTOS);
+    if (!valHoja.ok) return valHoja;
+
+    var lastRow = shProd.getLastRow();
+    if (lastRow < 2) return respError('No hay productos registrados');
+
+    var skuBuscado = datos.sku.trim().toUpperCase();
+    var skus       = shProd.getRange(2, 1, lastRow - 1, 1).getValues();
+    var filaEncontrada = -1;
+
+    for (var i = 0; i < skus.length; i++) {
+      if (String(skus[i][0]).trim().toUpperCase() === skuBuscado) {
+        filaEncontrada = i + 2; break;
+      }
+    }
+
+    if (filaEncontrada === -1)
+      return respError('SKU "' + datos.sku + '" no encontrado en PRODUCTOS');
+
+    shProd.getRange(filaEncontrada, COL_PROD_CATEGORIA + 1).setValue((datos.categoria || '').trim().replace(/\s+/g,' ').toUpperCase());
+    shProd.getRange(filaEncontrada, COL_PROD_MODELO + 1).setValue((datos.modelo || '').trim().replace(/\s+/g,' '));
+    shProd.getRange(filaEncontrada, COL_PROD_TALLA + 1).setValue((datos.talla || DEFAULT_TALLA).trim().toUpperCase());
+    shProd.getRange(filaEncontrada, COL_PROD_PRECIO_DETAL + 1).setValue(toFloat(datos.precioDetal));
+    shProd.getRange(filaEncontrada, COL_PROD_PRECIO_MAYOR + 1).setValue(toFloat(datos.precioMayor));
+    shProd.getRange(filaEncontrada, COL_PROD_PRECIO_COSTO + 1).setValue(toFloat(datos.precioCosto));
+    aplicarFormatoPrecio(shProd, filaEncontrada, COL_PROD_PRECIO_DETAL + 1, 2);
+    if (toFloat(datos.precioCosto) > 0) aplicarFormatoPrecio(shProd, filaEncontrada, COL_PROD_PRECIO_COSTO + 1);
+
+    // Actualizar USA_VARIANTES si se envía en los datos
+    if (datos.usaVariantes !== undefined) {
+      var usaVariantesVal = (normalizeUpper(datos.usaVariantes || '') === USA_VARIANTES_NO)
+        ? USA_VARIANTES_NO
+        : USA_VARIANTES_SI;
+      shProd.getRange(filaEncontrada, COL_PROD_USA_VARIANTES + 1).setValue(usaVariantesVal);
+    }
+
+    // Actualizar TELA si se envía en los datos ← NUEVO
+    if (datos.tela !== undefined) {
+      shProd.getRange(filaEncontrada, COL_PROD_TELA + 1).setValue(normalizeUpper(datos.tela || ''));
+    }
+
+    invalidarCacheProductos();
+    registrarLog('EDITAR_PRODUCTO', 'SKU: ' + skuBuscado, 'OK');
+    return respOk({ sku: skuBuscado });
+
+  } catch (e) {
+    logError('editarProducto', e);
+    registrarLog('EDITAR_PRODUCTO', String(datos.sku || ''), 'ERROR: ' + e.message);
+    return respError(e.message);
+  }
+}

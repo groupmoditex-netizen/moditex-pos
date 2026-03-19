@@ -1,0 +1,350 @@
+// ═══════════════════════════════════════════════════════════════════════════
+//  MODITEX GROUP — 12_EnviosParciales.gs  v1.0
+//
+//  Gestión de envíos parciales por comanda.
+//  Permite enviar un subconjunto de prendas de un pedido,
+//  descontando del inventario y actualizando el progreso del pedido.
+//
+//  Depende de: 11_Comandas.gs
+//
+//  NUEVA COLUMNA EN HOJA COMANDAS:
+//    Col 15 → ENVIOS  (JSON array de envíos parciales)
+//
+//  ESTRUCTURA DE UN ENVÍO PARCIAL (elemento del array ENVIOS):
+//  {
+//    id:     "ENV-XXXXXX",        // ID único del envío
+//    fecha:  1234567890000,       // timestamp ms
+//    items:  [                    // prendas enviadas en este envío
+//      { sku: "SKU001", cant: 6, modelo: "Jacket", color: "NEGRO", talla: "M" }
+//    ],
+//    nota:   "Primer envío"       // opcional
+//  }
+// ═══════════════════════════════════════════════════════════════════════════
+
+var COL_CMD_ENVIOS = 15;   // ← nueva columna en la hoja COMANDAS
+
+// ───────────────────────────────────────────────────────────────────────────
+//  HELPER: encabezado de la columna ENVIOS (migración no destructiva)
+// ───────────────────────────────────────────────────────────────────────────
+function _asegurarColumnaEnvios() {
+  var hoja    = getHoja(HOJA_COMANDAS);
+  var numCols = hoja.getLastColumn();
+  if (numCols < COL_CMD_ENVIOS) {
+    // La hoja tiene menos columnas de las esperadas → escribir cabecera
+    hoja.getRange(1, COL_CMD_ENVIOS).setValue('Envios');
+    hoja.getRange(1, COL_CMD_ENVIOS)
+      .setFontWeight('bold')
+      .setBackground('#111')
+      .setFontColor('#fff');
+  } else {
+    // Si la cabecera está vacía, ponerla
+    var cab = hoja.getRange(1, COL_CMD_ENVIOS).getValue();
+    if (!cab || String(cab).trim() === '') {
+      hoja.getRange(1, COL_CMD_ENVIOS).setValue('Envios');
+    }
+  }
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+//  HELPER: leer envíos de una fila ya leída (array de 15 celdas mínimo)
+// ───────────────────────────────────────────────────────────────────────────
+function _leerEnvios(rowDatos) {
+  if (!rowDatos || rowDatos.length < COL_CMD_ENVIOS) return [];
+  return safeJSON(rowDatos[COL_CMD_ENVIOS - 1]) || [];
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+//  HELPER: calcular métricas de progreso de una comanda
+// ───────────────────────────────────────────────────────────────────────────
+function _calcularProgresoEnvio(productos, envios) {
+  var totalPrendas = 0;
+  (productos || []).forEach(function(p) {
+    totalPrendas += (parseInt(p.cant) || parseInt(p.cantidad) || 1);
+  });
+
+  var prendasEnviadas = 0;
+  (envios || []).forEach(function(env) {
+    (env.items || []).forEach(function(item) {
+      prendasEnviadas += (parseInt(item.cant) || 0);
+    });
+  });
+
+  return {
+    totalPrendas:     totalPrendas,
+    prendasEnviadas:  Math.min(prendasEnviadas, totalPrendas),
+    prendasPendientes: Math.max(0, totalPrendas - prendasEnviadas),
+    porcentaje:       totalPrendas > 0
+                        ? Math.round(Math.min(prendasEnviadas, totalPrendas) / totalPrendas * 100)
+                        : 0
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  registrarEnvioParcial(id, itemsEnviados, nota)
+//
+//  @param {string}   id            - ID de la comanda (CMD-XXXXX)
+//  @param {Array}    itemsEnviados - [ { sku, cant } , … ]
+//  @param {string}   [nota]        - Nota opcional para este envío
+//  @returns {{ ok, prendasEnviadas, totalPrendas, prendasPendientes, porcentaje, advertencias }}
+//
+//  FLUJO:
+//    1. Valida que la comanda exista y no esté cancelada/entregada.
+//    2. Valida que las cantidades a enviar no superen las pendientes.
+//    3. Verifica stock en MOVIMIENTOS (stock real = inicial + entradas – salidas).
+//    4. Registra SALIDAs en hoja MOVIMIENTOS.
+//    5. Agrega entrada al array ENVIOS de la comanda.
+//    6. Agrega observación en historial de la comanda.
+//    7. Si prendasPendientes === 0 → marca la comanda como 'entregado'.
+// ═══════════════════════════════════════════════════════════════════════════
+function registrarEnvioParcial(id, itemsEnviados, nota) {
+  if (!id)                        return { ok: false, error: 'ID de comanda requerido' };
+  if (!itemsEnviados || !itemsEnviados.length)
+                                  return { ok: false, error: 'Debes indicar al menos un producto a enviar' };
+
+  var lock = acquireLock(20000);
+  try {
+    _asegurarColumnaEnvios();
+
+    var hCmd = getHoja(HOJA_COMANDAS);
+    var hInv = _getHojaInv();
+    var hMov = getHoja(HOJA_MOVIMIENTOS);
+
+    // ── 1. Buscar la comanda ─────────────────────────────────────
+    var enc = _buscarComandaConEnvios(hCmd, id);
+    if (!enc) return { ok: false, error: 'Comanda no encontrada: ' + id };
+
+    var row = enc.datos, fila = enc.fila;
+    var st  = String(row[COL_CMD.STATUS - 1]);
+
+    if (st === 'cancelado')  return { ok: false, error: 'La comanda está cancelada.' };
+    if (st === 'entregado')  return { ok: false, error: 'La comanda ya fue entregada en su totalidad.' };
+
+    var productos = safeJSON(row[COL_CMD.PRODUCTOS - 1]) || [];
+    var enviosPrev = _leerEnvios(row);
+
+    // ── 2. Calcular cantidades pendientes por SKU ────────────────
+    var pendienteMap = {};   // SKU → cantidad aún no enviada
+    productos.forEach(function(p) {
+      var sku  = String(p.sku || p.nombre || '').trim();
+      var cant = parseInt(p.cant) || parseInt(p.cantidad) || 1;
+      if (!sku) return;
+      pendienteMap[sku] = (pendienteMap[sku] || 0) + cant;
+    });
+
+    // Restar lo ya enviado
+    enviosPrev.forEach(function(env) {
+      (env.items || []).forEach(function(item) {
+        var sku = String(item.sku || '').trim();
+        if (pendienteMap[sku] !== undefined) {
+          pendienteMap[sku] = Math.max(0, pendienteMap[sku] - (parseInt(item.cant) || 0));
+        }
+      });
+    });
+
+    // ── 3. Validar cantidades solicitadas ────────────────────────
+    var erroresValidacion = [];
+    itemsEnviados.forEach(function(item) {
+      var sku  = String(item.sku || '').trim();
+      var cant = parseInt(item.cant) || 0;
+      if (!sku || cant <= 0) return;
+      var disponible = pendienteMap[sku] !== undefined ? pendienteMap[sku] : 0;
+      if (cant > disponible) {
+        erroresValidacion.push('SKU ' + sku + ': se quieren enviar ' + cant
+                               + ' pero solo quedan ' + disponible + ' pendientes.');
+      }
+    });
+    if (erroresValidacion.length) {
+      return { ok: false, error: erroresValidacion.join(' | ') };
+    }
+
+    // ── 4. Verificar stock real en inventario ────────────────────
+    var invMap = {};
+    if (hInv && hInv.getLastRow() >= 2) {
+      var lr = hInv.getLastRow(), lc = Math.max(hInv.getLastColumn(), 9);
+      var invData = hInv.getRange(2, 1, lr - 1, lc).getValues();
+      for (var r = 0; r < invData.length; r++) {
+        var sk = String(invData[r][COL_INV.SKU - 1]).trim();
+        if (sk) invMap[sk] = {
+          stockInicial: Number(invData[r][COL_INV.DISPONIBLE - 1]) || 0,
+          datos: invData[r]
+        };
+      }
+    }
+
+    var stockReal = {};
+    for (var sk in invMap) { stockReal[sk] = invMap[sk].stockInicial; }
+    var movDelta = _calcMovDelta(hMov);
+    for (var dSku in movDelta) {
+      if (stockReal[dSku] === undefined) stockReal[dSku] = 0;
+      stockReal[dSku] += movDelta[dSku];
+    }
+
+    // ── 5. Registrar SALIDAs en MOVIMIENTOS ─────────────────────
+    var ahora     = new Date();
+    var cliente   = String(row[COL_CMD.CLIENTE - 1] || '');
+    var advertencias = [];
+    var itemsValidos = [];
+    var movRows = [];
+
+    _hdrMovs(hMov);
+
+    itemsEnviados.forEach(function(item) {
+      var sku  = String(item.sku || '').trim();
+      var cant = parseInt(item.cant) || 0;
+      if (!sku || cant <= 0) return;
+
+      var pe    = invMap[sku];
+      var stock = (stockReal[sku] !== undefined) ? stockReal[sku] : 0;
+      var adv   = stock < cant
+        ? '⚠ Stock insuficiente (' + stock + ' disponible, se envían ' + cant + ')'
+        : '';
+
+      if (adv) advertencias.push(adv + ' · SKU: ' + sku);
+
+      movRows.push([
+        generarId('MOV'),
+        ahora,
+        'SALIDA',
+        sku,
+        pe ? String(pe.datos[COL_INV.MODELO - 1] || sku) : sku,
+        pe ? String(pe.datos[COL_INV.COLOR  - 1] || item.color || '') : (item.color || ''),
+        pe ? String(pe.datos[COL_INV.TALLA  - 1] || item.talla || '') : (item.talla || ''),
+        cant,
+        id,
+        cliente,
+        (nota || 'Envío parcial comanda')
+      ]);
+
+      itemsValidos.push({
+        sku:    sku,
+        cant:   cant,
+        modelo: pe ? String(pe.datos[COL_INV.MODELO - 1] || sku) : sku,
+        color:  pe ? String(pe.datos[COL_INV.COLOR  - 1] || item.color || '') : (item.color || ''),
+        talla:  pe ? String(pe.datos[COL_INV.TALLA  - 1] || item.talla || '') : (item.talla || '')
+      });
+    });
+
+    if (!itemsValidos.length) return { ok: false, error: 'Ningún ítem válido para enviar.' };
+
+    if (movRows.length) {
+      hMov.getRange(hMov.getLastRow() + 1, 1, movRows.length, movRows[0].length)
+          .setValues(movRows);
+    }
+
+    // ── 6. Actualizar ENVIOS de la comanda ───────────────────────
+    var nuevoEnvio = {
+      id:    generarId('ENV'),
+      fecha: ahora.getTime(),
+      items: itemsValidos,
+      nota:  nota || ''
+    };
+    enviosPrev.push(nuevoEnvio);
+
+    // ── 7. Actualizar observaciones ──────────────────────────────
+    var resumen = itemsValidos.map(function(it) {
+      return it.cant + 'x ' + it.modelo + (it.color ? ' ' + it.color : '');
+    }).join(', ');
+
+    var obs = safeJSON(row[COL_CMD.OBSERVACIONES - 1]) || [];
+    obs.push({
+      texto: '📦 Envío parcial: ' + resumen
+             + (nota ? ' — ' + nota : '')
+             + (advertencias.length ? ' ⚠ ' + advertencias.join('; ') : ''),
+      fecha: ahora.getTime(),
+      tipo:  'envio'
+    });
+
+    // ── 8. Calcular nuevo progreso ───────────────────────────────
+    var progreso = _calcularProgresoEnvio(productos, enviosPrev);
+
+    // ── 9. Escribir en Sheets ────────────────────────────────────
+    hCmd.getRange(enc.fila, COL_CMD_ENVIOS)
+        .setValue(JSON.stringify(enviosPrev));
+    hCmd.getRange(enc.fila, COL_CMD.OBSERVACIONES)
+        .setValue(JSON.stringify(obs));
+
+    // ── 10. Si todo fue enviado → marcar como entregado ─────────
+    var autoEntregado = false;
+    if (progreso.prendasPendientes === 0) {
+      // Registrar en VENTAS
+      var hVen = getHoja(HOJA_VENTAS);
+      _hdrVtas(hVen);
+      hVen.appendRow([
+        generarId('VEN'), ahora, id, cliente,
+        String(row[COL_CMD.CLIENTE_ID   - 1] || ''),
+        String(row[COL_CMD.TELEFONO     - 1] || ''),
+        JSON.stringify(productos),
+        Number(row[COL_CMD.PRECIO       - 1]) || 0,
+        String(row[COL_CMD.PAGO         - 1] || ''),
+        String(row[COL_CMD.AGENCIA      - 1] || ''),
+        Number(row[COL_CMD.MONTO_PAGADO - 1]) || 0,
+        String(row[COL_CMD.NOTA         - 1] || '')
+      ]);
+
+      obs.push({
+        texto: '✅ Todas las prendas enviadas. Comanda marcada como entregada automáticamente.',
+        fecha: ahora.getTime(),
+        tipo:  'edit'
+      });
+      hCmd.getRange(enc.fila, COL_CMD.STATUS).setValue('entregado');
+      hCmd.getRange(enc.fila, COL_CMD.FECHA_STATUS).setValue(ahora);
+      hCmd.getRange(enc.fila, COL_CMD.OBSERVACIONES).setValue(JSON.stringify(obs));
+      autoEntregado = true;
+    }
+
+    SpreadsheetApp.flush();
+
+    return {
+      ok:               true,
+      autoEntregado:    autoEntregado,
+      advertencias:     advertencias,
+      totalPrendas:     progreso.totalPrendas,
+      prendasEnviadas:  progreso.prendasEnviadas,
+      prendasPendientes: progreso.prendasPendientes,
+      porcentaje:       progreso.porcentaje,
+      mensaje:          autoEntregado
+        ? '✅ Último envío registrado. Comanda entregada completamente.'
+        : '📦 Envío parcial registrado. Quedan ' + progreso.prendasPendientes + ' prendas pendientes.'
+    };
+
+  } catch (e) {
+    return { ok: false, error: e.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  getProgresoComanda(id)
+//  Retorna el progreso actual de una comanda sin modificar nada.
+// ═══════════════════════════════════════════════════════════════════════════
+function getProgresoComanda(id) {
+  if (!id) return { ok: false, error: 'ID requerido' };
+  try {
+    var hCmd = getHoja(HOJA_COMANDAS);
+    var enc  = _buscarComandaConEnvios(hCmd, id);
+    if (!enc) return { ok: false, error: 'No encontrada: ' + id };
+
+    var productos = safeJSON(enc.datos[COL_CMD.PRODUCTOS - 1]) || [];
+    var envios    = _leerEnvios(enc.datos);
+    var prog      = _calcularProgresoEnvio(productos, envios);
+
+    return { ok: true, envios: envios, progreso: prog };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  HELPER INTERNO: buscarComandaFila extendido que lee hasta col 15
+// ═══════════════════════════════════════════════════════════════════════════
+function _buscarComandaConEnvios(hoja, id) {
+  if (hoja.getLastRow() < 2) return null;
+  _buildCmdIndex(hoja);
+  var fila = _cmdIndex[String(id)];
+  if (!fila) return null;
+  // Leer hasta col 15 (incluye ENVIOS)
+  var numCols = Math.max(hoja.getLastColumn(), COL_CMD_ENVIOS);
+  var datos   = hoja.getRange(fila, 1, 1, numCols).getValues()[0];
+  return { fila: fila, datos: datos };
+}

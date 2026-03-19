@@ -1,6 +1,9 @@
 export const dynamic = 'force-dynamic';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase-server';
 import { NextResponse } from 'next/server';
+// Tasa USD/USDT → EUR configurable via variable de entorno
+// Vercel: Settings → Environment Variables → USD_EUR_RATE
+const USD_EUR_RATE = parseFloat(process.env.USD_EUR_RATE || '0.93');
 
 export async function GET(request) {
   try {
@@ -33,7 +36,7 @@ export async function POST(request) {
     let montoBs  = 0;
     if      (div==='BS')              { montoBs=md; montoEUR=ts>0?md/ts:0; }
     else if (div==='EUR')             { montoEUR=md; montoBs=ts>0?md*ts:0; }
-    else if (div==='USD'||div==='USDT') { montoEUR=md*0.93; montoBs=ts>0?md*ts:0; }
+    else if (div==='USD'||div==='USDT') { montoEUR=md*USD_EUR_RATE; montoBs=ts>0?md*ts:0; }
     else                              { montoEUR=md; montoBs=ts>0?md*ts:0; }
 
     montoEUR = Math.round(montoEUR*100)/100;

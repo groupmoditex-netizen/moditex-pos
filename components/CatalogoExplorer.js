@@ -1,18 +1,13 @@
 'use client';
+import { colorHex } from '@/utils/colores';
 import { useState, useMemo } from 'react';
 
-const COLOR_MAP = {
-  'BLANCO':'#d0d0d0','NEGRO':'#1a1a1a','AZUL':'#3b6fd4','ROJO':'#d63b3b','VERDE':'#2d9e4a',
-  'ROSA':'#f07aa0','GRIS':'#6b7280','AMARILLO':'#f5c842','NARANJA':'#f57c42','MORADO':'#7c4fd4',
-  'VINOTINTO':'#8b2035','BEIGE':'#d4b896','CORAL':'#f26e5b','CELESTE':'#7ec8e3',
-};
 const CAT_ICONS = {
   'BODIES':'👙','BODY':'👙','CHAQUETA':'🧥','CONJUNTO':'👗','ENTERIZO':'🩱',
   'FALDA':'👘','PANTS':'👖','SHORT':'🩳','TOPS':'👕','TOP':'👕',
   'TRAJE DE BANO':'🩱','TRIKINIS':'🩱','VESTIDO':'💃','DEFAULT':'🏷️',
 };
 
-function colorHex(n){const k=(n||'').toUpperCase().trim();return COLOR_MAP[k]||COLOR_MAP[k.split(' ')[0]]||'#9ca3af';}
 function catIcon(c){const k=(c||'').toUpperCase();for(const [key,v] of Object.entries(CAT_ICONS)){if(k.includes(key))return v;}return CAT_ICONS.DEFAULT;}
 
 /**

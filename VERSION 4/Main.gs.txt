@@ -1,0 +1,173 @@
+// ═══════════════════════════════════════════════════════════════════════════
+//  MODITEX GROUP — MAIN.gs  (versión corregida)
+//
+//  BUGS CORREGIDOS:
+//    · getComandasUrl() y getRecetasUrl() estaban declaradas DENTRO de doGet()
+//      → GAS las tomaba como funciones locales, no globales. MOVIDAS afuera.
+//    · Faltaba la ruta page === 'pos' → el POS era inaccesible.
+//    · doGet() retornaba antes de llegar a algunas rutas (return prematuro).
+//    · Función de inicialización de recetas añadida para MAIN completo.
+// ═══════════════════════════════════════════════════════════════════════════
+
+
+// ───────────────────────────────────────────────────────────────────────────
+//  ROUTER PRINCIPAL
+// ───────────────────────────────────────────────────────────────────────────
+function doGet(e) {
+  var page = (e && e.parameter && e.parameter.page) || 'index';
+
+  if (page === 'pos') {
+    return HtmlService.createHtmlOutputFromFile('POS')
+      .setTitle('MODITEX POS — Caja')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+
+  if (page === 'comandas') {
+    return HtmlService.createTemplateFromFile('Comandas')
+      .evaluate()
+      .setTitle('MODITEX — Comandas de Fábrica')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1.0')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+
+  if (page === 'etiquetas') {
+    return HtmlService.createHtmlOutputFromFile('BarcodePrint')
+      .setTitle('MODITEX GROUP - Etiquetas')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+
+  if (page === 'envios') {
+    return HtmlService.createHtmlOutputFromFile('EnvioPrint')
+      .setTitle('MODITEX GROUP - Envios')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+
+  if (page === 'recetas') {
+    return HtmlService.createHtmlOutputFromFile('Recetas')
+      .setTitle('MODITEX — Recetas & Plan de Compra')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1.0')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+
+  // Página por defecto: inventario
+  return HtmlService.createHtmlOutputFromFile('Index')
+    .setTitle('MODITEX GROUP - Inventario')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+
+// ───────────────────────────────────────────────────────────────────────────
+//  HELPERS DE URL  (deben ser funciones globales, NO dentro de doGet)
+// ───────────────────────────────────────────────────────────────────────────
+function getBaseUrl()     { return ScriptApp.getService().getUrl(); }
+function getPosUrl()      { return getBaseUrl() + '?page=pos'; }
+function getComandasUrl() { return getBaseUrl() + '?page=comandas'; }
+function getRecetasUrl()  { return getBaseUrl() + '?page=recetas'; }
+function getEtiquetasUrl(){ return getBaseUrl() + '?page=etiquetas'; }
+function getEnviosUrl()   { return getBaseUrl() + '?page=envios'; }
+
+
+// ───────────────────────────────────────────────────────────────────────────
+//  MENÚ SHEETS
+// ───────────────────────────────────────────────────────────────────────────
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('MODITEX')
+    .addItem('Inicializar hojas',              'inicializarHojas')
+    .addItem('Abrir panel de inventario',      'abrirPanel')
+    .addItem('🛒 Abrir POS (Punto de Venta)',  'abrirPOS')
+    .addSeparator()
+    .addItem('Verificar estructura',           'verificarEstructura')
+    .addItem('Reporte stock critico',          'alertaStockCritico')
+    .addSeparator()
+    .addItem('Generar hoja de etiquetas',      'abrirDialogoEtiquetas')
+    .addItem('Abrir pagina de impresion web',  'abrirPaginaEtiquetas')
+    .addItem('Abrir pagina de envios',         'abrirPaginaEnvios')
+    .addSeparator()
+    .addItem('🧵 Plan de compra de tela',      'generarPlanCompra')
+    .addToUi();
+}
+
+function abrirPanel() {
+  var url = getBaseUrl();
+  SpreadsheetApp.getUi().showModalDialog(
+    HtmlService.createHtmlOutput('<script>window.open("' + url + '","_blank");google.script.host.close();</script>'),
+    'Abriendo...'
+  );
+}
+
+function abrirPOS() {
+  var url = getPosUrl();
+  SpreadsheetApp.getUi().showModalDialog(
+    HtmlService.createHtmlOutput('<script>window.open("' + url + '","_blank");google.script.host.close();</script>'),
+    'Abriendo POS...'
+  );
+}
+
+function abrirPaginaEtiquetas() {
+  var url = getEtiquetasUrl();
+  SpreadsheetApp.getUi().showModalDialog(
+    HtmlService.createHtmlOutput('<script>window.open("' + url + '","_blank");google.script.host.close();</script>'),
+    'Abriendo etiquetas...'
+  );
+}
+
+function abrirPaginaEnvios() {
+  var url = getEnviosUrl();
+  SpreadsheetApp.getUi().showModalDialog(
+    HtmlService.createHtmlOutput('<script>window.open("' + url + '","_blank");google.script.host.close();</script>'),
+    'Abriendo envios...'
+  );
+}
+
+function abrirDialogoEtiquetas() {
+  abrirPaginaEtiquetas();
+}
+
+
+// ───────────────────────────────────────────────────────────────────────────
+//  INICIALIZAR HOJAS
+// ───────────────────────────────────────────────────────────────────────────
+function inicializarHojas() {
+  try {
+    var ss = getSS();
+    var hojas = {
+      'PRODUCTOS':   HEADERS_PRODUCTOS,
+      'MOVIMIENTOS': HEADERS_MOVIMIENTOS,
+      'CLIENTES':    HEADERS_CLIENTES
+    };
+
+    Object.keys(hojas).forEach(function(name) {
+      var sh = ss.getSheetByName(name);
+      if (!sh) sh = ss.insertSheet(name);
+      if (sh.getLastRow() === 0) {
+        sh.appendRow(hojas[name]);
+        sh.getRange(1, 1, 1, hojas[name].length)
+          .setBackground(HEADER_BG_COLOR)
+          .setFontColor(HEADER_FONT_COLOR)
+          .setFontWeight('bold');
+        sh.setFrozenRows(1);
+      }
+    });
+
+    inicializarHojaUsuarios();
+
+    // Solo llamar si la función existe (módulos opcionales)
+    if (typeof inicializarHojaComandas === 'function') inicializarHojaComandas();
+    if (typeof inicializarHojaRecetas  === 'function') inicializarHojaRecetas();
+
+    registrarLog('INICIALIZAR_HOJAS', 'Hojas base creadas', 'OK');
+    SpreadsheetApp.getUi().alert(
+      'Hojas inicializadas correctamente.\n\n' +
+      '✅ PRODUCTOS, MOVIMIENTOS, CLIENTES\n' +
+      '✅ USUARIOS\n' +
+      (typeof inicializarHojaComandas === 'function' ? '✅ COMANDAS\n' : '') +
+      (typeof inicializarHojaRecetas  === 'function' ? '✅ RECETAS_PRODUCCION\n' : '') +
+      '\nURL del POS:\n' + getPosUrl()
+    );
+  } catch(e) {
+    logError('inicializarHojas', e);
+    SpreadsheetApp.getUi().alert('Error al inicializar: ' + e.message);
+  }
+}

@@ -1,0 +1,47 @@
+// ═══════════════════════════════════════════════════════════════════════════
+//  MODITEX GROUP — 06_Logs.gs  (Logging + Auditoría)
+// ═══════════════════════════════════════════════════════════════════════════
+
+var SHEET_LOG    = 'LOG_CAMBIOS';
+var HEADERS_LOG  = ['TIMESTAMP','USUARIO','ACCION','DETALLE','RESULTADO'];
+
+// ── Logger interno ──────────────────────────────────────────────────────────
+function logError(nombreFuncion, e) {
+  Logger.log('[ERROR] ' + nombreFuncion + ' — ' + (e.message || String(e)));
+}
+
+function logInfo(nombreFuncion, mensaje) {
+  Logger.log('[INFO] ' + nombreFuncion + ' — ' + mensaje);
+}
+
+// ── Auditoría en hoja ───────────────────────────────────────────────────────
+/**
+ * Registra una acción en la hoja LOG_CAMBIOS.
+ * La crea automáticamente si no existe.
+ * @param {string} accion   - Ej: 'REGISTRAR_MOVIMIENTO'
+ * @param {string} detalle  - Ej: 'SKU=CAM-BLA-001 | CANT=5'
+ * @param {string} resultado- 'OK' | 'ERROR: ...'
+ */
+function registrarLog(accion, detalle, resultado) {
+  try {
+    var ss = getSS();
+    var sh = ss.getSheetByName(SHEET_LOG);
+
+    if (!sh) {
+      sh = ss.insertSheet(SHEET_LOG);
+      sh.appendRow(HEADERS_LOG);
+      sh.getRange(1, 1, 1, HEADERS_LOG.length)
+        .setBackground('#1a1714').setFontColor('#ffffff').setFontWeight('bold');
+      sh.setFrozenRows(1);
+    }
+
+    var usuario = 'desconocido';
+    try { usuario = Session.getActiveUser().getEmail(); } catch(e) {}
+
+    sh.appendRow([new Date(), usuario, accion || '', detalle || '', resultado || 'OK']);
+    sh.getRange(sh.getLastRow(), 1).setNumberFormat('yyyy-mm-dd hh:mm:ss');
+
+  } catch(e) {
+    Logger.log('[LOG_FAIL] registrarLog — ' + e.message);
+  }
+}

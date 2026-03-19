@@ -1,0 +1,396 @@
+// ═══════════════════════════════════════════════════════════════════════════
+//  MODITEX GROUP — 10_CodigoBarras.gs
+//  Módulo de generación de hojas de etiquetas con código de barras.
+//  Genera una hoja "ETIQUETAS" en el Spreadsheet con fórmulas IMAGE()
+//  para imprimir en hoja carta (4×5, 3×4 u otras configuraciones).
+//
+//  Depende de: 00_Config.gs, 01_Utils.gs, 03_Productos.gs, 06_Logs.gs
+//
+//  CÓMO USAR:
+//  1. Desde el menú ⬡ MODITEX → "🏷️ Generar hoja de etiquetas"
+//  2. O llamar generarHojaEtiquetas() con filtros opcionales
+//  3. También disponible desde el panel web con la página BarcodePrint.html
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ───────────────────────────────────────────────────────────────────────────
+//  CONSTANTES DE ETIQUETAS
+// ───────────────────────────────────────────────────────────────────────────
+var SHEET_ETIQUETAS      = 'ETIQUETAS';
+var ETIQUETA_COLS_POR_FILA = 4;    // Cuántas etiquetas por fila (4×5 = carta)
+var ETIQUETA_ANCHO_COL   = 140;    // Puntos (px aprox.) de cada columna etiqueta
+var ETIQUETA_ALTO_FILA   = 130;    // Puntos de cada fila etiqueta
+
+// URL base de la API gratuita bwip-js para Code128
+var BARCODE_API_BASE = 'https://bwipjs-api.metafloor.com/?bcid=code128&text=';
+var BARCODE_PARAMS   = '&scale=3&height=10&includetext&textxalign=center';
+
+
+// ───────────────────────────────────────────────────────────────────────────
+//  FUNCIÓN PRINCIPAL — llamada desde el menú
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * Genera la hoja ETIQUETAS en el Spreadsheet activo.
+ * Muestra un diálogo para elegir parámetros (categoría, cantidad de copias).
+ * Puede llamarse directamente sin parámetros (usará UI) o con opciones.
+ *
+ * @param {Object} [opts]
+ * @param {string}   [opts.categoria]  - Filtrar por categoría (vacío = todos)
+ * @param {string[]} [opts.skus]       - Lista de SKUs específicos (vacío = todos)
+ * @param {number}   [opts.copias]     - Cuántas copias por SKU (default 1)
+ * @param {string}   [opts.layout]     - '4x5' | '3x4' | '2x3' (default '3x4')
+ * @param {boolean}  [opts.mostrarPrecio] - Incluir precio detal en etiqueta
+ */
+function generarHojaEtiquetas(opts) {
+  try {
+    opts = opts || {};
+
+    // ── 1. Leer productos ──────────────────────────────────────────────────
+    var productos = getProductos();
+    if (!productos.length) {
+      SpreadsheetApp.getUi().alert('No hay productos en la hoja PRODUCTOS.');
+      return;
+    }
+
+    // ── 2. Aplicar filtros ─────────────────────────────────────────────────
+    var lista = productos;
+    if (opts.categoria) {
+      lista = lista.filter(function(p) {
+        return p.categoria.toUpperCase() === opts.categoria.toUpperCase();
+      });
+    }
+    if (opts.skus && opts.skus.length) {
+      lista = lista.filter(function(p) {
+        return opts.skus.indexOf(p.sku) !== -1;
+      });
+    }
+    if (!lista.length) {
+      SpreadsheetApp.getUi().alert('No se encontraron productos con los filtros indicados.');
+      return;
+    }
+
+    // ── 3. Expandir por copias ─────────────────────────────────────────────
+    var copias = Math.max(1, Math.min(50, parseInt(opts.copias) || 1));
+    var items  = [];
+    lista.forEach(function(p) {
+      for (var i = 0; i < copias; i++) items.push(p);
+    });
+
+    // ── 4. Determinar layout ───────────────────────────────────────────────
+    var layout   = opts.layout || '3x4';
+    var colsMap  = { '4x5': 4, '3x4': 3, '2x3': 2, '1x2': 1 };
+    var numCols  = colsMap[layout] || 3;
+    var anchoCols = { '4x5': 120, '3x4': 155, '2x3': 200, '1x2': 360 };
+    var altoFila  = { '4x5': 115, '3x4': 145, '2x3': 185, '1x2': 220 };
+    var anchoCol = anchoCols[layout] || 155;
+    var altoF    = altoFila[layout]  || 145;
+
+    // ── 5. Preparar la hoja ────────────────────────────────────────────────
+    var ss = getSS();
+    var sh = ss.getSheetByName(SHEET_ETIQUETAS);
+    if (sh) ss.deleteSheet(sh);
+    sh = ss.insertSheet(SHEET_ETIQUETAS);
+
+    // Encabezado de la hoja
+    var hdrRange = sh.getRange(1, 1, 1, numCols * 2);
+    hdrRange.merge();
+    sh.getRange(1, 1).setValue('MODITEX GROUP — Etiquetas de Códigos de Barras — ' + new Date().toLocaleDateString('es-VE'));
+    sh.getRange(1, 1)
+      .setBackground('#1a1714')
+      .setFontColor('#ffffff')
+      .setFontWeight('bold')
+      .setFontSize(11)
+      .setFontFamily('Arial')
+      .setHorizontalAlignment('center')
+      .setVerticalAlignment('middle');
+    sh.setRowHeight(1, 32);
+
+    // ── 6. Construir filas de datos ────────────────────────────────────────
+    // Cada etiqueta ocupa 2 filas:
+    //   Fila A: Código de barras (IMAGE)
+    //   Fila B: Descripción (texto)
+    // Las etiquetas se agrupan en bloques de numCols columnas.
+
+    var COLS_POR_ETIQUETA = 1; // Cada etiqueta ocupa 1 columna
+
+    // Calcular ancho de columnas (en píxeles, Sheets usa points)
+    for (var col = 1; col <= numCols; col++) {
+      sh.setColumnWidth(col, anchoCol);
+    }
+
+    var dataStartRow = 3; // Las etiquetas empiezan en fila 3 (fila 2 = espacio)
+
+    // Separador visual fila 2
+    sh.setRowHeight(2, 8);
+
+    // Procesar items en bloques de numCols
+    var currentRow = dataStartRow;
+    var numItems   = items.length;
+
+    for (var idx = 0; idx < numItems; idx += numCols) {
+      var bloque = items.slice(idx, idx + numCols);
+
+      // Fila de imágenes de código de barras
+      var barRow = currentRow;
+      // Fila de texto descriptivo
+      var txtRow = currentRow + 1;
+
+      sh.setRowHeight(barRow, altoF - 48);
+      sh.setRowHeight(txtRow, 52);
+
+      bloque.forEach(function(p, i) {
+        var col = i + 1;
+        var barcodeUrl = BARCODE_API_BASE + encodeURIComponent(p.sku) + BARCODE_PARAMS;
+
+        // Celda de código de barras
+        var barCell = sh.getRange(barRow, col);
+        barCell.setFormula('=IMAGE("' + barcodeUrl + '",4,' + Math.round((altoF - 52) * 0.75) + ',' + Math.round(anchoCol * 0.88) + ')');
+        barCell
+          .setBackground('#ffffff')
+          .setHorizontalAlignment('center')
+          .setVerticalAlignment('middle')
+          .setBorder(true, true, false, true, false, false,
+            '#dddddd', SpreadsheetApp.BorderStyle.SOLID);
+
+        // Celda de descripción
+        var descCell = sh.getRange(txtRow, col);
+        var descTexto = p.modelo + '\n' + p.color +
+          (p.talla !== 'UNICA' ? ' · ' + p.talla : '') +
+          (opts.mostrarPrecio ? '\n$' + p.precioDetal.toFixed(2) : '');
+
+        // Encabezado MODITEX en la descripción — lo hacemos con nota de celda
+        // (no se puede mezclar formato en celdas) y el SKU se pone en la celda
+        descCell.setValue(descTexto);
+        descCell
+          .setBackground('#f8f8f6')
+          .setFontFamily('Arial')
+          .setFontSize(7)
+          .setWrap(true)
+          .setHorizontalAlignment('center')
+          .setVerticalAlignment('middle')
+          .setBorder(false, true, true, true, false, false,
+            '#dddddd', SpreadsheetApp.BorderStyle.SOLID);
+      });
+
+      // Línea decorativa MODITEX arriba de cada grupo de etiquetas
+      if (idx === 0 || idx % (numCols * 3) === 0) {
+        // Encabezado "MODITEX" sobre cada conjunto de bloques
+        // (opcional — lo omitimos para no romper el grid visual)
+      }
+
+      // Separador entre filas de etiquetas
+      currentRow += 2;
+      var sepRow = currentRow;
+      sh.setRowHeight(sepRow, 6);
+      currentRow++;
+    }
+
+    // ── 7. Agregar hoja de resumen en el pie ─────────────────────────────
+    sh.getRange(currentRow + 1, 1, 1, numCols)
+      .merge()
+      .setValue('Total etiquetas: ' + items.length + '  |  Layout: ' + layout + '  |  Copias/SKU: ' + copias + '  |  Generado: ' + new Date().toLocaleDateString('es-VE') + '  |  MODITEX GROUP')
+      .setBackground('#1a1714')
+      .setFontColor('#ffffff')
+      .setFontSize(8)
+      .setHorizontalAlignment('center')
+      .setVerticalAlignment('middle');
+    sh.setRowHeight(currentRow + 1, 22);
+
+    // ── 8. Activar la hoja ─────────────────────────────────────────────────
+    ss.setActiveSheet(sh);
+
+    registrarLog('GENERAR_ETIQUETAS',
+      'Layout: ' + layout + ' | Items: ' + items.length + ' | Copias: ' + copias,
+      'OK'
+    );
+
+    SpreadsheetApp.getUi().alert(
+      '✅ Hoja "ETIQUETAS" generada correctamente.\n\n' +
+      '📋 ' + items.length + ' etiquetas · Layout ' + layout + '\n' +
+      '🖨 Para imprimir: Archivo → Imprimir → Hoja actual\n' +
+      '   Configurar: Sin márgenes · Papel Carta · Orientación Vertical\n\n' +
+      '💡 TIP: También puedes usar la página web BarcodePrint.html\n' +
+      '   para una vista previa más rica antes de imprimir.'
+    );
+
+  } catch (e) {
+    logError('generarHojaEtiquetas', e);
+    SpreadsheetApp.getUi().alert('Error al generar etiquetas: ' + e.message);
+  }
+}
+
+
+// ───────────────────────────────────────────────────────────────────────────
+//  MENÚ INTERACTIVO — llama al diálogo HTML antes de generar
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * Abre el diálogo de configuración de etiquetas desde el menú de Sheets.
+ * El diálogo permite filtrar por categoría, elegir layout y copias.
+ */
+function abrirDialogoEtiquetas() {
+  try {
+    var productos = getProductos();
+    var cats = [];
+    productos.forEach(function(p) {
+      if (cats.indexOf(p.categoria) === -1) cats.push(p.categoria);
+    });
+    cats.sort();
+
+    var html = HtmlService.createHtmlOutput(buildDialogoHTML(cats))
+      .setWidth(480)
+      .setHeight(520)
+      .setTitle('Generar Etiquetas de Código de Barras');
+
+    SpreadsheetApp.getUi().showModalDialog(html, '🏷️ Generar Etiquetas — MODITEX');
+
+  } catch (e) {
+    logError('abrirDialogoEtiquetas', e);
+    SpreadsheetApp.getUi().alert('Error: ' + e.message);
+  }
+}
+
+
+/**
+ * Construye el HTML del diálogo de configuración de etiquetas.
+ * @param {string[]} categorias
+ * @returns {string}
+ */
+function buildDialogoHTML(categorias) {
+  var catOptions = categorias.map(function(c) {
+    return '<option value="' + c + '">' + c + '</option>';
+  }).join('');
+
+  return '<!DOCTYPE html><html><head>' +
+    '<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">' +
+    '<style>' +
+    '* { box-sizing: border-box; margin: 0; padding: 0; }' +
+    'body { font-family: \'Poppins\', sans-serif; background: #f5f4f2; color: #111; font-size: 13px; }' +
+    '.hdr { background: #1a1714; padding: 20px 24px; }' +
+    '.hdr-name { font-size: 20px; font-weight: 700; color: #fff; letter-spacing: .04em; }' +
+    '.hdr-sub  { font-family: \'DM Mono\', monospace; font-size: 9px; color: #d91e1e; letter-spacing: .2em; margin-top: 3px; }' +
+    '.body { padding: 20px 24px; display: flex; flex-direction: column; gap: 14px; }' +
+    '.fg { display: flex; flex-direction: column; gap: 5px; }' +
+    '.lbl { font-family: \'DM Mono\', monospace; font-size: 8px; color: #666; letter-spacing: .14em; text-transform: uppercase; }' +
+    'select, input[type=number] { padding: 9px 12px; background: #fff; border: 1px solid rgba(0,0,0,.12); font-family: \'Poppins\', sans-serif; font-size: 12px; color: #111; outline: none; width: 100%; }' +
+    'select:focus, input:focus { border-color: #d91e1e; }' +
+    '.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }' +
+    '.tip { background: rgba(26,122,60,0.07); border: 1px solid rgba(26,122,60,.2); border-left: 3px solid #1a7a3c; padding: 10px 13px; font-size: 11px; color: #444; line-height: 1.6; }' +
+    '.ftr { padding: 14px 24px; border-top: 1px solid rgba(0,0,0,.1); display: flex; justify-content: flex-end; gap: 8px; background: #fafafa; }' +
+    '.btn { padding: 9px 18px; font-family: \'Poppins\', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; cursor: pointer; border: none; }' +
+    '.btn-red { background: #d91e1e; color: #fff; }' +
+    '.btn-ghost { background: none; border: 1px solid rgba(0,0,0,.2); color: #333; }' +
+    '</style></head>' +
+    '<body>' +
+    '<div class="hdr"><div class="hdr-name">MODITEX</div><div class="hdr-sub">Generar etiquetas con código de barras</div></div>' +
+    '<div class="body">' +
+    '<div class="tip">Los códigos de barras Code-128 se generan automáticamente desde el SKU usando la API gratuita de bwip-js. Necesitas conexión a internet al imprimir.</div>' +
+    '<div class="grid2">' +
+    '<div class="fg"><label class="lbl">Categoría (opcional)</label>' +
+    '<select id="cat"><option value="">— Todas las categorías —</option>' + catOptions + '</select></div>' +
+    '<div class="fg"><label class="lbl">Copias por SKU</label><input type="number" id="copias" value="1" min="1" max="50"></div>' +
+    '</div>' +
+    '<div class="fg"><label class="lbl">Layout de página</label>' +
+    '<select id="layout">' +
+    '<option value="3x4">3 × 4 — 12 por página (recomendado)</option>' +
+    '<option value="4x5">4 × 5 — 20 por página (etiquetas pequeñas)</option>' +
+    '<option value="2x3">2 × 3 — 6 por página (etiquetas medianas)</option>' +
+    '<option value="1x2">1 × 2 — 2 por página (etiquetas grandes)</option>' +
+    '</select></div>' +
+    '<div class="fg"><label class="lbl">Mostrar precio</label>' +
+    '<select id="precio">' +
+    '<option value="">Sin precio</option>' +
+    '<option value="detal">Precio Detal</option>' +
+    '</select></div>' +
+    '</div>' +
+    '<div class="ftr">' +
+    '<button class="btn btn-ghost" onclick="google.script.host.close()">Cancelar</button>' +
+    '<button class="btn btn-red" onclick="generar()">✓ Generar Etiquetas</button>' +
+    '</div>' +
+    '<script>' +
+    'function generar() {' +
+    '  var opts = {' +
+    '    categoria: document.getElementById("cat").value,' +
+    '    copias:    parseInt(document.getElementById("copias").value)||1,' +
+    '    layout:    document.getElementById("layout").value,' +
+    '    mostrarPrecio: document.getElementById("precio").value === "detal"' +
+    '  };' +
+    '  document.querySelector(".btn-red").disabled = true;' +
+    '  document.querySelector(".btn-red").textContent = "Generando...";' +
+    '  google.script.run' +
+    '    .withSuccessHandler(function(){ google.script.host.close(); })' +
+    '    .withFailureHandler(function(e){ alert("Error: " + e.message); })' +
+    '    .generarHojaEtiquetas(opts);' +
+    '}' +
+    '<\/script>' +
+    '</body></html>';
+}
+
+
+// ───────────────────────────────────────────────────────────────────────────
+//  FUNCIÓN HELPER — retorna URL del barcode para una SKU
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * Retorna la URL de la imagen del código de barras Code-128 para un SKU.
+ * Útil para usar en fórmulas de Sheets directamente.
+ * Ejemplo de uso en celda: =getBarcodeUrl("CAM-NEG-UNI")
+ *
+ * @param {string} sku
+ * @returns {string} URL completa lista para usar en =IMAGE(...)
+ */
+function getBarcodeUrl(sku) {
+  if (!sku) return '';
+  return BARCODE_API_BASE + encodeURIComponent(String(sku).trim()) + BARCODE_PARAMS;
+}
+
+
+// ───────────────────────────────────────────────────────────────────────────
+//  FUNCIÓN HELPER — genera fórmula IMAGE para una SKU
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * Genera la fórmula =IMAGE(...) para usar directamente en una celda de Sheets.
+ * Llamar desde el menú o desde una celda como función personalizada.
+ *
+ * @param {string} sku
+ * @returns {string} Fórmula lista para pegar en una celda
+ */
+function getBarcodeFormula(sku) {
+  return '=IMAGE("' + getBarcodeUrl(sku) + '")';
+}
+
+
+// ───────────────────────────────────────────────────────────────────────────
+//  FUNCIÓN CUSTOM — usa en celda =BARCODE(C2) en Sheets
+//  donde C2 contiene el SKU
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * Función personalizada de Sheets.
+ * Úsala en una celda: =BARCODE(C2)
+ * Retorna la URL del código de barras para el SKU en C2.
+ * Para mostrar la imagen: =IMAGE(BARCODE(C2))
+ *
+ * @customfunction
+ * @param {string} sku - El SKU del producto
+ * @returns {string} URL del código de barras
+ */
+function BARCODE(sku) {
+  return getBarcodeUrl(sku);
+}
+
+
+// ───────────────────────────────────────────────────────────────────────────
+//  FUNCIÓN LLAMADA DESDE Index.html — retorna la URL de BarcodePrint
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * Retorna la URL de la página de etiquetas BarcodePrint.html.
+ * Es llamada desde Index.html con google.script.run para abrir
+ * la página en una nueva pestaña del navegador.
+ * @returns {string} URL completa con ?page=etiquetas
+ */
+function getEtiquetasUrl() {
+  return ScriptApp.getService().getUrl() + '?page=etiquetas';
+}

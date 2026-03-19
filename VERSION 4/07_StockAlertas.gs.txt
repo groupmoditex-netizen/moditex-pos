@@ -1,0 +1,84 @@
+// ═══════════════════════════════════════════════════════════════════════════
+//  MODITEX GROUP — 07_StockAlertas.gs
+//  Control de stock mínimo. No modifica lógica existente.
+//  Depende de: 00_Config.gs, 03_Productos.gs, 06_Logs.gs
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Retorna todos los productos con stock bajo o cero.
+ * "Bajo"  = disponible > 0 && disponible <= STOCK_BAJO  (default 3)
+ * "Cero"  = disponible === 0
+ *
+ * @returns {{ criticos: Object[], bajos: Object[] }}
+ */
+function verificarStockBajo() {
+  try {
+    var productos = getProductos();
+    var criticos  = [], bajos = [];
+
+    productos.forEach(function(p) {
+      if (p.disponible <= STOCK_CRITICO) {
+        criticos.push(p);
+      } else if (p.disponible <= STOCK_BAJO) {
+        bajos.push(p);
+      }
+    });
+
+    logInfo('verificarStockBajo', 'Críticos: ' + criticos.length + ' | Bajos: ' + bajos.length);
+    return { criticos: criticos, bajos: bajos };
+
+  } catch (e) {
+    logError('verificarStockBajo', e);
+    throw new Error('Error al verificar stock: ' + e.message);
+  }
+}
+
+/**
+ * Retorna el total de productos con stock crítico o bajo.
+ * Útil para el badge del sidebar.
+ * @returns {number}
+ */
+function contarProductosStockBajo() {
+  try {
+    var resultado = verificarStockBajo();
+    return resultado.criticos.length + resultado.bajos.length;
+  } catch(e) {
+    logError('contarProductosStockBajo', e);
+    return 0;
+  }
+}
+
+/**
+ * Muestra un alert en Sheets con el resumen de stock crítico.
+ * Ejecutar manualmente desde el menú o por trigger.
+ */
+function alertaStockCritico() {
+  try {
+    var resultado = verificarStockBajo();
+    var msgs = [];
+
+    if (resultado.criticos.length) {
+      msgs.push('🔴 SIN STOCK (' + resultado.criticos.length + '):');
+      resultado.criticos.forEach(function(p) {
+        msgs.push('   ' + p.sku + ' — ' + p.modelo + ' ' + p.color);
+      });
+    }
+
+    if (resultado.bajos.length) {
+      msgs.push('\n🟡 STOCK BAJO (' + resultado.bajos.length + '):');
+      resultado.bajos.forEach(function(p) {
+        msgs.push('   ' + p.sku + ' — ' + p.modelo + ' ' + p.color + ' (' + p.disponible + ' uds)');
+      });
+    }
+
+    var msg = msgs.length
+      ? msgs.join('\n')
+      : '✅ Todo el inventario tiene stock suficiente.';
+
+    SpreadsheetApp.getUi().alert('Reporte de Stock Crítico\n\n' + msg);
+
+  } catch(e) {
+    logError('alertaStockCritico', e);
+    SpreadsheetApp.getUi().alert('Error al generar reporte: ' + e.message);
+  }
+}

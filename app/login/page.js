@@ -2,14 +2,16 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
+import { useAppData } from '@/lib/AppContext';
 
 export default function LoginPage() {
   const { login, usuario } = useAuth() || {};
+  const { recargar } = useAppData() || {};
   const router = useRouter();
   const [username, setUsername] = useState('');
-  const [pin,   setPin]   = useState('');
-  const [err,   setErr]   = useState('');
-  const [load,  setLoad]  = useState(false);
+  const [pin,      setPin]      = useState('');
+  const [err,      setErr]      = useState('');
+  const [load,     setLoad]     = useState(false);
 
   useEffect(() => {
     if (usuario) router.replace('/dashboard');
@@ -20,16 +22,25 @@ export default function LoginPage() {
     setErr(''); setLoad(true);
     try {
       const res = await fetch('/api/auth', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, pin }),
       }).then(r => r.json());
+
       if (res.ok) {
+        // 1. Actualizar estado de auth
         login(res.usuario);
+        // 2. Disparar carga de datos INMEDIATAMENTE — la cookie ya está activa
+        //    No esperamos a que el usuario haga clic en "Recargar"
+        if (recargar) recargar();
+        // 3. Navegar al dashboard
         router.replace('/dashboard');
       } else {
         setErr(res.error || 'Error al iniciar sesión');
       }
-    } catch(e) { setErr('Error de conexión'); }
+    } catch {
+      setErr('Error de conexión');
+    }
     setLoad(false);
   }
 
@@ -60,8 +71,9 @@ export default function LoginPage() {
                 Usuario
               </label>
               <input
-                type="text" value={username} onChange={e=>setUsername(e.target.value)}
-                placeholder="ej: maria_garcia" required autoFocus autoCapitalize="off" autoComplete="username"
+                type="text" value={username} onChange={e => setUsername(e.target.value)}
+                placeholder="ej: administrador" required autoFocus
+                autoCapitalize="off" autoComplete="username"
                 style={{width:'100%',padding:'11px 13px',background:'var(--bg2)',border:'1px solid var(--border)',fontFamily:'Poppins,sans-serif',fontSize:'13px',outline:'none',boxSizing:'border-box'}}
               />
             </div>
@@ -70,7 +82,7 @@ export default function LoginPage() {
                 PIN de acceso
               </label>
               <input
-                type="password" value={pin} onChange={e=>setPin(e.target.value)}
+                type="password" value={pin} onChange={e => setPin(e.target.value)}
                 placeholder="••••••" required maxLength={6}
                 style={{width:'100%',padding:'11px 13px',background:'var(--bg2)',border:'1px solid var(--border)',fontFamily:'DM Mono,monospace',fontSize:'20px',letterSpacing:'.3em',outline:'none',boxSizing:'border-box',textAlign:'center'}}
               />

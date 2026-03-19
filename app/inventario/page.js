@@ -1,10 +1,9 @@
 'use client';
+import { colorHex } from '@/utils/colores';
 import { useState, useMemo } from 'react';
 import Shell from '@/components/Shell';
 import { useAppData } from '@/lib/AppContext';
 
-const CM={'BLANCO':'#d0d0d0','NEGRO':'#1a1a1a','AZUL':'#3b6fd4','ROJO':'#d63b3b','VERDE':'#2d9e4a','ROSA':'#f07aa0','GRIS':'#6b7280','AMARILLO':'#f5c842','NARANJA':'#f57c42','MORADO':'#7c4fd4','VINOTINTO':'#8b2035','BEIGE':'#d4b896','CORAL':'#f26e5b','CELESTE':'#7ec8e3'};
-function colorHex(n){const k=(n||'').toUpperCase().trim();return CM[k]||CM[k.split(' ')[0]]||'#9ca3af';}
 function estD(n){if(n<=0)return 'zero';if(n<=3)return 'low';return 'ok';}
 function agrupar(prods){const map={},order=[];prods.forEach(p=>{const key=`${p.categoria}||${p.modelo}`;if(!map[key]){map[key]={categoria:p.categoria,modelo:p.modelo,precioDetal:p.precioDetal,precioMayor:p.precioMayor,colores:[]};order.push(key);}map[key].colores.push(p);});return order.map(k=>map[k]);}
 

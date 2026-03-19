@@ -1,5 +1,5 @@
 export const dynamic = 'force-dynamic';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase-server';
 import { generarId } from '@/utils/generarId';
 import { NextResponse } from 'next/server';
 

@@ -1,0 +1,802 @@
+// ═══════════════════════════════════════════════════════════════
+// MODITEX — Módulo de Comandas · 11_Comandas.gs  v4.0
+// CORRECCIONES v4.0:
+//   [FIX-P1] getDatosComandas() calcula stock real usando MOVIMIENTOS:
+//            STOCK_REAL = STOCK_INICIAL + Σ(ENTRADAS) − Σ(SALIDAS)
+//   [FIX-P2] entregarComanda() NO modifica Inventario directamente.
+//            Solo registra SALIDAS en MOVIMIENTOS.
+//            Stock verificado leyendo MOVIMIENTOS en tiempo real.
+//   [FIX-P3] registrarAbono() permite abonar en status "entregado"
+//            para pagos atrasados. Solo bloquea "cancelado".
+//            Acepta parámetro fechaManual para abonos retroactivos.
+//   [KEEP]   Todas las funciones v3.2 sin cambio de firma.
+// ═══════════════════════════════════════════════════════════════
+
+var SS = SpreadsheetApp.getActiveSpreadsheet();
+
+// ══════════════════════════════════════════════════════════════
+// NOMBRES DE HOJAS — ajustados al Spreadsheet real de MODITEX
+// Según las pestañas reales: PRODUCTOS, COMANDAS, MOVIMIENTOS,
+//   CLIENTES, USUARIOS, LOG_CAMBIOS, PLAN_COMPRA, etc.
+// ══════════════════════════════════════════════════════════════
+var HOJA_COMANDAS    = 'COMANDAS';
+var HOJA_CLIENTES    = 'CLIENTES';
+var HOJA_PRODUCTOS   = 'PRODUCTOS';   // ← pestaña real con el catálogo
+var HOJA_VENTAS      = 'VENTAS';
+var HOJA_MOVIMIENTOS = 'MOVIMIENTOS';
+
+// ── COLUMNAS COMANDAS ──────────────────────────────────────────
+var COL_CMD = {
+  ID: 1, CLIENTE: 2, CLIENTE_ID: 3, TELEFONO: 4, PRODUCTOS: 5,
+  PRECIO: 6, PAGO: 7, AGENCIA: 8, NOTA: 9, STATUS: 10,
+  FECHA_CREACION: 11, FECHA_STATUS: 12, OBSERVACIONES: 13,
+  MONTO_PAGADO: 14,
+  ENVIOS: 15      // ← NUEVO: col 15, array JSON de envíos parciales
+};
+var TOTAL_COLS_CMD = 15;
+
+// ── COLUMNAS INVENTARIO ────────────────────────────────────────
+// Hoja Inventario: ID_SKU | CATEGORIA | MODELO | TALLA | COLOR |
+//                  PRECIO_DETAL | PRECIO_MAYOR | STOCK_INICIAL | PRECIO_COSTO
+var COL_INV = {
+  SKU:          1,
+  CATEGORIA:    2,
+  MODELO:       3,
+  TALLA:        4,
+  COLOR:        5,
+  PRECIO_DETAL: 6,
+  PRECIO_MAYOR: 7,
+  DISPONIBLE:   8,  // STOCK_INICIAL (base para el cálculo)
+  TELA:         9
+};
+
+// ── COLUMNAS MOVIMIENTOS ───────────────────────────────────────
+// ID | Fecha | Tipo | SKU | Modelo | Color | Talla | Cantidad | RefComanda | Cliente | Nota
+var COL_MOV = {
+  ID: 1, FECHA: 2, TIPO: 3, SKU: 4, MODELO: 5, COLOR: 6,
+  TALLA: 7, CANTIDAD: 8, REF_COMANDA: 9, CLIENTE: 10, NOTA: 11
+};
+
+var COL_CLI = { ID: 1, NOMBRE: 2, CEDULA: 3, TELEFONO: 4, EMAIL: 5, CIUDAD: 6, FECHA: 7 };
+
+var TRANSICIONES_VALIDAS = {
+  'pendiente':  ['produccion', 'cancelado'],
+  'produccion': ['listo',      'cancelado'],
+  'listo':      ['entregado',  'cancelado'],
+  'entregado':  [],
+  'cancelado':  []
+};
+
+// ═══════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════
+function getHoja(nombre) {
+  var h = SS.getSheetByName(nombre);
+  if (!h) {
+    Logger.log('[MODITEX] Hoja no encontrada: "' + nombre + '". Creando nueva.');
+    h = SS.insertSheet(nombre);
+  }
+  return h;
+}
+
+function _getHojaInv() {
+  // Nombre real de la hoja de productos en este proyecto: PRODUCTOS
+  // Orden de búsqueda: primero el nombre configurado, luego variantes con datos
+  var h = SS.getSheetByName(HOJA_PRODUCTOS);
+  if (h && h.getLastRow() >= 2) return h;
+
+  // Fallback: busca por nombre parcial cualquier hoja con datos de productos
+  var candidatos = ['PRODUCTOS','Productos','INVENTARIO','Inventario','inventario','productos'];
+  for (var i = 0; i < candidatos.length; i++) {
+    var hc = SS.getSheetByName(candidatos[i]);
+    if (hc && hc.getLastRow() >= 2) return hc;
+  }
+
+  // Último recurso: hoja con "PRODUC" o "INVENT" en el nombre que tenga datos
+  var sheets = SS.getSheets();
+  for (var j = 0; j < sheets.length; j++) {
+    var s = sheets[j];
+    if (s.getLastRow() < 2) continue;
+    var n = s.getName().toUpperCase();
+    if (n.indexOf('PRODUC') !== -1 || n.indexOf('INVENT') !== -1) return s;
+  }
+  return SS.getSheetByName(HOJA_PRODUCTOS) || null;
+}
+
+function acquireLock(ms) {
+  ms = ms || 15000;
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(ms); }
+  catch (e) { throw new Error('Sistema ocupado. Reintenta en unos segundos.'); }
+  return lock;
+}
+
+function safeJSON(str) {
+  if (!str || typeof str !== 'string' || str.trim() === '') return null;
+  try { return JSON.parse(str); } catch (e) { return null; }
+}
+
+function generarId(prefijo) {
+  return (prefijo || 'CMD') + '-' +
+    Date.now().toString(36).toUpperCase() +
+    Math.random().toString(36).substring(2, 6).toUpperCase();
+}
+
+function _fmtEur(n) { return '€ ' + Number(n || 0).toFixed(2); }
+
+// ═══════════════════════════════════════════════════════════════
+// [FIX-P1] CÁLCULO DE STOCK REAL DESDE MOVIMIENTOS
+// Retorna un mapa { SKU: deltaMovimientos }
+// STOCK_REAL = STOCK_INICIAL + delta
+// ═══════════════════════════════════════════════════════════════
+function _calcMovDelta(hMov) {
+  var delta = {};
+  try {
+    var movLR = hMov.getLastRow();
+    if (movLR < 2) return delta;
+    // Leemos hasta col 8 (Cantidad). Índices 0-based: Tipo=2, SKU=3, Cantidad=7
+    var movData = hMov.getRange(2, 1, movLR - 1, COL_MOV.CANTIDAD).getValues();
+    for (var m = 0; m < movData.length; m++) {
+      var tipo = String(movData[m][COL_MOV.TIPO     - 1]).trim().toUpperCase();
+      var sku  = String(movData[m][COL_MOV.SKU      - 1]).trim();
+      var cant = Number(movData[m][COL_MOV.CANTIDAD - 1]) || 0;
+      if (!sku || cant <= 0) continue;
+      if (!delta[sku]) delta[sku] = 0;
+      if (tipo === 'ENTRADA')     delta[sku] += cant;
+      else if (tipo === 'SALIDA') delta[sku] -= cant;
+    }
+  } catch (e) {
+    // Hoja Movimientos vacía o columnas incompletas — ignorar
+    Logger.log('_calcMovDelta warning: ' + e.message);
+  }
+  return delta;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ÍNDICE EN MEMORIA
+// ═══════════════════════════════════════════════════════════════
+var _cmdIndex = null;
+
+function _invalidateCmdIndex() { _cmdIndex = null; }
+
+function _buildCmdIndex(hoja) {
+  if (_cmdIndex !== null) return;
+  _cmdIndex = {};
+  var lastRow = hoja.getLastRow();
+  if (lastRow < 2) return;
+  var ids = hoja.getRange(2, COL_CMD.ID, lastRow - 1, 1).getValues();
+  for (var i = 0; i < ids.length; i++) {
+    var v = String(ids[i][0]).trim();
+    if (v) _cmdIndex[v] = i + 2;
+  }
+}
+
+function buscarComandaFila(hoja, id) {
+  if (hoja.getLastRow() < 2) return null;
+  _buildCmdIndex(hoja);
+  var fila = _cmdIndex[String(id)];
+  if (!fila) return null;
+  return { fila: fila, datos: hoja.getRange(fila, 1, 1, TOTAL_COLS_CMD).getValues()[0] };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DEBOUNCE ABONOS
+// ═══════════════════════════════════════════════════════════════
+var _lastAbono = { id: null, monto: null, ts: 0 };
+var ABONO_DEBOUNCE_MS = 2000;
+
+function _esDuplicadoAbono(id, monto) {
+  return _lastAbono.id === String(id) &&
+         _lastAbono.monto === Number(monto) &&
+         (Date.now() - _lastAbono.ts) < ABONO_DEBOUNCE_MS;
+}
+function _marcarAbono(id, monto) {
+  _lastAbono = { id: String(id), monto: Number(monto), ts: Date.now() };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ENCABEZADOS
+// ═══════════════════════════════════════════════════════════════
+function _hdrCmds(h) {
+  if (h.getLastRow() > 0) return;
+  h.appendRow([
+    'ID','Cliente','ClienteID','Teléfono','Productos','Precio',
+    'Pago','Agencia','Nota','Status','FechaCreacion','FechaStatus',
+    'Observaciones','MontoPagado','Envios'   // ← añadido
+  ]);
+  h.getRange(1, 1, 1, 15).setFontWeight('bold').setBackground('#111').setFontColor('#fff');
+}
+
+function _hdrMovs(h)  {
+  if (h.getLastRow() > 0) return;
+  h.appendRow(['ID','Fecha','Tipo','SKU','Modelo','Color','Talla','Cantidad','RefComanda','Cliente','Nota']);
+  h.getRange(1,1,1,11).setFontWeight('bold').setBackground('#222').setFontColor('#fff');
+}
+function _hdrVtas(h)  {
+  if (h.getLastRow() > 0) return;
+  h.appendRow(['IDVenta','FechaEntrega','IDComanda','Cliente','ClienteID','Teléfono','Productos','TotalEUR','Pago','Agencia','Abonado','Nota']);
+}
+function _hdrClis(h)  {
+  if (h.getLastRow() > 0) return;
+  h.appendRow(['ID','Nombre','Cédula','Teléfono','Email','Ciudad','Fecha']);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// [FIX-P1] getDatosComandas()
+// Calcula disponible = STOCK_INICIAL + Σ(ENTRADAS) − Σ(SALIDAS)
+// NO lee DISPONIBLE directamente como stock final.
+// ═══════════════════════════════════════════════════════════════
+function getDatosComandas() {
+  var hInv = _getHojaInv();
+  var hCmd = getHoja(HOJA_COMANDAS);
+  var hCli = getHoja(HOJA_CLIENTES);
+  var hMov = getHoja(HOJA_MOVIMIENTOS);
+
+  // ── Paso 1: leer Inventario ──────────────────────────────────
+  var productos       = [];
+  var stockInicialMap = {};  // SKU → STOCK_INICIAL (col 8 de Inventario)
+  if (hInv && hInv.getLastRow() >= 2) {
+    var lr = hInv.getLastRow(), lc = Math.max(hInv.getLastColumn(), 9);
+    if (lr >= 2) {
+      var invData = hInv.getRange(2, 1, lr - 1, lc).getValues();
+      for (var i = 0; i < invData.length; i++) {
+        var r   = invData[i];
+        var sku = String(r[COL_INV.SKU - 1]).trim();
+        if (!sku) continue;
+        var si = Number(r[COL_INV.DISPONIBLE - 1]) || 0;
+        stockInicialMap[sku] = si;
+        productos.push({
+          sku:         sku,
+          categoria:   String(r[COL_INV.CATEGORIA   - 1] || '').trim(),
+          modelo:      String(r[COL_INV.MODELO       - 1] || '').trim(),
+          talla:       (String(r[COL_INV.TALLA       - 1] || '').trim() || 'UNICA'),
+          color:       String(r[COL_INV.COLOR        - 1] || '').trim(),
+          precioDetal: Number(r[COL_INV.PRECIO_DETAL - 1]) || 0,
+          precioMayor: Number(r[COL_INV.PRECIO_MAYOR - 1]) || 0,
+          disponible:  si,   // valor temporal; se sobreescribe en Paso 3
+          tela:        String(r[COL_INV.TELA         - 1] || '').trim()
+        });
+      }
+    }
+  }
+
+  // ── Paso 2: calcular delta de MOVIMIENTOS por SKU ────────────
+  // STOCK_REAL = STOCK_INICIAL + Σ(ENTRADAS) − Σ(SALIDAS)
+  var movDelta = _calcMovDelta(hMov);
+
+  // ── Paso 3: aplicar delta a cada producto ────────────────────
+  for (var p = 0; p < productos.length; p++) {
+    var pSku  = productos[p].sku;
+    var delta = movDelta[pSku] || 0;
+    productos[p].disponible = Math.max(0, (stockInicialMap[pSku] || 0) + delta);
+  }
+
+  // ── Clientes ─────────────────────────────────────────────────
+  var clientes = [];
+  var cliData  = hCli.getDataRange().getValues();
+  for (var j = 1; j < cliData.length; j++) {
+    var c = cliData[j], cid = String(c[0]).trim();
+    if (!cid) continue;
+    clientes.push({
+      id:       cid,
+      nombre:   String(c[1] || ''),
+      cedula:   String(c[2] || ''),
+      telefono: String(c[3] || ''),
+      email:    String(c[4] || ''),
+      ciudad:   String(c[5] || '')
+    });
+  }
+
+  // ── Comandas ─────────────────────────────────────────────────
+var comandas = [];
+  var cmdLR    = hCmd.getLastRow();
+  if (cmdLR >= 2) {
+    // Leer hasta col 15 para incluir ENVIOS
+    var numColsCmd = Math.max(hCmd.getLastColumn(), TOTAL_COLS_CMD);
+    var cmdData    = hCmd.getRange(2, 1, cmdLR - 1, numColsCmd).getValues();
+
+    for (var k = 0; k < cmdData.length; k++) {
+      var row   = cmdData[k];
+      var cmdId = String(row[COL_CMD.ID - 1]).trim();
+      if (!cmdId) continue;
+
+      var prods_cmd = safeJSON(row[COL_CMD.PRODUCTOS - 1]) || [];
+      var envios    = safeJSON(row[COL_CMD.ENVIOS    - 1]) || [];
+
+      // Calcular progreso de envíos
+      var totalPrendas = 0;
+      prods_cmd.forEach(function(p) {
+        totalPrendas += (parseInt(p.cant) || parseInt(p.cantidad) || 1);
+      });
+      var prendasEnviadas = 0;
+      envios.forEach(function(env) {
+        (env.items || []).forEach(function(item) {
+          prendasEnviadas += (parseInt(item.cant) || 0);
+        });
+      });
+      prendasEnviadas  = Math.min(prendasEnviadas, totalPrendas);
+      var prendasPend  = Math.max(0, totalPrendas - prendasEnviadas);
+      var porcentaje   = totalPrendas > 0 ? Math.round(prendasEnviadas / totalPrendas * 100) : 0;
+
+      comandas.push({
+        id:               cmdId,
+        cliente:          String(row[COL_CMD.CLIENTE       - 1] || ''),
+        clienteId:        String(row[COL_CMD.CLIENTE_ID    - 1] || ''),
+        telefono:         String(row[COL_CMD.TELEFONO      - 1] || ''),
+        productos:        prods_cmd,
+        precio:           Number(row[COL_CMD.PRECIO        - 1]) || 0,
+        pago:             String(row[COL_CMD.PAGO          - 1] || ''),
+        agencia:          String(row[COL_CMD.AGENCIA       - 1] || ''),
+        nota:             String(row[COL_CMD.NOTA          - 1] || ''),
+        status:           String(row[COL_CMD.STATUS        - 1] || 'pendiente'),
+        fechaCreacion:    row[COL_CMD.FECHA_CREACION - 1] ? new Date(row[COL_CMD.FECHA_CREACION - 1]).getTime() : 0,
+        fechaStatus:      row[COL_CMD.FECHA_STATUS   - 1] ? new Date(row[COL_CMD.FECHA_STATUS   - 1]).getTime() : 0,
+        observaciones:    safeJSON(row[COL_CMD.OBSERVACIONES - 1]) || [],
+        montoPagado:      Number(row[COL_CMD.MONTO_PAGADO  - 1]) || 0,
+        // ── NUEVOS campos de envíos parciales ──────────────────
+        envios:           envios,
+        totalPrendas:     totalPrendas,
+        prendasEnviadas:  prendasEnviadas,
+        prendasPendientes: prendasPend,
+        porcentaje:       porcentaje
+      });
+    }
+  }
+
+  return { comandas: comandas, clientes: clientes, productos: productos };
+}
+// ═══════════════════════════════════════════════════════════════
+// crearComanda(datos)
+// ═══════════════════════════════════════════════════════════════
+function crearComanda(datos) {
+  var lock = acquireLock();
+  try {
+    var hoja  = getHoja(HOJA_COMANDAS);
+    var ahora = new Date();
+    var id    = generarId('CMD');
+    _hdrCmds(hoja);
+
+    var montoPagadoInicial = Number(datos.montoPagadoInicial || 0);
+    var obsInicial = [];
+    if (montoPagadoInicial > 0) {
+      obsInicial.push({
+        texto: '💰 Pago inicial: ' + _fmtEur(montoPagadoInicial) +
+               (datos.notaPagoInicial ? ' · ' + datos.notaPagoInicial : ''),
+        fecha: ahora.getTime(),
+        tipo:  'obs'
+      });
+    }
+
+    hoja.appendRow([
+      id,
+      datos.cliente   || '',
+      datos.clienteId || '',
+      datos.telefono  || '',
+      JSON.stringify(datos.productos || []),
+      datos.precio    || 0,
+      datos.pago      || '',
+      datos.agencia   || '',
+      datos.nota      || '',
+      'pendiente',
+      ahora,
+      ahora,
+      JSON.stringify(obsInicial),
+      montoPagadoInicial
+    ]);
+
+    SpreadsheetApp.flush();
+    _invalidateCmdIndex();
+    return { ok: true, id: id };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// actualizarComanda(datos)
+// Bloquea edición en entregado/cancelado (solo pagos y obs permitidos).
+// ═══════════════════════════════════════════════════════════════
+function actualizarComanda(datos) {
+  if (!datos.id) return { ok: false, error: 'ID requerido' };
+  var lock = acquireLock();
+  try {
+    var hoja = getHoja(HOJA_COMANDAS);
+    var enc  = buscarComandaFila(hoja, datos.id);
+    if (!enc) return { ok: false, error: 'Comanda no encontrada: ' + datos.id };
+    var st = String(enc.datos[COL_CMD.STATUS - 1]);
+    if (st === 'entregado') return { ok: false, error: 'No se puede editar una comanda ya entregada. Solo se permiten abonos y observaciones.' };
+    if (st === 'cancelado') return { ok: false, error: 'No se puede editar una comanda cancelada.' };
+
+    hoja.getRange(enc.fila, COL_CMD.CLIENTE, 1, 8).setValues([[
+      datos.cliente || '', datos.clienteId || '', datos.telefono || '',
+      JSON.stringify(datos.productos || []), datos.precio || 0,
+      datos.pago || '', datos.agencia || '', datos.nota || ''
+    ]]);
+    SpreadsheetApp.flush();
+    _invalidateCmdIndex();
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e.message }; }
+  finally { lock.releaseLock(); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// cambiarStatusComanda(id, nuevoStatus)
+// ═══════════════════════════════════════════════════════════════
+function cambiarStatusComanda(id, nuevoStatus) {
+  if (!id || !nuevoStatus) return { ok: false, error: 'ID y status requeridos' };
+  if (nuevoStatus === 'entregado') return { ok: false, error: 'Usa el botón Entregar para registrar la salida de inventario.' };
+
+  var lock = acquireLock();
+  try {
+    var hoja = getHoja(HOJA_COMANDAS);
+    var enc  = buscarComandaFila(hoja, id);
+    if (!enc) return { ok: false, error: 'Comanda no encontrada: ' + id };
+
+    var st   = String(enc.datos[COL_CMD.STATUS - 1]);
+    var perm = TRANSICIONES_VALIDAS[st] || [];
+    if (perm.indexOf(nuevoStatus) === -1)
+      return { ok: false, error: 'Transición inválida: ' + st + ' → ' + nuevoStatus };
+
+    var ahora = new Date();
+    hoja.getRange(enc.fila, COL_CMD.STATUS).setValue(nuevoStatus);
+    hoja.getRange(enc.fila, COL_CMD.FECHA_STATUS).setValue(ahora);
+    SpreadsheetApp.flush();
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e.message }; }
+  finally { lock.releaseLock(); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// [FIX-P2] entregarComanda(id)
+// ──────────────────────────────────────────────────────────────
+// CORRECCIÓN CRÍTICA:
+//   ✅ Registra SALIDA en MOVIMIENTOS por cada prenda.
+//   ✅ Calcula stock real leyendo MOVIMIENTOS (no solo STOCK_INICIAL).
+//   ❌ NO modifica la hoja Inventario directamente.
+//      El inventario es inmutable; el stock se calcula siempre
+//      desde STOCK_INICIAL + suma de MOVIMIENTOS.
+// ═══════════════════════════════════════════════════════════════
+function entregarComanda(id) {
+  if (!id) return { ok: false, error: 'ID requerido' };
+  var lock = acquireLock(20000);
+  try {
+    var hCmd = getHoja(HOJA_COMANDAS);
+    var hInv = _getHojaInv();
+    var hMov = getHoja(HOJA_MOVIMIENTOS);
+    var hVen = getHoja(HOJA_VENTAS);
+
+    // Usar helper extendido para leer col 15 también
+    var enc = (typeof _buscarComandaConEnvios === 'function')
+      ? _buscarComandaConEnvios(hCmd, id)
+      : buscarComandaFila(hCmd, id);
+
+    if (!enc) return { ok: false, error: 'Comanda no encontrada: ' + id };
+
+    var row  = enc.datos, fila = enc.fila;
+    var st   = String(row[COL_CMD.STATUS - 1]);
+    if (st === 'entregado') return { ok: false, error: 'Ya fue entregada.' };
+    if (st === 'cancelado') return { ok: false, error: 'Está cancelada.' };
+    if (st !== 'listo')     return { ok: false, error: 'Solo se entregan comandas en estado "listo". Estado actual: ' + st };
+
+    var prendas    = safeJSON(row[COL_CMD.PRODUCTOS - 1]) || [];
+    var enviosPrev = (row.length >= COL_CMD.ENVIOS) ? (safeJSON(row[COL_CMD.ENVIOS - 1]) || []) : [];
+
+    if (!prendas.length) return { ok: false, error: 'La comanda no tiene prendas.' };
+
+    var cliente = String(row[COL_CMD.CLIENTE - 1] || '');
+    var ahora   = new Date();
+    var errores = [];
+
+    // ── Calcular cuánto ya fue enviado por SKU ────────────────
+    var yaEnviadoMap = {};   // SKU → total ya enviado en envíos parciales
+    enviosPrev.forEach(function(env) {
+      (env.items || []).forEach(function(item) {
+        var sku = String(item.sku || '').trim();
+        yaEnviadoMap[sku] = (yaEnviadoMap[sku] || 0) + (parseInt(item.cant) || 0);
+      });
+    });
+
+    // ── Calcular prendas PENDIENTES de registrar SALIDA ───────
+    var prendasRestantes = [];   // solo lo que aún no se envió
+    prendas.forEach(function(ln) {
+      var sku      = String(ln.sku || ln.nombre || '').trim();
+      var cantTotal = parseInt(ln.cant) || 1;
+      if (!sku) return;
+      var yaEnv   = yaEnviadoMap[sku] || 0;
+      var restante = Math.max(0, cantTotal - yaEnv);
+      if (restante > 0) {
+        prendasRestantes.push({ sku: sku, cant: restante, original: ln });
+      }
+    });
+
+    // ── Si todo ya fue enviado vía parciales → solo actualizar estado
+    if (prendasRestantes.length === 0) {
+      var obs0 = safeJSON(row[COL_CMD.OBSERVACIONES - 1]) || [];
+      obs0.push({
+        texto: '✅ Entregada (todas las prendas ya enviadas en envíos parciales).',
+        fecha: ahora.getTime(),
+        tipo:  'edit'
+      });
+      hCmd.getRange(fila, COL_CMD.STATUS).setValue('entregado');
+      hCmd.getRange(fila, COL_CMD.FECHA_STATUS, 1, 2).setValues([[ahora, JSON.stringify(obs0)]]);
+      SpreadsheetApp.flush();
+      return { ok: true, advertencias: [], mensaje: 'Comanda marcada entregada. Stock ya descontado en envíos parciales.' };
+    }
+
+    // ── Stock real para las prendas restantes ─────────────────
+    var invMap = {};
+    if (hInv) {
+      var lr = hInv.getLastRow(), lc = Math.max(hInv.getLastColumn(), 9);
+      if (lr >= 2) {
+        var invData = hInv.getRange(2, 1, lr - 1, lc).getValues();
+        for (var r = 0; r < invData.length; r++) {
+          var sk = String(invData[r][COL_INV.SKU - 1]).trim();
+          if (sk) invMap[sk] = { stockInicial: Number(invData[r][COL_INV.DISPONIBLE - 1]) || 0, datos: invData[r] };
+        }
+      }
+    }
+    var stockReal = {};
+    for (var sk in invMap) { stockReal[sk] = invMap[sk].stockInicial; }
+    var movDelta = _calcMovDelta(hMov);
+    for (var dSku in movDelta) {
+      if (stockReal[dSku] === undefined) stockReal[dSku] = 0;
+      stockReal[dSku] += movDelta[dSku];
+    }
+
+    // ── Registrar SALIDAs solo para prendas pendientes ────────
+    _hdrMovs(hMov);
+    _hdrVtas(hVen);
+
+    var movRows = [];
+    prendasRestantes.forEach(function(item) {
+      var sku  = item.sku, cant = item.cant, ln = item.original;
+      var pe    = invMap[sku];
+      var stock = (stockReal[sku] !== undefined) ? stockReal[sku] : 0;
+      var adv   = stock < cant
+        ? '⚠ Stock insuficiente (' + stock + ' disponible, se solicitan ' + cant + ')'
+        : '';
+      movRows.push([
+        generarId('MOV'), ahora, 'SALIDA', sku,
+        pe ? String(pe.datos[COL_INV.MODELO - 1] || ln.nombre || sku) : String(ln.nombre || sku),
+        pe ? String(pe.datos[COL_INV.COLOR  - 1] || ln.color  || '') : String(ln.color  || ''),
+        pe ? String(pe.datos[COL_INV.TALLA  - 1] || ln.talla  || '') : String(ln.talla  || ''),
+        cant, id, cliente,
+        adv || 'Entrega comanda'
+      ]);
+      if (!pe) errores.push('SKU "' + sku + '" no en Inventario (SALIDA registrada de todas formas).');
+      if (adv) errores.push(adv + ' · SKU: ' + sku);
+    });
+
+    if (movRows.length) {
+      hMov.getRange(hMov.getLastRow() + 1, 1, movRows.length, movRows[0].length).setValues(movRows);
+    }
+
+    // ── Registro en Ventas ────────────────────────────────────
+    hVen.appendRow([
+      generarId('VEN'), ahora, id, cliente,
+      String(row[COL_CMD.CLIENTE_ID   - 1] || ''),
+      String(row[COL_CMD.TELEFONO     - 1] || ''),
+      JSON.stringify(prendas),
+      Number(row[COL_CMD.PRECIO       - 1]) || 0,
+      String(row[COL_CMD.PAGO         - 1] || ''),
+      String(row[COL_CMD.AGENCIA      - 1] || ''),
+      Number(row[COL_CMD.MONTO_PAGADO - 1]) || 0,
+      String(row[COL_CMD.NOTA         - 1] || '')
+    ]);
+
+    var obs = safeJSON(row[COL_CMD.OBSERVACIONES - 1]) || [];
+    obs.push({
+      texto: '✅ Entregada — SALIDA registrada en Movimientos.' + (enviosPrev.length ? ' (' + enviosPrev.length + ' envío(s) parcial(es) previo(s)).' : ''),
+      fecha: ahora.getTime(),
+      tipo:  'edit'
+    });
+    hCmd.getRange(fila, COL_CMD.STATUS).setValue('entregado');
+    hCmd.getRange(fila, COL_CMD.FECHA_STATUS, 1, 2).setValues([[ahora, JSON.stringify(obs)]]);
+    SpreadsheetApp.flush();
+
+    return {
+      ok: true,
+      advertencias: errores,
+      mensaje: errores.length
+        ? 'Entregada con ' + errores.length + ' advertencia(s). Revisa el tablero.'
+        : 'Comanda entregada. Stock descontado correctamente vía Movimientos.'
+    };
+  } catch (e) { return { ok: false, error: e.message }; }
+  finally { lock.releaseLock(); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// [FIX-P3] registrarAbono(id, montoEUR, moneda, metodoPago, montoBs, fechaManual)
+// ──────────────────────────────────────────────────────────────
+// CORRECCIONES:
+//   ✅ Permite abonar incluso si la comanda ya fue "entregada".
+//      Esto cubre pagos que llegaron tarde o no se registraron.
+//   ✅ Solo bloquea si está "cancelada".
+//   ✅ Acepta fechaManual (string ISO o datetime-local) para
+//      pagos retroactivos con fecha correcta.
+// ═══════════════════════════════════════════════════════════════
+function registrarAbono(id, montoEUR, moneda, metodoPago, montoBs, fechaManual) {
+  if (!id)                          return { ok: false, error: 'ID requerido' };
+  if (!montoEUR || montoEUR <= 0)   return { ok: false, error: 'Monto EUR inválido' };
+  if (_esDuplicadoAbono(id, montoEUR)) return { ok: false, error: 'Abono duplicado. Espera 2 seg.' };
+
+  var lock = acquireLock();
+  try {
+    var hoja = getHoja(HOJA_COMANDAS);
+    var enc  = buscarComandaFila(hoja, id);
+    if (!enc) return { ok: false, error: 'Comanda no encontrada: ' + id };
+
+    var st = String(enc.datos[COL_CMD.STATUS - 1]);
+    // Solo se bloquea si está CANCELADA.
+    // Los pagos atrasados en comandas ENTREGADAS sí se permiten.
+    if (st === 'cancelado') {
+      return { ok: false, error: 'No se puede abonar a una comanda cancelada.' };
+    }
+
+    var montoPrev   = Number(enc.datos[COL_CMD.MONTO_PAGADO - 1]) || 0;
+    var nuevoMonto  = montoPrev + Number(montoEUR);
+    var totalPedido = Number(enc.datos[COL_CMD.PRECIO       - 1]) || 0;
+    var saldo       = Math.max(0, totalPedido - nuevoMonto);
+
+    // Fecha del abono: manual (retroactivo) o ahora mismo
+    var esRetroactivo = !!(fechaManual && String(fechaManual).trim());
+    var fechaAbono    = esRetroactivo ? new Date(fechaManual) : new Date();
+
+    // Descripción detallada del abono
+    var detalle = '';
+    if (moneda === 'BS' && montoBs && montoBs > 0) {
+      detalle = 'Bs. ' + Number(montoBs).toFixed(2) + ' → ' + _fmtEur(montoEUR);
+    } else {
+      detalle = _fmtEur(montoEUR);
+    }
+    if (metodoPago)    detalle += ' [' + metodoPago + ']';
+    if (esRetroactivo) detalle += ' ← RETROACTIVO · ' + fechaAbono.toLocaleDateString('es-VE');
+
+    var obs = safeJSON(enc.datos[COL_CMD.OBSERVACIONES - 1]) || [];
+    obs.push({
+      texto: '💰 Abono' + (esRetroactivo ? ' retroactivo' : '') + ': ' + detalle +
+             ' — Acumulado: ' + _fmtEur(nuevoMonto) +
+             (saldo > 0 ? ' · Pendiente: ' + _fmtEur(saldo) : ' · ✓ Saldado'),
+      fecha: fechaAbono.getTime(),
+      tipo:  'obs'
+    });
+
+    hoja.getRange(enc.fila, COL_CMD.MONTO_PAGADO).setValue(nuevoMonto);
+    hoja.getRange(enc.fila, COL_CMD.OBSERVACIONES).setValue(JSON.stringify(obs));
+    SpreadsheetApp.flush();
+    _marcarAbono(id, montoEUR);
+
+    return { ok: true, montoPagado: nuevoMonto, saldo: saldo };
+  } catch (e) { return { ok: false, error: e.message }; }
+  finally { lock.releaseLock(); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// agregarObservacion / eliminarComanda / registrarCliente
+// ═══════════════════════════════════════════════════════════════
+function agregarObservacion(id, obs) {
+  if (!id || !obs) return { ok: false, error: 'Faltan parámetros' };
+  var lock = acquireLock();
+  try {
+    var hoja = getHoja(HOJA_COMANDAS), enc = buscarComandaFila(hoja, id);
+    if (!enc) return { ok: false, error: 'No encontrada: ' + id };
+    var st = String(enc.datos[COL_CMD.STATUS - 1]);
+    if (st === 'cancelado') return { ok: false, error: 'No se pueden agregar observaciones a una comanda cancelada.' };
+    var actual = safeJSON(enc.datos[COL_CMD.OBSERVACIONES - 1]) || [];
+    actual.push({ texto: obs.texto || '', fecha: obs.fecha || Date.now(), tipo: obs.tipo || 'obs' });
+    hoja.getRange(enc.fila, COL_CMD.OBSERVACIONES).setValue(JSON.stringify(actual));
+    SpreadsheetApp.flush();
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e.message }; }
+  finally { lock.releaseLock(); }
+}
+
+function eliminarComanda(id) {
+  if (!id) return { ok: false, error: 'ID requerido' };
+  var lock = acquireLock();
+  try {
+    var hoja = getHoja(HOJA_COMANDAS), enc = buscarComandaFila(hoja, id);
+    if (!enc) return { ok: false, error: 'No encontrada: ' + id };
+    var st = String(enc.datos[COL_CMD.STATUS - 1]);
+    if (st === 'entregado') return { ok: false, error: 'Las comandas entregadas no se eliminan.' };
+    if (st === 'cancelado') return { ok: true, mensaje: 'Ya estaba cancelada.' };
+    var ahora = new Date();
+    var obs = safeJSON(enc.datos[COL_CMD.OBSERVACIONES - 1]) || [];
+    obs.push({ texto: '🗑 Cancelada por el operador.', fecha: Date.now(), tipo: 'edit' });
+    hoja.getRange(enc.fila, COL_CMD.STATUS).setValue('cancelado');
+    hoja.getRange(enc.fila, COL_CMD.FECHA_STATUS, 1, 2).setValues([[ahora, JSON.stringify(obs)]]);
+    SpreadsheetApp.flush();
+    _invalidateCmdIndex();
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e.message }; }
+  finally { lock.releaseLock(); }
+}
+
+function registrarCliente(datos) {
+  if (!datos.nombre) return { ok: false, error: 'Nombre requerido' };
+  if (!datos.cedula)  return { ok: false, error: 'Cédula requerida' };
+  var lock = acquireLock();
+  try {
+    var hoja = getHoja(HOJA_CLIENTES);
+    _hdrClis(hoja);
+    var rows = hoja.getDataRange().getValues();
+    for (var i = 1; i < rows.length; i++) {
+      if (String(rows[i][COL_CLI.CEDULA - 1]).trim() === datos.cedula.trim())
+        return { ok: false, error: 'Cédula "' + datos.cedula + '" ya existe.' };
+    }
+    var id = generarId('CLI');
+    hoja.appendRow([id, datos.nombre || '', datos.cedula || '', datos.telefono || '',
+                    datos.email || '', datos.ciudad || '', new Date()]);
+    SpreadsheetApp.flush();
+    return { ok: true, id: id };
+  } catch (e) { return { ok: false, error: e.message }; }
+  finally { lock.releaseLock(); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// doGet / getComandasUrl
+// ═══════════════════════════════════════════════════════════════
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile('Comandas')
+    .setTitle('MODITEX — Comandas')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
+}
+
+function getComandasUrl() { return ScriptApp.getService().getUrl(); }
+
+// ═══════════════════════════════════════════════════════════════
+// DIAGNÓSTICO — ejecutar manualmente desde el editor GAS
+// ═══════════════════════════════════════════════════════════════
+function _test_diagnostico() {
+  Logger.log('=== DIAGNÓSTICO MODITEX v4.0 ===');
+
+  var hInv = _getHojaInv();
+  if (!hInv) {
+    Logger.log('ERROR: Hoja de inventario no encontrada.');
+    return;
+  }
+  Logger.log('Inventario: ' + hInv.getName() + ' · ' + hInv.getLastRow() + ' filas');
+  if (hInv.getLastRow() >= 1)
+    Logger.log('Cabeceras: ' + JSON.stringify(hInv.getRange(1,1,1,Math.min(9,hInv.getLastColumn())).getValues()[0]));
+  if (hInv.getLastRow() >= 2)
+    Logger.log('Fila 2: ' + JSON.stringify(hInv.getRange(2,1,1,Math.min(9,hInv.getLastColumn())).getValues()[0]));
+
+  var hMov = getHoja(HOJA_MOVIMIENTOS);
+  Logger.log('Movimientos: ' + hMov.getLastRow() + ' filas');
+  var delta = _calcMovDelta(hMov);
+  Logger.log('Delta movimientos: ' + JSON.stringify(delta));
+
+  var d = getDatosComandas();
+  Logger.log('Productos: ' + d.productos.length + ' | Clientes: ' + d.clientes.length + ' | Comandas: ' + d.comandas.length);
+  if (d.productos.length > 0) Logger.log('Primer producto: ' + JSON.stringify(d.productos[0]));
+  Logger.log('=== FIN ===');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LISTADO DE HOJAS — ejecutar para ver nombres exactos en el log
+// ═══════════════════════════════════════════════════════════════
+function _listarHojas() {
+  Logger.log('=== HOJAS DEL SPREADSHEET ===');
+  var sheets = SS.getSheets();
+  sheets.forEach(function(s) {
+    Logger.log('"' + s.getName() + '" → ' + s.getLastRow() + ' filas, ' + s.getLastColumn() + ' cols');
+  });
+  Logger.log('=== RESOLUCIÓN ACTUAL ===');
+  Logger.log('HOJA_COMANDAS    = "' + HOJA_COMANDAS    + '"');
+  Logger.log('HOJA_CLIENTES    = "' + HOJA_CLIENTES    + '"');
+  Logger.log('HOJA_PRODUCTOS   = "' + HOJA_PRODUCTOS   + '"');
+  Logger.log('HOJA_MOVIMIENTOS = "' + HOJA_MOVIMIENTOS + '"');
+  var hInv = _getHojaInv();
+  Logger.log('Hoja Inventario detectada: "' + (hInv ? hInv.getName() : 'NINGUNA') + '" — ' + (hInv ? hInv.getLastRow() : 0) + ' filas');
+  if (hInv && hInv.getLastRow() >= 1) {
+    var lc = Math.min(hInv.getLastColumn(), 9);
+    Logger.log('Cabeceras Inventario: ' + JSON.stringify(hInv.getRange(1,1,1,lc).getValues()[0]));
+  }
+  if (hInv && hInv.getLastRow() >= 2) {
+    var lc2 = Math.min(hInv.getLastColumn(), 9);
+    Logger.log('Fila 2 Inventario: ' + JSON.stringify(hInv.getRange(2,1,1,lc2).getValues()[0]));
+  }
+}

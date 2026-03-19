@@ -1,9 +1,8 @@
 'use client';
+import { colorHex } from '@/utils/colores';
 import Shell from '@/components/Shell';
 import { useAppData } from '@/lib/AppContext';
 
-const COLOR_MAP={'BLANCO':'#d0d0d0','NEGRO':'#1a1a1a','AZUL':'#3b6fd4','ROJO':'#d63b3b','VERDE':'#2d9e4a','ROSA':'#f07aa0','GRIS':'#6b7280','AMARILLO':'#f5c842','NARANJA':'#f57c42','MORADO':'#7c4fd4','VINOTINTO':'#8b2035','BEIGE':'#d4b896','CORAL':'#f26e5b','CELESTE':'#7ec8e3'};
-function colorHex(n){const k=(n||'').toUpperCase().trim();return COLOR_MAP[k]||COLOR_MAP[k.split(' ')[0]]||'#9ca3af';}
 function fmtF(d){if(!d)return '—';const p=d.split('-');return (p[2]||'')+'/'+(p[1]||'')+'/'+(p[0]||'');}
 function estD(n){if(n<=0)return 'zero';if(n<=3)return 'low';return 'ok';}
 

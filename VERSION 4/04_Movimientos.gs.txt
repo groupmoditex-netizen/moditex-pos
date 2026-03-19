@@ -1,0 +1,391 @@
+// ═══════════════════════════════════════════════════════════════════════════
+//  MODITEX GROUP — 04_Movimientos.gs
+//  Depende de: 00_Config.gs, 01_Utils.gs, 02_Validaciones.gs,
+//              03_Productos.gs, 06_Logs.gs
+// ═══════════════════════════════════════════════════════════════════════════
+
+var _CACHE_KEY_MOVIMIENTOS = 'moditex_movimientos';
+var _CACHE_KEY_CLIENTES    = 'moditex_clientes';
+
+// ── Movimientos — Lectura ────────────────────────────────────────────────────
+function getMovimientos() {
+  try {
+    var ss    = getSS();
+    var shMov = ss.getSheetByName(SHEET_MOVIMIENTOS);
+    if (!shMov || shMov.getLastRow() < 2) return [];
+
+    var numCols = Math.min(Math.max(shMov.getLastColumn(), NUM_COLS_MOVIMIENTOS), NUM_COLS_MOVIMIENTOS);
+    var data    = shMov.getRange(2, 1, shMov.getLastRow() - 1, numCols).getValues();
+
+    return data
+      .filter(function(row) { return row[COL_MOV_ID] && row[COL_MOV_SKU]; })
+      .map(function(row) {
+        return {
+          id:          str(row[COL_MOV_ID]),
+          fecha:       formatearFechaCelda(row[COL_MOV_FECHA]),
+          sku:         str(row[COL_MOV_SKU]),
+          tipo:        str(row[COL_MOV_TIPO]).toUpperCase(),
+          cantidad:    toInt(row[COL_MOV_CANTIDAD]),
+          concepto:    str(row[COL_MOV_CONCEPTO]),
+          contacto:    str(row[COL_MOV_CONTACTO]),
+          referencia:  str(row[COL_MOV_REFERENCIA]),
+          tipoVenta:   str(row[COL_MOV_TIPO_VENTA]).toUpperCase(),
+          precioVenta: toFloat(row[COL_MOV_PRECIO_VENTA]),
+          clienteId:   str(row[COL_MOV_CLIENTE_ID])
+        };
+      });
+
+  } catch (e) {
+    logError('getMovimientos', e);
+    throw new Error('Error al leer movimientos: ' + e.message);
+  }
+}
+
+/** Versión con CacheService. TTL 300s. */
+function getMovimientosCached() {
+  try {
+    var cache  = CacheService.getScriptCache();
+    var cached = cache.get(_CACHE_KEY_MOVIMIENTOS);
+    if (cached) return JSON.parse(cached);
+
+    var data = getMovimientos();
+    try { cache.put(_CACHE_KEY_MOVIMIENTOS, JSON.stringify(data), _CACHE_TTL); } catch(e) {}
+    return data;
+  } catch(e) {
+    logError('getMovimientosCached', e);
+    throw new Error('Error al leer movimientos (cache): ' + e.message);
+  }
+}
+
+function invalidarCacheMovimientos() {
+  try { CacheService.getScriptCache().remove(_CACHE_KEY_MOVIMIENTOS); } catch(e) {}
+}
+
+// ── Movimientos — Escritura ──────────────────────────────────────────────────
+function registrarMovimiento(datos) {
+  try {
+    var valBasica = validarDatosMovimiento(datos);
+    if (!valBasica.ok) return valBasica;
+
+    var tipoUp   = valBasica.tipoUp;
+    var cantidad = valBasica.cantidad;
+
+    var ss     = getSS();
+    var shProd = ss.getSheetByName(SHEET_PRODUCTOS);
+    var shMov  = ss.getSheetByName(SHEET_MOVIMIENTOS);
+
+    var vMov  = validarHojaExiste(shMov,  SHEET_MOVIMIENTOS); if (!vMov.ok)  return vMov;
+    var vProd = validarHojaExiste(shProd, SHEET_PRODUCTOS);   if (!vProd.ok) return vProd;
+
+    var vSku = validarSkuExiste(datos.sku, shProd);
+    if (!vSku.ok) return vSku;
+
+    if (tipoUp === TIPO_SALIDA) {
+      var vStock = validarStockSuficiente(datos.sku, cantidad);
+      if (!vStock.ok) return vStock;
+    }
+
+    var id = generarId(PREFIX_MOVIMIENTO);
+    shMov.appendRow([
+      id,
+      new Date(datos.fecha + 'T12:00:00'),
+      datos.sku.trim(),
+      tipoUp,
+      cantidad,
+      datos.concepto   || '',
+      datos.contacto   || '',
+      datos.referencia || '',
+      datos.tipoVenta  || '',
+      toFloat(datos.precioVenta),
+      datos.clienteId  || ''
+    ]);
+    aplicarFormatoFecha(shMov, shMov.getLastRow(), COL_MOV_FECHA + 1);
+
+    invalidarCacheMovimientos();
+    invalidarCacheProductos();
+    registrarLog(
+      'REGISTRAR_MOVIMIENTO',
+      'ID: ' + id + ' | SKU: ' + datos.sku + ' | TIPO: ' + tipoUp + ' | CANT: ' + cantidad,
+      'OK'
+    );
+    return respOk({ id: id });
+
+  } catch (e) {
+    logError('registrarMovimiento', e);
+    registrarLog('REGISTRAR_MOVIMIENTO', String(datos.sku || ''), 'ERROR: ' + e.message);
+    return respError(e.message);
+  }
+}
+
+// ── Clientes — Lectura ───────────────────────────────────────────────────────
+function getClientes() {
+  try {
+    var ss  = getSS();
+    var shC = ss.getSheetByName(SHEET_CLIENTES);
+    if (!shC || shC.getLastRow() < 2) return [];
+
+    var movimientos  = getMovimientos();
+    var totalGastado = {}, totalPedidos = {};
+
+    movimientos.forEach(function(m) {
+      if (m.tipo !== TIPO_SALIDA) return;
+      var ref = m.clienteId || m.contacto || '';
+      if (!ref) return;
+      totalGastado[ref] = (totalGastado[ref] || 0) + (m.precioVenta * m.cantidad);
+      totalPedidos[ref] = (totalPedidos[ref] || 0) + 1;
+    });
+
+    return shC.getRange(2, 1, shC.getLastRow() - 1, NUM_COLS_CLIENTES).getValues()
+      .filter(function(row) { return row[COL_CLI_ID] && row[COL_CLI_NOMBRE]; })
+      .map(function(row) {
+var id     = str(row[COL_CLI_ID]);
+        var nombre = str(row[COL_CLI_NOMBRE]);
+        return {
+          id:            id,
+          nombre:        nombre,
+          cedula:        str(row[COL_CLI_CEDULA]),  // ← NUEVO
+          telefono:      str(row[COL_CLI_TELEFONO]),
+          email:         str(row[COL_CLI_EMAIL]),
+          ciudad:        str(row[COL_CLI_CIUDAD]),
+          fechaRegistro: formatearFechaCelda(row[COL_CLI_FECHA_REGISTRO]),
+          totalGastado:  (totalGastado[id] || totalGastado[nombre] || 0),
+          totalPedidos:  (totalPedidos[id] || totalPedidos[nombre] || 0)
+        };
+      });
+
+  } catch (e) {
+    logError('getClientes', e);
+    throw new Error('Error al leer clientes: ' + e.message);
+  }
+}
+
+/** Versión con CacheService. TTL 300s. */
+function getClientesCached() {
+  try {
+    var cache  = CacheService.getScriptCache();
+    var cached = cache.get(_CACHE_KEY_CLIENTES);
+    if (cached) return JSON.parse(cached);
+
+    var data = getClientes();
+    try { cache.put(_CACHE_KEY_CLIENTES, JSON.stringify(data), _CACHE_TTL); } catch(e) {}
+    return data;
+  } catch(e) {
+    logError('getClientesCached', e);
+    throw new Error('Error al leer clientes (cache): ' + e.message);
+  }
+}
+
+function invalidarCacheClientes() {
+  try { CacheService.getScriptCache().remove(_CACHE_KEY_CLIENTES); } catch(e) {}
+}
+
+// ── Clientes — Escritura ─────────────────────────────────────────────────────
+function registrarCliente(datos) {
+  try {
+    var valBasica = validarDatosCliente(datos);
+    if (!valBasica.ok) return valBasica;
+
+    var ss  = getSS();
+    var shC = ss.getSheetByName(SHEET_CLIENTES);
+    var valHoja = validarHojaExiste(shC, SHEET_CLIENTES);
+    if (!valHoja.ok) return valHoja;
+
+// Verificar cédula duplicada
+    if (shC.getLastRow() >= 2) {
+      var cedulas = shC.getRange(2, COL_CLI_CEDULA + 1, shC.getLastRow() - 1, 1)
+        .getValues().flat().map(function(c){ return String(c).trim(); });
+      if (cedulas.indexOf(datos.cedula.trim()) !== -1)
+        return respError('Ya existe un cliente con la cédula "' + datos.cedula.trim() + '"');
+    }
+
+    var id = generarId(PREFIX_CLIENTE);
+    shC.appendRow([id, datos.nombre.trim(), datos.cedula.trim(), datos.telefono || '', datos.email || '', datos.ciudad || '', new Date()]);
+    aplicarFormatoFecha(shC, shC.getLastRow(), COL_CLI_FECHA_REGISTRO + 1);
+
+    invalidarCacheClientes();
+    registrarLog('REGISTRAR_CLIENTE', 'ID: ' + id + ' | Nombre: ' + datos.nombre, 'OK');
+    return respOk({ id: id });
+
+  } catch (e) {
+    logError('registrarCliente', e);
+    registrarLog('REGISTRAR_CLIENTE', String(datos.nombre || ''), 'ERROR: ' + e.message);
+    return respError(e.message);
+  }
+}
+// ── Movimientos — Escritura en lote (BATCH) ──────────────────────────────────
+/**
+ * Registra UNO O VARIOS movimientos en una sola llamada setValues().
+ * Soluciona la pérdida de datos por llamadas paralelas concurrentes.
+ *
+ * @param  {Object[]} listaDatos  Array de objetos movimiento.
+ * @return {Object} { ok, data:{ ids:[] } } o { ok:false, error }
+ */
+function registrarMovimientos(listaDatos) {
+  try {
+    if (!Array.isArray(listaDatos) || listaDatos.length === 0)
+      return { ok: false, data: { ids: [] }, error: 'No se recibieron movimientos.' };
+
+    var ss     = getSS();
+    var shProd = ss.getSheetByName(SHEET_PRODUCTOS);
+    var shMov  = ss.getSheetByName(SHEET_MOVIMIENTOS);
+
+    var vMov  = validarHojaExiste(shMov,  SHEET_MOVIMIENTOS);
+    if (!vMov.ok)  return { ok: false, data: { ids: [] }, error: vMov.error };
+    var vProd = validarHojaExiste(shProd, SHEET_PRODUCTOS);
+    if (!vProd.ok) return { ok: false, data: { ids: [] }, error: vProd.error };
+
+    // ── 1. Validar campos básicos de todos los registros ─────────────────────
+    var errores = [];
+    var itemsValidos = [];
+
+    for (var i = 0; i < listaDatos.length; i++) {
+      var datos     = listaDatos[i];
+      var valBasica = validarDatosMovimiento(datos);
+      if (!valBasica.ok) {
+        errores.push('Item ' + (i + 1) + ': ' + valBasica.error);
+        continue;
+      }
+      itemsValidos.push({ datos: datos, tipoUp: valBasica.tipoUp, cantidad: valBasica.cantidad });
+    }
+
+    if (errores.length > 0)
+      return { ok: false, data: { ids: [] }, error: errores.join('\n') };
+
+    // ── 2. Validar SKUs (una sola lectura de la hoja) ────────────────────────
+    var lastRowP = shProd.getLastRow();
+    if (lastRowP < 2) return { ok: false, data: { ids: [] }, error: 'No hay productos registrados.' };
+    var skusHoja = shProd.getRange(2, 1, lastRowP - 1, 1)
+      .getValues().flat().map(function(s){ return String(s).trim(); });
+
+    for (var j = 0; j < itemsValidos.length; j++) {
+      var sku = itemsValidos[j].datos.sku.trim();
+      if (skusHoja.indexOf(sku) === -1)
+        return { ok: false, data: { ids: [] }, error: 'SKU "' + sku + '" no encontrado en PRODUCTOS.' };
+    }
+
+    // ── 3. Validar stock ACUMULADO por SKU (salidas del lote + historial) ────
+    var productos = getProductos();
+    var stockActual = {};
+    productos.forEach(function(p){ stockActual[p.sku] = p.disponible; });
+
+    var acumuladoLote = {};
+    for (var k = 0; k < itemsValidos.length; k++) {
+      var it = itemsValidos[k];
+      if (it.tipoUp !== TIPO_SALIDA) continue;
+      var skuItem = it.datos.sku.trim();
+      acumuladoLote[skuItem] = (acumuladoLote[skuItem] || 0) + it.cantidad;
+      var disponible = (stockActual[skuItem] !== undefined) ? stockActual[skuItem] : 0;
+      if (acumuladoLote[skuItem] > disponible)
+        return {
+          ok: false,
+          data: { ids: [] },
+          error: 'Stock insuficiente para "' + skuItem + '". Disponible: ' + disponible + ', solicitado en lote: ' + acumuladoLote[skuItem]
+        };
+    }
+
+    // ── 4. Construir todas las filas en memoria ──────────────────────────────
+    var filas = [];
+    var ids   = [];
+
+    for (var l = 0; l < itemsValidos.length; l++) {
+      var it2  = itemsValidos[l];
+      var id   = generarId(PREFIX_MOVIMIENTO);
+      ids.push(id);
+      filas.push([
+        id,
+        new Date(it2.datos.fecha + 'T12:00:00'),
+        it2.datos.sku.trim(),
+        it2.tipoUp,
+        it2.cantidad,
+        it2.datos.concepto   || '',
+        it2.datos.contacto   || '',
+        it2.datos.referencia || '',
+        it2.datos.tipoVenta  || '',
+        toFloat(it2.datos.precioVenta),
+        it2.datos.clienteId  || ''
+      ]);
+    }
+
+    // ── 5. Escribir TODO con UNA sola llamada setValues() ────────────────────
+    var primeraFila = shMov.getLastRow() + 1;
+    shMov.getRange(primeraFila, 1, filas.length, filas[0].length).setValues(filas);
+
+    // Aplicar formato de fecha a todas las filas escritas
+    for (var m = 0; m < filas.length; m++) {
+      aplicarFormatoFecha(shMov, primeraFila + m, COL_MOV_FECHA + 1);
+    }
+
+    // ── 6. Invalidar caché y registrar log ───────────────────────────────────
+    invalidarCacheMovimientos();
+    invalidarCacheProductos();
+
+    for (var n = 0; n < ids.length; n++) {
+      registrarLog(
+        'REGISTRAR_MOVIMIENTO',
+        'ID: ' + ids[n] + ' | SKU: ' + itemsValidos[n].datos.sku +
+        ' | TIPO: ' + itemsValidos[n].tipoUp + ' | CANT: ' + itemsValidos[n].cantidad,
+        'OK'
+      );
+    }
+
+    return { ok: true, data: { ids: ids } };
+
+  } catch (e) {
+    logError('registrarMovimientos', e);
+    registrarLog('REGISTRAR_MOVIMIENTOS', 'lote de ' + (listaDatos ? listaDatos.length : 0), 'ERROR: ' + e.message);
+    return { ok: false, data: { ids: [] }, error: e.message };
+  }
+}
+
+// ── Clientes — Actualizar ────────────────────────────────────────────────────
+function actualizarCliente(datos) {
+  try {
+    if (!datos.id || !datos.id.trim())
+      return respError('ID de cliente requerido para edición');
+
+    var valBasica = validarDatosCliente(datos);
+    if (!valBasica.ok) return valBasica;
+
+    var ss  = getSS();
+    var shC = ss.getSheetByName(SHEET_CLIENTES);
+    var valHoja = validarHojaExiste(shC, SHEET_CLIENTES);
+    if (!valHoja.ok) return valHoja;
+
+    var lastRow = shC.getLastRow();
+    if (lastRow < 2) return respError('No hay clientes registrados');
+
+    // Buscar fila por ID
+    var ids = shC.getRange(2, COL_CLI_ID + 1, lastRow - 1, 1).getValues();
+    var filaEncontrada = -1;
+    for (var i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]).trim() === datos.id.trim()) {
+        filaEncontrada = i + 2; break;
+      }
+    }
+    if (filaEncontrada === -1)
+      return respError('Cliente con ID "' + datos.id + '" no encontrado');
+
+    // Verificar que la cédula nueva no pertenezca a OTRO cliente
+    var cedulas = shC.getRange(2, COL_CLI_CEDULA + 1, lastRow - 1, 1).getValues();
+    for (var j = 0; j < cedulas.length; j++) {
+      if (String(cedulas[j][0]).trim() === datos.cedula.trim() && (j + 2) !== filaEncontrada)
+        return respError('La cédula "' + datos.cedula.trim() + '" ya pertenece a otro cliente');
+    }
+
+    // Actualizar campos editables (NO tocar ID ni FECHA_REGISTRO)
+    shC.getRange(filaEncontrada, COL_CLI_NOMBRE   + 1).setValue(datos.nombre.trim());
+    shC.getRange(filaEncontrada, COL_CLI_CEDULA   + 1).setValue(datos.cedula.trim());
+    shC.getRange(filaEncontrada, COL_CLI_TELEFONO + 1).setValue(datos.telefono || '');
+    shC.getRange(filaEncontrada, COL_CLI_EMAIL    + 1).setValue(datos.email    || '');
+    shC.getRange(filaEncontrada, COL_CLI_CIUDAD   + 1).setValue(datos.ciudad   || '');
+
+    invalidarCacheClientes();
+    registrarLog('ACTUALIZAR_CLIENTE', 'ID: ' + datos.id + ' | Nombre: ' + datos.nombre, 'OK');
+    return respOk({ id: datos.id });
+
+  } catch (e) {
+    logError('actualizarCliente', e);
+    registrarLog('ACTUALIZAR_CLIENTE', String(datos.id || ''), 'ERROR: ' + e.message);
+    return respError(e.message);
+  }
+}

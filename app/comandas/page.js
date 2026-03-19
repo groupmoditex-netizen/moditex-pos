@@ -686,6 +686,8 @@ function ComandasInner() {
   const [loading,  setLoading]  = useState(true);
   const [filtro,   setFiltro]   = useState('todos');
   const [buscar,   setBuscar]   = useState('');
+  const [desde,    setDesde]    = useState('');
+  const [hasta,    setHasta]    = useState('');
   const [modal,    setModal]    = useState(null);
 
   const searchParams = useSearchParams();
@@ -712,7 +714,7 @@ function ComandasInner() {
 
   async function cargar(){
     setLoading(true);
-    const res=await fetch('/api/comandas').then(r=>r.json()).catch(()=>({ok:false}));
+    const res=await fetchApi('/api/comandas').then(r=>r.json()).catch((e)=>{ console.warn('[Comandas] Error cargando:', e.message); return {ok:false}; });
     if(res.ok) setComandas(res.comandas||[]);
     setLoading(false);
   }
@@ -723,7 +725,7 @@ function ComandasInner() {
     let channel = null;
     async function conectarRealtime() {
       try {
-        const { supabasePublic } = await import('@/lib/supabase');
+        const { supabasePublic } = await import('@/lib/supabase-client');
         if (!supabasePublic) return;
         let debounce = null;
         channel = supabasePublic.channel('comandas-live')
@@ -739,14 +741,25 @@ function ComandasInner() {
       } catch(e) { console.warn('[Realtime comandas]',e.message); }
     }
     conectarRealtime();
-    return ()=>{ if(channel) import('@/lib/supabase').then(({supabasePublic})=>supabasePublic?.removeChannel(channel)).catch(()=>{}); };
+    return ()=>{ if(channel) import('@/lib/supabase-client').then(({supabasePublic})=>supabasePublic?.removeChannel(channel)).catch((e)=>console.warn('[Realtime comandas] cleanup:', e.message)); };
   },[]);
 
   const filtradas = useMemo(()=>{
     let r=filtro==='todos'?comandas:comandas.filter(c=>c.status===filtro);
-    if(buscar){const q=buscar.toLowerCase();r=r.filter(c=>`${c.cliente} ${c.id} ${c.notas||''}`.toLowerCase().includes(q));}
+    if(buscar){
+      const q=buscar.toLowerCase();
+      r=r.filter(c=>{
+        // Buscar también dentro de los productos de la comanda
+        let prods=c.productos;
+        if(typeof prods==='string') try{prods=JSON.parse(prods);}catch{prods=[];}
+        const textoProds=Array.isArray(prods)?prods.map(p=>`${p.modelo||''} ${p.sku||''}`).join(' '):'';
+        return `${c.cliente} ${c.id} ${c.notas||''} ${textoProds}`.toLowerCase().includes(q);
+      });
+    }
+    if(desde) r=r.filter(c=>(c.fecha_creacion||c.created_at||'')>=desde);
+    if(hasta) r=r.filter(c=>(c.fecha_creacion||c.created_at||'')<=hasta+'T99');
     return r;
-  },[comandas,filtro,buscar]);
+  },[comandas,filtro,buscar,desde,hasta]);
 
   const conteos = useMemo(()=>Object.fromEntries(Object.keys(S).map(s=>[s,comandas.filter(c=>c.status===s).length])),[comandas]);
 
@@ -783,7 +796,7 @@ function ComandasInner() {
       <div style={{display:'flex',gap:'8px',marginBottom:'12px',flexWrap:'wrap',alignItems:'center'}}>
         <div style={{display:'flex',alignItems:'center',gap:'8px',background:'var(--bg2)',border:'1px solid var(--border)',padding:'7px 12px',flex:1,minWidth:'180px'}}>
           <span>🔍</span>
-          <input value={buscar} onChange={e=>setBuscar(e.target.value)} placeholder="Buscar cliente, ID..." style={{background:'none',border:'none',outline:'none',fontFamily:'Poppins,sans-serif',fontSize:'12px',width:'100%'}}/>
+          <input value={buscar} onChange={e=>setBuscar(e.target.value)} placeholder="Buscar cliente, ID, modelo..." style={{background:'none',border:'none',outline:'none',fontFamily:'Poppins,sans-serif',fontSize:'12px',width:'100%'}}/>
         </div>
         <div style={{display:'flex',gap:'5px',flexWrap:'wrap'}}>
           {[['todos','Todas'],['pendiente','Pendiente'],['produccion','Prod.'],['listo','Listo'],['entregado','Entregado']].map(([s,l])=>(
@@ -792,6 +805,14 @@ function ComandasInner() {
             </button>
           ))}
         </div>
+        <input type="date" value={desde} onChange={e=>setDesde(e.target.value)}
+          style={{padding:'6px 9px',background:'var(--bg2)',border:'1px solid var(--border)',fontFamily:'Poppins,sans-serif',fontSize:'12px',color:'#111',outline:'none'}}
+          title="Desde"/>
+        <input type="date" value={hasta} onChange={e=>setHasta(e.target.value)}
+          style={{padding:'6px 9px',background:'var(--bg2)',border:'1px solid var(--border)',fontFamily:'Poppins,sans-serif',fontSize:'12px',color:'#111',outline:'none'}}
+          title="Hasta"/>
+        {(desde||hasta)&&<button onClick={()=>{setDesde('');setHasta('');}}
+          style={{padding:'6px 9px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#888'}}>✕</button>}
         <button onClick={cargar} style={{padding:'6px 10px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#555'}}>↺</button>
       </div>
 

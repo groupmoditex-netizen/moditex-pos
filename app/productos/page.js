@@ -1,17 +1,15 @@
 'use client';
+import { colorHex } from '@/utils/colores';
 import { useState, useMemo } from 'react';
 import Shell from '@/components/Shell';
 import { useAppData } from '@/lib/AppContext';
 import { generarSku } from '@/utils/generarSku.js';
 
-const CM={'BLANCO':'#d0d0d0','NEGRO':'#1a1a1a','AZUL':'#3b6fd4','ROJO':'#d63b3b','VERDE':'#2d9e4a','ROSA':'#f07aa0','GRIS':'#6b7280','AMARILLO':'#f5c842','NARANJA':'#f57c42','MORADO':'#7c4fd4','VINOTINTO':'#8b2035','BEIGE':'#d4b896','CORAL':'#f26e5b','CELESTE':'#7ec8e3'};
-function colorHex(n){const k=(n||'').toUpperCase().trim();return CM[k]||CM[k.split(' ')[0]]||'#9ca3af';}
 function estD(n){if(n<=0)return 'zero';if(n<=3)return 'low';return 'ok';}
 
 const CATEGORIAS=['BODIES','CHAQUETA','CONJUNTO','ENTERIZO','FALDA','PANTS','SHORT','TOPS','TRAJE DE BANO','TRIKINIS','VESTIDO'];
 const TALLAS=['UNICA','XS','S','M','L','XL','XXL'];
 const COLORES_COMUNES=['NEGRO','BLANCO','AZUL','ROJO','VERDE','ROSA','GRIS','AMARILLO','NARANJA','MORADO','VINOTINTO','BEIGE','CORAL','CELESTE','AZUL MARINO'];
-const TELAS_COMUNES=['LICRA','ALGODÓN','LYCRA','SPANDEX','POLIÉSTER','SEDA','LINO','DENIM','FRANELA','MODAL','BAMBÚ','VISCOSA','NYLON','MICROFIBRA'];
 
 const inp={width:'100%',padding:'9px 11px',background:'var(--bg2)',border:'1px solid var(--border)',fontFamily:'Poppins,sans-serif',fontSize:'12px',color:'#111',outline:'none'};
 const lbl={fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.16em',textTransform:'uppercase',color:'#555',display:'block',marginBottom:'4px'};

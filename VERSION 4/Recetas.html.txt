@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MODITEX — Recetas & Plan de Tela</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;900&family=DM+Mono:wght@300;400;500&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink:#111111; --ink-dim:#444; --ink-muted:#777;
+  --bg:#f4f0eb; --bg2:#fafaf8; --surface:#fff;
+  --border:rgba(0,0,0,0.09); --border-st:rgba(0,0,0,0.20);
+  --gold:#c9a84c; --gold-deep:#a8882e; --gold-soft:rgba(201,168,76,0.10);
+  --red:#d91e1e; --red-soft:rgba(217,30,30,0.07);
+  --green:#1a7a3c; --green-soft:rgba(26,122,60,0.08);
+  --blue:#1440b0; --blue-soft:rgba(20,64,176,0.08);
+  --warn:#9a4700; --warn-soft:rgba(154,71,0,0.08);
+  --r:2px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);font-family:'Poppins',sans-serif;color:var(--ink);font-size:13px;min-height:100vh}
+
+/* ══ TOPBAR ══ */
+.topbar{background:#111;padding:0 28px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;border-bottom:1px solid rgba(255,255,255,0.06)}
+.brand{display:flex;align-items:baseline;gap:10px}
+.brand-name{font-family:'Playfair Display',serif;font-size:18px;font-weight:900;color:#fff;letter-spacing:.04em}
+.brand-sep{color:rgba(255,255,255,0.2);font-size:16px}
+.brand-page{font-family:'DM Mono',monospace;font-size:9px;color:var(--gold);letter-spacing:.28em;text-transform:uppercase}
+.topbar-r{display:flex;align-items:center;gap:8px}
+
+/* ══ TABS ══ */
+.tabs{background:#fff;border-bottom:2px solid var(--border);display:flex;padding:0 28px;position:sticky;top:56px;z-index:100}
+.tab-btn{padding:14px 20px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.18em;text-transform:uppercase;border:none;background:none;color:var(--ink-muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s;display:flex;align-items:center;gap:7px}
+.tab-btn:hover{color:var(--ink)}
+.tab-btn.active{color:var(--ink);border-bottom-color:var(--gold);font-weight:600}
+.tab-count{background:var(--bg);border:1px solid var(--border);font-size:9px;padding:1px 6px;border-radius:10px}
+.tab-btn.active .tab-count{background:var(--gold);border-color:var(--gold);color:#111}
+.tab-page{display:none;animation:fadeIn .2s ease}
+.tab-page.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+/* ══ LAYOUT ══ */
+.main{padding:28px;max-width:1280px;margin:0 auto}
+
+/* ══ BUTTONS ══ */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border:none;cursor:pointer;font-family:'Poppins',sans-serif;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;transition:all .13s;white-space:nowrap;border-radius:var(--r)}
+.btn-gold{background:var(--gold);color:#111}.btn-gold:hover{background:var(--gold-deep);color:#fff}
+.btn-dark{background:#1a1714;color:#fff}.btn-dark:hover{background:#333}
+.btn-ghost{background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.18)}.btn-ghost:hover{background:rgba(255,255,255,.16)}
+.btn-outline{background:none;color:var(--ink);border:1px solid var(--border-st)}.btn-outline:hover{background:#f0f0f0}
+.btn-red{background:var(--red);color:#fff}.btn-red:hover{background:#b81818}
+.btn-green{background:var(--green);color:#fff}.btn-green:hover{background:#155c2e}
+.btn-sm{padding:5px 11px;font-size:10px}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+
+/* ══ CARDS / SECTIONS ══ */
+.card{background:var(--surface);border:1px solid var(--border);margin-bottom:20px}
+.card-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.card-title{font-family:'Playfair Display',serif;font-size:15px;font-weight:700}
+.card-sub{font-family:'DM Mono',monospace;font-size:9px;color:var(--ink-muted);margin-top:2px;letter-spacing:.08em}
+.card-body{padding:20px}
+
+/* ══ FORM ══ */
+.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}
+.fg{display:flex;flex-direction:column;gap:5px}
+.fg.span2{grid-column:span 2}
+.fg.span3{grid-column:span 3}
+.lbl{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:.16em;text-transform:uppercase;color:#555}
+.inp,.sel{padding:9px 12px;background:var(--bg2);border:1px solid var(--border);font-family:'Poppins',sans-serif;font-size:12px;color:var(--ink);outline:none;transition:border-color .13s;width:100%;border-radius:var(--r)}
+.inp:focus,.sel:focus{border-color:var(--gold);background:#fff}
+.inp::placeholder{color:#bbb}
+.hint{font-family:'DM Mono',monospace;font-size:9px;color:var(--ink-muted);margin-top:3px;line-height:1.5}
+
+/* ══ SKU SEARCH ══ */
+.sku-search-wrap{position:relative}
+.sku-search-input{width:100%;padding:9px 12px 9px 36px;background:var(--bg2);border:1px solid var(--border);font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.06em;color:var(--ink);outline:none;transition:border-color .13s;border-radius:var(--r)}
+.sku-search-input:focus{border-color:var(--gold);background:#fff}
+.sku-search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:13px;pointer-events:none;color:#888}
+.sku-dropdown{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--border-st);border-top:none;z-index:50;max-height:300px;overflow-y:auto;display:none;box-shadow:0 8px 24px rgba(0,0,0,.10)}
+.sku-dropdown.open{display:block}
+.sku-item{display:grid;grid-template-columns:72px 1fr 70px;align-items:center;gap:10px;padding:10px 13px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .12s}
+.sku-item:hover{background:var(--blue-soft)}
+.sku-item:last-child{border-bottom:none}
+.si-sku{font-family:'DM Mono',monospace;font-size:9px;color:var(--blue)}
+.si-name{font-size:12px;font-weight:600}
+.si-det{font-size:10px;color:var(--ink-muted)}
+.si-stock{font-family:'DM Mono',monospace;font-size:11px;font-weight:700;text-align:right}
+
+/* ══ SKU CHIP ══ */
+.sku-chip{display:inline-flex;align-items:center;gap:7px;padding:8px 12px;background:var(--blue-soft);border:1px solid rgba(20,64,176,.15);margin-top:6px}
+.sku-chip-txt{font-family:'DM Mono',monospace;font-size:10px;color:var(--blue);font-weight:600}
+.sku-chip-clear{background:none;border:none;cursor:pointer;font-size:12px;color:var(--blue);opacity:.6;padding:0 2px}
+.sku-chip-clear:hover{opacity:1}
+
+/* ══ COSTO PREVIEW ══ */
+.costo-preview{background:var(--bg2);border:1px solid var(--border);padding:12px 14px;margin-top:8px;display:none}
+.costo-preview.visible{display:block}
+.cp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.cp-item .cp-lbl{font-family:'DM Mono',monospace;font-size:8px;color:var(--ink-muted);letter-spacing:.12em;text-transform:uppercase;margin-bottom:3px}
+.cp-item .cp-val{font-family:'Playfair Display',serif;font-size:16px;font-weight:700}
+.cp-item .cp-val.green{color:var(--green)}
+.cp-item .cp-val.warn{color:var(--warn)}
+.cp-item .cp-val.red{color:var(--red)}
+.cp-margen{font-family:'DM Mono',monospace;font-size:10px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+.cp-update-btn{margin-top:10px}
+
+/* ══ TABLE ══ */
+.tbl-wrap{background:var(--surface);border:1px solid var(--border);overflow-x:auto}
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{padding:9px 13px;text-align:left;font-family:'DM Mono',monospace;font-size:8px;letter-spacing:.16em;text-transform:uppercase;color:#444;background:#efefef;border-bottom:1px solid var(--border);white-space:nowrap}
+.tbl td{padding:10px 13px;border-bottom:1px solid var(--border);font-size:12px;vertical-align:middle}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tbody tr:hover{background:var(--bg2)}
+.td-sku{font-family:'DM Mono',monospace;font-size:10px;color:var(--blue)}
+.td-num{font-family:'DM Mono',monospace;font-size:12px;font-weight:700;text-align:right}
+.td-muted{color:var(--ink-muted);font-size:11px}
+.tbl-empty{padding:48px;text-align:center;color:var(--ink-muted);font-family:'DM Mono',monospace;font-size:11px}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;font-family:'DM Mono',monospace;font-size:9px;border-radius:var(--r)}
+.chip-blue{background:var(--blue-soft);color:var(--blue);border:1px solid rgba(20,64,176,.15)}
+.chip-green{background:var(--green-soft);color:var(--green);border:1px solid rgba(26,122,60,.15)}
+.chip-gray{background:var(--bg2);color:#555;border:1px solid var(--border)}
+.chip-gold{background:var(--gold-soft);color:var(--gold-deep);border:1px solid rgba(201,168,76,.25)}
+.cdot{width:8px;height:8px;border-radius:50%;border:1px solid rgba(0,0,0,.12);flex-shrink:0;display:inline-block}
+
+/* ══ PLAN HERO ══ */
+.plan-hero{background:#1a1714;padding:28px 32px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap}
+.ph-left .ph-eyebrow{font-family:'DM Mono',monospace;font-size:8px;color:var(--gold);letter-spacing:.3em;text-transform:uppercase;margin-bottom:8px}
+.ph-left h2{font-family:'Playfair Display',serif;font-size:24px;font-weight:700;color:#fff;margin-bottom:6px;line-height:1.2}
+.ph-left p{font-family:'DM Mono',monospace;font-size:10px;color:rgba(255,255,255,.45)}
+.ph-stats{display:flex;gap:0;flex-shrink:0}
+.ph-stat{padding:8px 24px;border-right:1px solid rgba(255,255,255,.08);text-align:center}
+.ph-stat:last-child{border-right:none;padding-right:0}
+.ph-stat-val{font-family:'Playfair Display',serif;font-size:30px;font-weight:700;color:var(--gold);line-height:1}
+.ph-stat-lbl{font-family:'DM Mono',monospace;font-size:8px;color:rgba(255,255,255,.35);letter-spacing:.14em;text-transform:uppercase;margin-top:4px}
+
+/* ══ TOTALES STRIP ══ */
+.tot-strip{display:flex;background:#fff;border:1px solid var(--border);margin-bottom:20px;overflow-x:auto}
+.tot-item{flex:1;min-width:130px;padding:14px 18px;border-right:1px solid var(--border);display:flex;flex-direction:column;gap:3px}
+.tot-item:last-child{border-right:none}
+.tot-val{font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:var(--gold-deep)}
+.tot-lbl{font-family:'DM Mono',monospace;font-size:8px;color:var(--ink-muted);letter-spacing:.12em;text-transform:uppercase;line-height:1.4}
+
+/* ══ TELA CARD ══ */
+.telas-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;margin-bottom:24px}
+.tela-card{background:#fff;border:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.tela-accent{height:3px;background:var(--gold)}
+.tela-head{padding:16px 18px 12px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.tela-head-l .tela-nombre{font-family:'Playfair Display',serif;font-size:16px;font-weight:700;line-height:1.1}
+.tela-head-l .tela-color-row{display:flex;align-items:center;gap:6px;margin-top:5px}
+.tela-color-lbl{font-family:'DM Mono',monospace;font-size:10px;color:var(--ink-muted)}
+.tela-head-r{text-align:right;flex-shrink:0}
+.tela-metros-val{font-family:'Playfair Display',serif;font-size:28px;font-weight:700;color:var(--gold-deep);line-height:1}
+.tela-metros-lbl{font-family:'DM Mono',monospace;font-size:8px;color:var(--ink-muted);letter-spacing:.1em;text-transform:uppercase}
+.tela-merma{font-family:'DM Mono',monospace;font-size:10px;color:var(--warn);margin-top:2px}
+.tela-stats-row{display:flex;gap:20px;padding:10px 18px;border-bottom:1px solid var(--border);background:var(--bg2)}
+.tela-stat .ts-val{font-family:'DM Mono',monospace;font-size:13px;font-weight:700}
+.tela-stat .ts-lbl{font-family:'DM Mono',monospace;font-size:8px;color:var(--ink-muted);letter-spacing:.1em;text-transform:uppercase;margin-top:1px}
+
+/* ══ DESGLOSE ══ */
+.desglose-toggle{width:100%;padding:9px 18px;background:none;border:none;border-top:1px solid var(--border);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-muted);cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:background .13s}
+.desglose-toggle:hover{background:var(--bg2)}
+.dt-icon{transition:transform .2s}
+.desglose-toggle.open .dt-icon{transform:rotate(180deg)}
+.desglose-body{display:none;border-top:1px solid var(--border)}
+.desglose-body.open{display:block}
+.det-hdr{display:grid;grid-template-columns:1fr 65px 75px 80px;gap:8px;padding:7px 18px;background:#f5f5f5;border-bottom:1px solid var(--border)}
+.det-hdr span{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:#666}
+.det-row{display:grid;grid-template-columns:1fr 65px 75px 80px;gap:8px;padding:9px 18px;border-bottom:1px solid var(--border);align-items:center;font-size:12px}
+.det-row:last-child{border-bottom:none}
+.det-row:nth-child(even){background:var(--bg2)}
+.det-modelo{font-weight:600}
+.det-meta{font-family:'DM Mono',monospace;font-size:9px;color:var(--ink-muted);margin-top:1px}
+.det-talla{font-family:'DM Mono',monospace;font-size:10px;color:#555;text-align:center}
+.det-prendas{font-family:'DM Mono',monospace;font-size:11px;font-weight:700;text-align:right}
+.det-metros{font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--gold-deep);text-align:right}
+
+/* ══ SIN RECETA ══ */
+.sin-receta-box{background:#fff;border:1px solid rgba(154,71,0,.25);border-left:4px solid var(--warn);padding:18px 20px;margin-bottom:20px}
+.sr-title{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--warn);margin-bottom:12px;display:flex;align-items:center;gap:7px}
+.sr-grid{display:grid;grid-template-columns:1fr 100px 70px 100px;gap:8px}
+.sr-hdr span,.sr-row span{font-family:'DM Mono',monospace;font-size:9px}
+.sr-hdr span{color:var(--ink-muted);letter-spacing:.1em;text-transform:uppercase;padding:4px 0;border-bottom:1px solid rgba(0,0,0,.08)}
+.sr-row{display:contents}
+.sr-row span{padding:6px 0;border-bottom:1px dashed rgba(0,0,0,.06);font-size:11px}
+.sr-row span:last-child{font-weight:700;text-align:right}
+
+/* ══ NO PLAN ══ */
+.no-plan{background:#fff;border:1px solid var(--border);padding:70px 20px;text-align:center}
+.no-plan-ico{font-size:52px;margin-bottom:18px;opacity:.5}
+.no-plan-title{font-family:'Playfair Display',serif;font-size:22px;font-weight:700;margin-bottom:8px}
+.no-plan-sub{font-family:'DM Mono',monospace;font-size:11px;color:var(--ink-muted);line-height:1.8;margin-bottom:26px}
+
+/* ══ LOADING ══ */
+.loader-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:999;display:none;align-items:center;justify-content:center}
+.loader-overlay.show{display:flex}
+.loader-box{background:#fff;padding:32px 44px;display:flex;flex-direction:column;align-items:center;gap:16px}
+.loader-spin{width:34px;height:34px;border:3px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite}
+.loader-msg{font-family:'DM Mono',monospace;font-size:11px;color:var(--ink-muted)}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ══ TOAST ══ */
+.toast-ct{position:fixed;bottom:22px;right:22px;z-index:1000;display:flex;flex-direction:column;gap:7px;pointer-events:none}
+.toast{display:flex;align-items:center;gap:9px;padding:11px 16px;background:#111;color:#fff;font-family:'Poppins',sans-serif;font-size:12px;font-weight:500;border-left:3px solid var(--gold);min-width:220px;animation:tIn .2s ease}
+.toast.ok{border-left-color:var(--green)}.toast.err{border-left-color:var(--red)}
+@keyframes tIn{from{transform:translateX(14px);opacity:0}to{transform:none;opacity:1}}
+
+/* ══ SEC HEADER ══ */
+.sec-hdr{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.sec-title{font-family:'Playfair Display',serif;font-size:18px;font-weight:700}
+.sec-sub{font-family:'DM Mono',monospace;font-size:9px;color:var(--ink-muted);margin-top:3px;letter-spacing:.06em}
+
+/* ══ FILTRO ══ */
+.filter-bar{display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.filter-inp-wrap{display:flex;align-items:center;gap:7px;background:#fff;border:1px solid var(--border);padding:7px 12px;flex:1;min-width:200px;max-width:360px}
+.filter-inp-wrap input{background:none;border:none;outline:none;font-family:'Poppins',sans-serif;font-size:12px;color:var(--ink);width:100%}
+
+/* ══ PRINT ══ */
+@media print{
+  .topbar,.tabs,.no-print{display:none!important}
+  .tab-page{display:block!important}
+  body{background:#fff!important}
+  .main{padding:0!important;max-width:100%!important}
+  .tela-card{break-inside:avoid}
+  .plan-hero{background:#1a1714!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+@media(max-width:700px){
+  .form-grid{grid-template-columns:1fr}
+  .fg.span2,.fg.span3{grid-column:span 1}
+  .ph-stats{flex-wrap:wrap}
+  .telas-grid{grid-template-columns:1fr}
+  .det-hdr,.det-row{grid-template-columns:1fr 50px 60px}
+  .det-hdr span:nth-child(3),.det-row .det-metros{display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- LOADER -->
+<div class="loader-overlay" id="loader">
+  <div class="loader-box">
+    <div class="loader-spin"></div>
+    <div class="loader-msg" id="loader-msg">Procesando...</div>
+  </div>
+</div>
+
+<!-- TOASTS -->
+<div class="toast-ct" id="toast-ct"></div>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="brand">
+    <span class="brand-name">MODITEX</span>
+    <span class="brand-sep">·</span>
+    <span class="brand-page">Recetas &amp; Plan de Tela</span>
+  </div>
+  <div class="topbar-r no-print">
+    <button class="btn btn-ghost btn-sm" onclick="recargar()">↺ Recargar</button>
+    <button class="btn btn-gold btn-sm" onclick="generarPlan()">🧵 Generar Plan</button>
+    <button class="btn btn-ghost btn-sm" onclick="window.print()">🖨 Imprimir</button>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs no-print">
+  <button class="tab-btn active" id="tab-plan" onclick="switchTab('plan')">
+    📊 Plan de Compra
+    <span class="tab-count" id="tc-plan">—</span>
+  </button>
+  <button class="tab-btn" id="tab-recetas" onclick="switchTab('recetas')">
+    📋 Recetas de Producción
+    <span class="tab-count" id="tc-recetas">0</span>
+  </button>
+  <button class="tab-btn" id="tab-nueva" onclick="switchTab('nueva')">
+    ＋ Nueva Receta
+  </button>
+</div>
+
+<!-- ═══════════════════════════════════════
+     TAB: PLAN DE COMPRA
+     ═══════════════════════════════════════ -->
+<div class="tab-page active" id="page-plan">
+  <div class="main">
+    <div id="plan-content">
+      <div class="no-plan">
+        <div class="no-plan-ico">🧵</div>
+        <div class="no-plan-title">Plan de Compra de Tela</div>
+        <div class="no-plan-sub">
+          Calcula automáticamente los metros de tela necesarios<br>
+          basado en las comandas en estado <strong>PRODUCCIÓN</strong><br>
+          y las recetas configuradas para cada modelo.
+        </div>
+        <button class="btn btn-gold" onclick="generarPlan()">🧵 Calcular Plan Ahora</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     TAB: RECETAS
+     ═══════════════════════════════════════ -->
+<div class="tab-page" id="page-recetas">
+  <div class="main">
+    <div class="sec-hdr">
+      <div>
+        <div class="sec-title">Recetas de Producción</div>
+        <div class="sec-sub">Consumo de tela por SKU · <span id="recetas-count">0</span> recetas configuradas</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div class="filter-bar" style="margin:0">
+          <div class="filter-inp-wrap">
+            <span style="color:#aaa;font-size:13px">🔍</span>
+            <input type="text" placeholder="Filtrar por modelo, tela, SKU..." id="filtro-recetas" oninput="filtrarRecetas(this.value)">
+          </div>
+        </div>
+        <button class="btn btn-dark btn-sm" onclick="switchTab('nueva')">+ Nueva Receta</button>
+      </div>
+    </div>
+
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>SKU</th>
+            <th>Modelo</th>
+            <th>Color</th>
+            <th>Talla</th>
+            <th>Tela</th>
+            <th>Color Tela</th>
+            <th style="text-align:right">m/prenda</th>
+            <th style="text-align:right">Ancho</th>
+            <th style="text-align:right">Precio/m</th>
+            <th style="text-align:right">Costo est.</th>
+            <th>Obs.</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="recetas-tbody">
+          <tr><td colspan="12" class="tbl-empty">Cargando recetas...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     TAB: NUEVA RECETA
+     ═══════════════════════════════════════ -->
+<div class="tab-page" id="page-nueva">
+  <div class="main">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title" id="form-title">Nueva Receta de Producción</div>
+          <div class="card-sub" id="form-sub">Vincula un SKU con el consumo de tela necesario para producirlo</div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="cancelarEdicion()">✕ Cancelar</button>
+      </div>
+      <div class="card-body">
+
+        <!-- PASO 1: Seleccionar producto -->
+        <div style="margin-bottom:20px">
+          <div class="lbl" style="margin-bottom:8px;display:flex;align-items:center;gap:6px">
+            <span style="background:var(--gold);color:#111;width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">1</span>
+            Buscar y seleccionar producto del inventario
+          </div>
+          <div class="sku-search-wrap">
+            <span class="sku-search-icon">🔍</span>
+            <input type="text" class="sku-search-input" id="sku-search"
+              placeholder="Escribe el SKU, modelo o color del producto..."
+              oninput="buscarSkuProducto(this.value)" autocomplete="off">
+            <div class="sku-dropdown" id="sku-dropdown"></div>
+          </div>
+          <div id="sku-selected-wrap" style="display:none;margin-top:8px">
+            <div class="sku-chip" id="sku-chip">
+              <span class="cdot" id="sku-chip-dot"></span>
+              <span class="sku-chip-txt" id="sku-chip-txt"></span>
+              <button class="sku-chip-clear" onclick="limpiarSkuSeleccionado()">✕</button>
+            </div>
+          </div>
+          <input type="hidden" id="f-sku">
+          <input type="hidden" id="f-modelo">
+          <input type="hidden" id="f-color">
+          <input type="hidden" id="f-talla">
+          <input type="hidden" id="f-precio-detal">
+          <input type="hidden" id="f-precio-costo-actual">
+        </div>
+
+        <!-- PASO 2: Datos de la tela -->
+        <div style="margin-bottom:20px">
+          <div class="lbl" style="margin-bottom:12px;display:flex;align-items:center;gap:6px">
+            <span style="background:var(--gold);color:#111;width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">2</span>
+            Datos de la tela
+          </div>
+          <div class="form-grid">
+            <div class="fg span2">
+              <label class="lbl">Tipo de tela *</label>
+              <input type="text" class="inp" id="f-tela" placeholder="ej: RIB LISO, FRENCH TERRY, LYCRA, POLYESTER..." autocomplete="off" list="telas-lista">
+              <datalist id="telas-lista">
+                <option value="RIB LISO"><option value="FRENCH TERRY"><option value="LYCRA">
+                <option value="POLYESTER"><option value="NEOPRENE"><option value="SPANDEX">
+                <option value="MODAL"><option value="ALGODÓN"><option value="ELASTANO">
+                <option value="TELA PLANA"><option value="SEDA"><option value="LINO">
+              </datalist>
+            </div>
+            <div class="fg">
+              <label class="lbl">Color de la tela</label>
+              <select class="sel" id="f-color-tipo" onchange="toggleColorFijo()">
+                <option value="SEGUN_PRENDA">SEGÚN PRENDA (hereda el color del producto)</option>
+                <option value="FIJO">Color fijo</option>
+              </select>
+            </div>
+            <div class="fg" id="color-fijo-wrap" style="display:none">
+              <label class="lbl">Color fijo de la tela *</label>
+              <input type="text" class="inp" id="f-color-fijo" placeholder="ej: BLANCO, CRUDO, NEGRO">
+              <div class="hint">Para telas neutras o estampadas que no dependen del color de la prenda</div>
+            </div>
+            <div class="fg">
+              <label class="lbl">Talla aplicable</label>
+              <select class="sel" id="f-talla-receta">
+                <option value="TODAS">TODAS (aplica a cualquier talla)</option>
+                <option value="UNICA">ÚNICA</option>
+                <option value="XS">XS</option><option value="S">S</option>
+                <option value="M">M</option><option value="L">L</option>
+                <option value="XL">XL</option><option value="XXL">XXL</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- PASO 3: Consumo y precio -->
+        <div style="margin-bottom:20px">
+          <div class="lbl" style="margin-bottom:12px;display:flex;align-items:center;gap:6px">
+            <span style="background:var(--gold);color:#111;width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">3</span>
+            Consumo y precio de la tela
+          </div>
+          <div class="form-grid">
+            <div class="fg">
+              <label class="lbl">Metros por prenda *</label>
+              <input type="number" class="inp" id="f-metros" placeholder="ej: 1.80" min="0.01" step="0.01" oninput="calcularCostoPreview()">
+              <div class="hint">Metros lineales de tela por unidad producida</div>
+            </div>
+            <div class="fg">
+              <label class="lbl">Ancho de tela (cm)</label>
+              <input type="number" class="inp" id="f-ancho" placeholder="ej: 150" min="0" step="1">
+            </div>
+            <div class="fg">
+              <label class="lbl">Precio por metro ($)</label>
+              <input type="number" class="inp" id="f-precio-metro" placeholder="ej: 2.50" min="0" step="0.01" oninput="calcularCostoPreview()">
+              <div class="hint">Opcional — para calcular costo de producción</div>
+            </div>
+            <div class="fg">
+              <label class="lbl">Otros costos por prenda ($)</label>
+              <input type="number" class="inp" id="f-otros-costos" placeholder="ej: 0.50" min="0" step="0.01" oninput="calcularCostoPreview()">
+              <div class="hint">Mano de obra, accesorios, etc.</div>
+            </div>
+            <div class="fg span2">
+              <label class="lbl">Observaciones</label>
+              <input type="text" class="inp" id="f-obs" placeholder="Notas para el cortador / producción...">
+            </div>
+          </div>
+
+          <!-- Preview de costo -->
+          <div class="costo-preview" id="costo-preview">
+            <div style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-muted);margin-bottom:12px">🔒 Estimado de Costo de Producción</div>
+            <div class="cp-grid">
+              <div class="cp-item">
+                <div class="cp-lbl">Costo tela</div>
+                <div class="cp-val" id="cp-tela">$0.00</div>
+              </div>
+              <div class="cp-item">
+                <div class="cp-lbl">+ Otros costos</div>
+                <div class="cp-val" id="cp-otros">$0.00</div>
+              </div>
+              <div class="cp-item">
+                <div class="cp-lbl">= Costo total</div>
+                <div class="cp-val" id="cp-total">$0.00</div>
+              </div>
+            </div>
+            <div class="cp-margen" id="cp-margen-txt"></div>
+            <div class="cp-update-btn" id="cp-update-wrap" style="display:none">
+              <button class="btn btn-green btn-sm" onclick="actualizarCostoProducto()">
+                ↑ Actualizar precio de costo en el producto
+              </button>
+              <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--ink-muted);margin-left:8px" id="cp-update-lbl"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Acciones -->
+        <div style="display:flex;gap:10px;padding-top:16px;border-top:1px solid var(--border);align-items:center">
+          <button class="btn btn-gold" id="btn-guardar" onclick="guardarReceta()">✓ Guardar Receta</button>
+          <button class="btn btn-outline" onclick="cancelarEdicion()">Cancelar</button>
+          <span id="form-msg" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--ink-muted);margin-left:auto"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+//  ESTADO
+// ═══════════════════════════════════════════════
+var recetas        = [];
+var productos      = [];  // catálogo completo del inventario
+var planData       = null;
+var editandoIdx    = null;
+var skuSeleccionado = null;  // objeto producto seleccionado
+
+var COLOR_MAP = {
+  'BLANCO':'#d0d0d0','NEGRO':'#1a1a1a','AZUL':'#3b6fd4','AZU':'#3b6fd4',
+  'ROJO':'#d63b3b','ROJ':'#d63b3b','VERDE':'#2d9e4a','VER':'#2d9e4a',
+  'ROSA':'#f07aa0','ROS':'#f07aa0','ROSADO':'#f07aa0','GRIS':'#6b7280',
+  'GRI':'#6b7280','AMARILLO':'#f5c842','AMA':'#f5c842','NARANJA':'#f57c42',
+  'NAR':'#f57c42','MORADO':'#7c4fd4','MOR':'#7c4fd4','VINOTINTO':'#8b2035',
+  'VIN':'#8b2035','BEIGE':'#d4b896','BEI':'#d4b896','MARRON':'#7c5230',
+  'MAR':'#7c5230','CORAL':'#f26e5b','COR':'#f26e5b','CELESTE':'#7ec8e3',
+  'CEL':'#7ec8e3','A.MARINO':'#1a3a6b','AZUL MARINO':'#1a3a6b',
+  'TURQUESA':'#2a9d9d','TUR':'#2a9d9d','DORADO':'#c9a84c','ORO':'#c9a84c',
+  'CRUDO':'#e8d5b7','BLANCO':'#f0f0f0','FRENCH TERRY':'#a78b6f',
+  'SEGUN_PRENDA':'#c9a84c'
+};
+function colorHex(n){
+  var k=(n||'').toUpperCase().trim();
+  return COLOR_MAP[k] || COLOR_MAP[k.split(' ')[0]] || '#aaa';
+}
+function fmt(n){ return '$'+Number(n||0).toFixed(2); }
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function cdotHtml(color){
+  return '<span class="cdot" style="background:'+colorHex(color)+';vertical-align:middle;margin-right:4px"></span>';
+}
+
+// ═══════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', function(){
+  cargarDatos();
+});
+
+function recargar(){
+  cargarDatos();
+  if(planData) generarPlan();
+}
+
+function cargarDatos(){
+  showLoader('Cargando datos...');
+  var pending = 2;
+  function done(){ if(--pending===0){ hideLoader(); } }
+
+  google.script.run
+    .withSuccessHandler(function(resp){
+      if(resp && resp.ok) recetas = resp.recetas || [];
+      renderRecetas(recetas);
+      document.getElementById('tc-recetas').textContent = recetas.length;
+      document.getElementById('recetas-count').textContent = recetas.length;
+      done();
+    })
+    .withFailureHandler(function(e){ toast('Error recetas: '+e.message,'err'); done(); })
+    .getRecetasAPI();
+
+  google.script.run
+    .withSuccessHandler(function(resp){
+      if(resp && resp.ok) productos = resp.productos || [];
+      done();
+    })
+    .withFailureHandler(function(e){ toast('Error productos: '+e.message,'err'); done(); })
+    .getProductosParaRecetas();
+}
+
+// ═══════════════════════════════════════════════
+//  TABS
+// ═══════════════════════════════════════════════
+function switchTab(tab){
+  ['plan','recetas','nueva'].forEach(function(t){
+    document.getElementById('tab-'+t).classList.toggle('active', t===tab);
+    document.getElementById('page-'+t).classList.toggle('active', t===tab);
+  });
+}
+
+// ═══════════════════════════════════════════════
+//  BUSCADOR DE SKU
+// ═══════════════════════════════════════════════
+function buscarSkuProducto(q){
+  var dd = document.getElementById('sku-dropdown');
+  if(!q || q.length<2){ dd.classList.remove('open'); return; }
+  var ql = q.toLowerCase();
+  var matches = productos.filter(function(p){
+    return p.sku.toLowerCase().indexOf(ql)!==-1 ||
+           p.modelo.toLowerCase().indexOf(ql)!==-1 ||
+           p.color.toLowerCase().indexOf(ql)!==-1 ||
+           p.categoria.toLowerCase().indexOf(ql)!==-1;
+  }).slice(0,12);
+
+  if(!matches.length){ dd.classList.remove('open'); return; }
+
+  dd.innerHTML = matches.map(function(p){
+    var esOk = p.disponible > 3;
+    var esLow = p.disponible > 0 && p.disponible <= 3;
+    var sColor = esOk?'var(--green)':esLow?'var(--warn)':'var(--red)';
+    return '<div class="sku-item" onclick="seleccionarSku(\''+esc(p.sku)+'\')">'+
+      '<div>'+
+        '<div class="si-sku">'+esc(p.sku)+'</div>'+
+        '<span class="cdot" style="background:'+colorHex(p.color)+';margin-top:4px;display:block"></span>'+
+      '</div>'+
+      '<div>'+
+        '<div class="si-name">'+esc(p.modelo)+'</div>'+
+        '<div class="si-det">'+cdotHtml(p.color)+esc(p.color)+' · '+esc(p.talla)+' · '+esc(p.categoria)+'</div>'+
+        (p.precioDetal>0?'<div class="si-det" style="color:var(--red);margin-top:2px">Detal: '+fmt(p.precioDetal)+(p.precioCosto>0?' · Costo actual: '+fmt(p.precioCosto):'')+'</div>':'')+
+      '</div>'+
+      '<div class="si-stock" style="color:'+sColor+'">'+p.disponible+' uds</div>'+
+    '</div>';
+  }).join('');
+  dd.classList.add('open');
+}
+
+function seleccionarSku(sku){
+  var p = productos.find(function(x){ return x.sku===sku; });
+  if(!p) return;
+  skuSeleccionado = p;
+
+  document.getElementById('f-sku').value = p.sku;
+  document.getElementById('f-modelo').value = p.modelo;
+  document.getElementById('f-color').value = p.color;
+  document.getElementById('f-talla').value = p.talla;
+  document.getElementById('f-precio-detal').value = p.precioDetal || 0;
+  document.getElementById('f-precio-costo-actual').value = p.precioCosto || 0;
+
+  // Mostrar chip
+  var chip = document.getElementById('sku-chip');
+  var dot = document.getElementById('sku-chip-dot');
+  var txt = document.getElementById('sku-chip-txt');
+  dot.style.background = colorHex(p.color);
+  txt.textContent = p.sku+' — '+p.modelo+' '+p.color+' ('+p.talla+')';
+  document.getElementById('sku-selected-wrap').style.display='block';
+
+  // Limpiar buscador
+  document.getElementById('sku-search').value='';
+  document.getElementById('sku-dropdown').classList.remove('open');
+
+  // Auto-rellenar talla en el formulario
+  document.getElementById('f-talla-receta').value = p.talla || 'TODAS';
+
+  // Actualizar preview si ya hay metros y precio
+  calcularCostoPreview();
+  toast('Producto seleccionado: '+p.modelo+' '+p.color,'ok');
+}
+
+function limpiarSkuSeleccionado(){
+  skuSeleccionado = null;
+  document.getElementById('f-sku').value='';
+  document.getElementById('f-modelo').value='';
+  document.getElementById('f-color').value='';
+  document.getElementById('f-talla').value='';
+  document.getElementById('f-precio-detal').value='';
+  document.getElementById('f-precio-costo-actual').value='';
+  document.getElementById('sku-selected-wrap').style.display='none';
+  document.getElementById('costo-preview').classList.remove('visible');
+  document.getElementById('cp-update-wrap').style.display='none';
+}
+
+document.addEventListener('click', function(e){
+  if(!e.target.closest('.sku-search-wrap'))
+    document.getElementById('sku-dropdown').classList.remove('open');
+});
+
+// ═══════════════════════════════════════════════
+//  TOGGLE COLOR FIJO
+// ═══════════════════════════════════════════════
+function toggleColorFijo(){
+  var val = document.getElementById('f-color-tipo').value;
+  document.getElementById('color-fijo-wrap').style.display = val==='FIJO' ? '' : 'none';
+}
+
+// ═══════════════════════════════════════════════
+//  CÁLCULO DE COSTO PREVIEW
+// ═══════════════════════════════════════════════
+function calcularCostoPreview(){
+  var metros = parseFloat(document.getElementById('f-metros').value)||0;
+  var precioM = parseFloat(document.getElementById('f-precio-metro').value)||0;
+  var otros = parseFloat(document.getElementById('f-otros-costos').value)||0;
+  var pd = parseFloat(document.getElementById('f-precio-detal').value)||0;
+  var pcActual = parseFloat(document.getElementById('f-precio-costo-actual').value)||0;
+
+  if(metros<=0 && precioM<=0 && otros<=0){
+    document.getElementById('costo-preview').classList.remove('visible');
+    return;
+  }
+  document.getElementById('costo-preview').classList.add('visible');
+
+  var costoTela = metros * precioM;
+  var costoTotal = costoTela + otros;
+
+  document.getElementById('cp-tela').textContent = fmt(costoTela);
+  document.getElementById('cp-otros').textContent = fmt(otros);
+  document.getElementById('cp-total').textContent = fmt(costoTotal);
+
+  // Margen
+  var margenTxt = '';
+  if(costoTotal>0 && pd>0){
+    var gan = pd - costoTotal;
+    var pct = Math.round((gan/pd)*100);
+    var col = gan>=0?'var(--green)':'var(--red)';
+    margenTxt = 'Vs precio detal '+fmt(pd)+': <strong style="color:'+col+'">'+
+      (gan>=0?'+':'')+fmt(gan)+' ('+pct+'%)</strong>';
+  }
+  document.getElementById('cp-margen-txt').innerHTML = margenTxt;
+
+  // Botón actualizar si hay SKU seleccionado y costo calculable
+  var updateWrap = document.getElementById('cp-update-wrap');
+  if(skuSeleccionado && costoTotal>0){
+    updateWrap.style.display='block';
+    var lbl = '';
+    if(pcActual>0){
+      var diff = costoTotal - pcActual;
+      lbl = 'Costo actual: '+fmt(pcActual)+(diff!==0?' → diferencia: '+(diff>0?'+':'')+fmt(diff):'');
+    } else {
+      lbl = 'El producto no tiene costo registrado';
+    }
+    document.getElementById('cp-update-lbl').textContent = lbl;
+  } else {
+    updateWrap.style.display='none';
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  ACTUALIZAR COSTO EN EL PRODUCTO
+// ═══════════════════════════════════════════════
+function actualizarCostoProducto(){
+  if(!skuSeleccionado) return;
+  var metros = parseFloat(document.getElementById('f-metros').value)||0;
+  var precioM = parseFloat(document.getElementById('f-precio-metro').value)||0;
+  var otros = parseFloat(document.getElementById('f-otros-costos').value)||0;
+  var costoTotal = (metros*precioM)+otros;
+  if(costoTotal<=0){ toast('El costo calculado es 0','err'); return; }
+
+  var sku = skuSeleccionado.sku;
+  var p = skuSeleccionado;
+
+  showLoader('Actualizando precio de costo...');
+  google.script.run
+    .withSuccessHandler(function(res){
+      hideLoader();
+      if(res.ok){
+        // Actualizar local
+        document.getElementById('f-precio-costo-actual').value = costoTotal;
+        skuSeleccionado.precioCosto = costoTotal;
+        var pp = productos.find(function(x){return x.sku===sku;});
+        if(pp) pp.precioCosto = costoTotal;
+        toast('✓ Costo de '+sku+' actualizado a '+fmt(costoTotal),'ok');
+        document.getElementById('cp-update-lbl').textContent = 'Costo actualizado: '+fmt(costoTotal);
+        calcularCostoPreview();
+      } else { toast('Error: '+res.error,'err'); }
+    })
+    .withFailureHandler(function(e){ hideLoader(); toast('Error: '+e.message,'err'); })
+    .editarProducto({
+      sku: sku,
+      categoria: p.categoria,
+      modelo: p.modelo,
+      talla: p.talla,
+      precioDetal: p.precioDetal,
+      precioMayor: p.precioMayor,
+      precioCosto: costoTotal
+    });
+}
+
+// ═══════════════════════════════════════════════
+//  GUARDAR RECETA
+// ═══════════════════════════════════════════════
+function guardarReceta(){
+  var sku    = document.getElementById('f-sku').value.trim();
+  var modelo = document.getElementById('f-modelo').value.trim();
+  var tela   = (document.getElementById('f-tela').value||'').trim().toUpperCase();
+  var metros = parseFloat(document.getElementById('f-metros').value)||0;
+
+  if(!sku && !modelo){ toast('Selecciona un producto del inventario primero','err'); document.getElementById('sku-search').focus(); return; }
+  if(!tela){ toast('El tipo de tela es requerido','err'); document.getElementById('f-tela').focus(); return; }
+  if(metros<=0){ toast('Los metros por prenda deben ser mayores a 0','err'); document.getElementById('f-metros').focus(); return; }
+
+  var colorTipo = document.getElementById('f-color-tipo').value;
+  var colorTela = colorTipo==='FIJO'
+    ? (document.getElementById('f-color-fijo').value.trim().toUpperCase()||'SEGUN_PRENDA')
+    : 'SEGUN_PRENDA';
+
+  // Si tenemos SKU real, usamos el modelo del producto para coincidir con comandas
+  var modeloReceta = modelo || sku;
+
+  var datos = {
+    modelo:          modeloReceta.toUpperCase(),
+    talla:           document.getElementById('f-talla-receta').value || 'TODAS',
+    tela:            tela,
+    colorTela:       colorTela,
+    metrosPorPrenda: metros,
+    anchoTela:       parseFloat(document.getElementById('f-ancho').value)||0,
+    observaciones:   (document.getElementById('f-obs').value||'').trim(),
+    // Campos extra para referencia
+    skuRef:          sku,
+    precioMetro:     parseFloat(document.getElementById('f-precio-metro').value)||0,
+    otrosCostos:     parseFloat(document.getElementById('f-otros-costos').value)||0
+  };
+
+  var btn = document.getElementById('btn-guardar');
+  btn.disabled=true; btn.textContent='⏳ Guardando...';
+  showLoader('Guardando receta...');
+
+  google.script.run
+    .withSuccessHandler(function(resp){
+      hideLoader(); btn.disabled=false; btn.textContent='✓ Guardar Receta';
+      if(!resp||!resp.ok){ toast('Error: '+(resp&&resp.error||'?'),'err'); return; }
+      toast('✓ Receta guardada para '+modeloReceta,'ok');
+      limpiarFormReceta();
+      cargarDatos();
+      switchTab('recetas');
+    })
+    .withFailureHandler(function(e){
+      hideLoader(); btn.disabled=false; btn.textContent='✓ Guardar Receta';
+      toast('Error: '+e.message,'err');
+    })
+    .agregarReceta(datos);
+}
+
+function limpiarFormReceta(){
+  limpiarSkuSeleccionado();
+  document.getElementById('sku-search').value='';
+  ['f-tela','f-color-fijo','f-metros','f-ancho','f-precio-metro','f-otros-costos','f-obs'].forEach(function(id){
+    var e=document.getElementById(id); if(e) e.value='';
+  });
+  document.getElementById('f-talla-receta').value='TODAS';
+  document.getElementById('f-color-tipo').value='SEGUN_PRENDA';
+  document.getElementById('color-fijo-wrap').style.display='none';
+  document.getElementById('costo-preview').classList.remove('visible');
+  document.getElementById('form-msg').textContent='';
+  document.getElementById('form-title').textContent='Nueva Receta de Producción';
+  document.getElementById('btn-guardar').textContent='✓ Guardar Receta';
+  editandoIdx=null;
+  skuSeleccionado=null;
+}
+
+function cancelarEdicion(){
+  limpiarFormReceta();
+  switchTab('recetas');
+}
+
+// ═══════════════════════════════════════════════
+//  RENDER RECETAS TABLE
+// ═══════════════════════════════════════════════
+function filtrarRecetas(q){
+  if(!q){ renderRecetas(recetas); return; }
+  var ql=q.toLowerCase();
+  renderRecetas(recetas.filter(function(r){
+    return r.modelo.toLowerCase().indexOf(ql)!==-1 ||
+           r.tela.toLowerCase().indexOf(ql)!==-1 ||
+           (r.colorTela||'').toLowerCase().indexOf(ql)!==-1 ||
+           (r.skuRef||'').toLowerCase().indexOf(ql)!==-1;
+  }));
+}
+
+function renderRecetas(lista){
+  var tbody = document.getElementById('recetas-tbody');
+  if(!lista.length){
+    tbody.innerHTML='<tr><td colspan="12" class="tbl-empty">No hay recetas. Agrega la primera en la pestaña "+ Nueva Receta"</td></tr>';
+    return;
+  }
+  tbody.innerHTML = lista.map(function(r, i){
+    var realIdx = recetas.indexOf(r);
+    var colorChip = r.colorTela==='SEGUN_PRENDA'
+      ? '<span class="chip chip-blue">Según prenda</span>'
+      : '<span class="chip chip-green" style="display:inline-flex;align-items:center;gap:4px">'+cdotHtml(r.colorTela)+esc(r.colorTela)+'</span>';
+    var tallaChip = r.talla==='TODAS'
+      ? '<span class="chip chip-gray">Todas</span>'
+      : '<span class="chip chip-gray">'+esc(r.talla)+'</span>';
+
+    // Costo estimado si hay precio metro
+    var costoEst = (r.precioMetro>0 && r.metrosPorPrenda>0)
+      ? fmt(r.metrosPorPrenda*r.precioMetro + (r.otrosCostos||0))
+      : '—';
+
+    // SKU de referencia
+    var skuCell = r.skuRef
+      ? '<span class="td-sku">'+esc(r.skuRef)+'</span>'
+      : '<span class="td-muted">—</span>';
+
+    return '<tr>'+
+      '<td>'+skuCell+'</td>'+
+      '<td><strong>'+esc(r.modelo)+'</strong></td>'+
+      '<td>'+
+        (r.skuRef ? (function(){
+          var p=productos.find(function(x){return x.sku===r.skuRef;});
+          return p ? cdotHtml(p.color)+esc(p.color) : '<span class="td-muted">—</span>';
+        })() : '<span class="td-muted">—</span>')+
+      '</td>'+
+      '<td>'+tallaChip+'</td>'+
+      '<td><span class="chip chip-gold">'+esc(r.tela)+'</span></td>'+
+      '<td>'+colorChip+'</td>'+
+      '<td class="td-num">'+Number(r.metrosPorPrenda||0).toFixed(2)+' m</td>'+
+      '<td class="td-num td-muted">'+(r.anchoTela||'—')+'</td>'+
+      '<td class="td-num">'+(r.precioMetro>0?fmt(r.precioMetro):'—')+'</td>'+
+      '<td class="td-num" style="color:var(--green)">'+costoEst+'</td>'+
+      '<td class="td-muted">'+esc(r.observaciones||'—')+'</td>'+
+      '<td>'+
+        '<div style="display:flex;gap:5px">'+
+          '<button class="btn btn-outline btn-sm" onclick="editarReceta('+realIdx+')">✎</button>'+
+          '<button class="btn btn-red btn-sm" onclick="eliminarReceta('+realIdx+')">✕</button>'+
+        '</div>'+
+      '</td>'+
+    '</tr>';
+  }).join('');
+}
+
+function editarReceta(idx){
+  var r = recetas[idx]; if(!r) return;
+  editandoIdx = idx;
+  switchTab('nueva');
+  document.getElementById('form-title').textContent = '✎ Editando: '+r.modelo+' / '+r.tela;
+  document.getElementById('btn-guardar').textContent = '✓ Actualizar Receta';
+
+  // Si tiene SKU de referencia, buscar y seleccionar el producto
+  if(r.skuRef){
+    var p = productos.find(function(x){ return x.sku===r.skuRef; });
+    if(p){ seleccionarSku(p.sku); }
+  } else {
+    // Solo llenar modelo manualmente
+    document.getElementById('f-modelo').value = r.modelo;
+  }
+
+  document.getElementById('f-tela').value  = r.tela;
+  document.getElementById('f-talla-receta').value = r.talla || 'TODAS';
+  var esFijo = r.colorTela !== 'SEGUN_PRENDA';
+  document.getElementById('f-color-tipo').value = esFijo ? 'FIJO' : 'SEGUN_PRENDA';
+  toggleColorFijo();
+  document.getElementById('f-color-fijo').value = esFijo ? r.colorTela : '';
+  document.getElementById('f-metros').value = r.metrosPorPrenda||'';
+  document.getElementById('f-ancho').value  = r.anchoTela||'';
+  document.getElementById('f-precio-metro').value = r.precioMetro||'';
+  document.getElementById('f-otros-costos').value = r.otrosCostos||'';
+  document.getElementById('f-obs').value    = r.observaciones||'';
+  calcularCostoPreview();
+  document.getElementById('form-receta-panel') && document.getElementById('form-receta-panel').scrollIntoView({behavior:'smooth'});
+}
+
+function eliminarReceta(idx){
+  var r=recetas[idx]; if(!r) return;
+  if(!confirm('¿Eliminar receta de "'+r.modelo+' / '+r.tela+'"?\nEsta acción no se puede deshacer.')) return;
+  showLoader('Eliminando receta...');
+  google.script.run
+    .withSuccessHandler(function(resp){
+      hideLoader();
+      if(!resp||!resp.ok){ toast('Error: '+(resp&&resp.error||'?'),'err'); return; }
+      toast('Receta eliminada','ok');
+      cargarDatos();
+    })
+    .withFailureHandler(function(e){ hideLoader(); toast('Error: '+e.message,'err'); })
+    .eliminarRecetaAPI(idx);
+}
+
+// ═══════════════════════════════════════════════
+//  PLAN DE COMPRA
+// ═══════════════════════════════════════════════
+function generarPlan(){
+  showLoader('Calculando plan de tela desde comandas en PRODUCCIÓN...');
+  google.script.run
+    .withSuccessHandler(function(resp){
+      hideLoader();
+      if(!resp||!resp.ok){ toast('Error: '+(resp&&resp.error||'?'),'err'); return; }
+      planData = resp.data;
+      renderPlan(planData);
+      switchTab('plan');
+      var cnt = (planData&&planData.resumen)?planData.resumen.length:0;
+      document.getElementById('tc-plan').textContent = cnt+' telas';
+    })
+    .withFailureHandler(function(e){ hideLoader(); toast('Error: '+e.message,'err'); })
+    .generarPlanTela();
+}
+
+function renderPlan(data){
+  var cont = document.getElementById('plan-content');
+  if(!data || !data.resumen || !data.resumen.length){
+    var aviso = (data&&data.aviso)||'No hay comandas en estado PRODUCCIÓN o no hay recetas configuradas.';
+    cont.innerHTML = '<div class="no-plan">'+
+      '<div class="no-plan-ico">📦</div>'+
+      '<div class="no-plan-title">'+esc(aviso)+'</div>'+
+      '<div class="no-plan-sub">'+
+        'Asegúrate de que haya comandas en estado <strong>PRODUCCIÓN</strong><br>'+
+        'y que sus modelos tengan recetas configuradas.'+
+      '</div>'+
+      '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">'+
+        '<button class="btn btn-gold" onclick="generarPlan()">↺ Intentar de nuevo</button>'+
+        '<button class="btn btn-outline" onclick="switchTab(\'recetas\')">→ Ver Recetas</button>'+
+      '</div>'+
+    '</div>';
+    if(data && data.sinReceta && data.sinReceta.length){
+      cont.innerHTML += renderSinReceta(data.sinReceta);
+    }
+    return;
+  }
+
+  var totalPrendas = data.totalPrendas || data.resumen.reduce(function(a,r){return a+r.totalPrendas;},0);
+  var totalMetros  = data.totalMetros  || data.resumen.reduce(function(a,r){return a+r.metros;},0);
+  var totalMerma   = data.totalMetrosMerma || (totalMetros*1.08);
+  var fechaGen = (data.generadoEn ? new Date(data.generadoEn) : new Date())
+    .toLocaleString('es-VE',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+
+  var html = '';
+
+  // HERO
+  html += '<div class="plan-hero">'+
+    '<div class="ph-left">'+
+      '<div class="ph-eyebrow">Generado · '+esc(fechaGen)+'</div>'+
+      '<h2>Plan de Compra de Tela</h2>'+
+      '<p>'+data.comandas+' comanda(s) activa(s) en PRODUCCIÓN · '+data.resumen.length+' tipo(s) de tela necesarios</p>'+
+    '</div>'+
+    '<div class="ph-stats">'+
+      '<div class="ph-stat"><div class="ph-stat-val">'+data.comandas+'</div><div class="ph-stat-lbl">Comandas</div></div>'+
+      '<div class="ph-stat"><div class="ph-stat-val">'+totalPrendas+'</div><div class="ph-stat-lbl">Prendas</div></div>'+
+      '<div class="ph-stat"><div class="ph-stat-val">'+Number(totalMetros).toFixed(1)+'m</div><div class="ph-stat-lbl">Metros netos</div></div>'+
+      '<div class="ph-stat"><div class="ph-stat-val" style="color:#f59e0b">'+Number(totalMerma).toFixed(1)+'m</div><div class="ph-stat-lbl">+8% merma</div></div>'+
+    '</div>'+
+  '</div>';
+
+  // TOTALES STRIP
+  html += '<div class="tot-strip">';
+  data.resumen.forEach(function(r){
+    var colorLabel = (r.color||r.colorTela)==='SEGUN_PRENDA'?'multicolor':(r.color||r.colorTela||'');
+    var metrosConMerma = r.metrosConMerma || (r.metros*1.08);
+    html += '<div class="tot-item">'+
+      '<div class="tot-val">'+Number(r.metros||0).toFixed(2)+'m</div>'+
+      '<div class="tot-lbl">'+esc(r.tela)+(colorLabel?' · '+esc(colorLabel):'')+'</div>'+
+      '<div style="font-family:\'DM Mono\',monospace;font-size:9px;color:var(--warn)">'+Number(metrosConMerma).toFixed(2)+'m c/merma</div>'+
+    '</div>';
+  });
+  html += '</div>';
+
+  // AVISO MERMA
+  html += '<div style="display:flex;align-items:center;gap:12px;padding:10px 16px;background:#fff8ed;border:1px solid rgba(154,71,0,.2);border-left:3px solid var(--warn);margin-bottom:20px;font-size:11px;color:#6a3500">'+
+    '<span style="font-size:15px">⚠️</span>'+
+    '<span><strong>Merma textil del 8%</strong> incluida en los metros recomendados de compra. Representa el desperdicio promedio de corte.</span>'+
+  '</div>';
+
+  // TARJETAS DE TELA
+  html += '<div class="telas-grid">';
+  data.resumen.forEach(function(r, i){
+    var cardId = 'det-'+i;
+    var colorLabel = (r.color||r.colorTela)==='SEGUN_PRENDA' ? 'Según prenda' : (r.color||r.colorTela||'—');
+    var colorDotColor = (r.color||r.colorTela)==='SEGUN_PRENDA' ? '#c9a84c' : colorHex(r.color||r.colorTela);
+    var metrosConMerma = r.metrosConMerma || Math.round(r.metros*1.08*100)/100;
+    var detalle = r.detalle || [];
+
+    html += '<div class="tela-card">'+
+      '<div class="tela-accent"></div>'+
+      '<div class="tela-head">'+
+        '<div class="tela-head-l">'+
+          '<div class="tela-nombre">'+esc(r.tela)+'</div>'+
+          '<div class="tela-color-row">'+
+            '<span class="cdot" style="background:'+colorDotColor+'"></span>'+
+            '<span class="tela-color-lbl">'+esc(colorLabel)+'</span>'+
+          '</div>'+
+        '</div>'+
+        '<div class="tela-head-r">'+
+          '<div class="tela-metros-val">'+Number(r.metros||0).toFixed(2)+'</div>'+
+          '<div class="tela-metros-lbl">metros netos</div>'+
+          '<div class="tela-merma">+merma: '+Number(metrosConMerma).toFixed(2)+'m</div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="tela-stats-row">'+
+        '<div class="tela-stat"><div class="ts-val">'+r.totalPrendas+'</div><div class="ts-lbl">Prendas</div></div>'+
+        '<div class="tela-stat"><div class="ts-val">'+detalle.length+'</div><div class="ts-lbl">Modelos</div></div>'+
+        (r.anchoTela?'<div class="tela-stat"><div class="ts-val">'+r.anchoTela+' cm</div><div class="ts-lbl">Ancho</div></div>':'')+
+      '</div>';
+
+    if(detalle.length){
+      html += '<button class="desglose-toggle" id="btn-'+cardId+'" onclick="toggleDesglose(\''+cardId+'\')">'+
+        'Desglose por modelo y color <span class="dt-icon">▾</span>'+
+      '</button>'+
+      '<div class="desglose-body" id="'+cardId+'">'+
+        '<div class="det-hdr">'+
+          '<span>Modelo / Color</span>'+
+          '<span style="text-align:center">Talla</span>'+
+          '<span style="text-align:right">Prendas</span>'+
+          '<span style="text-align:right">Metros</span>'+
+        '</div>'+
+        detalle.map(function(d){
+          return '<div class="det-row">'+
+            '<div>'+
+              '<div class="det-modelo">'+esc(d.modelo)+'</div>'+
+              '<div class="det-meta">'+cdotHtml(d.colorPrenda||'')+esc(d.colorPrenda||d.color||'—')+'</div>'+
+            '</div>'+
+            '<div class="det-talla">'+esc(d.talla||'UNICA')+'</div>'+
+            '<div class="det-prendas">'+d.prendas+' uds</div>'+
+            '<div class="det-metros">'+Number(d.metros||0).toFixed(2)+'m</div>'+
+          '</div>';
+        }).join('')+
+      '</div>';
+    }
+
+    html += '</div>'; // tela-card
+  });
+  html += '</div>'; // telas-grid
+
+  // SIN RECETA
+  if(data.sinReceta && data.sinReceta.length){
+    html += renderSinReceta(data.sinReceta);
+  }
+
+  cont.innerHTML = html;
+}
+
+function renderSinReceta(sinReceta){
+  return '<div class="sin-receta-box">'+
+    '<div class="sr-title">⚠ '+sinReceta.length+' modelo(s) sin receta configurada — no incluidos en el plan</div>'+
+    '<div class="sr-grid">'+
+      '<span class="sr-hdr">Modelo</span>'+
+      '<span class="sr-hdr">Color</span>'+
+      '<span class="sr-hdr">Talla</span>'+
+      '<span class="sr-hdr" style="text-align:right">Prendas</span>'+
+      sinReceta.map(function(p){
+        return '<span style="font-weight:600;padding:6px 0;border-bottom:1px dashed rgba(0,0,0,.06)">'+esc(p.modelo||p.model||'')+'</span>'+
+          '<span style="padding:6px 0;border-bottom:1px dashed rgba(0,0,0,.06)">'+cdotHtml(p.color||p.colorPrenda||'')+esc(p.color||p.colorPrenda||'—')+'</span>'+
+          '<span style="padding:6px 0;border-bottom:1px dashed rgba(0,0,0,.06)">'+esc(p.talla||'—')+'</span>'+
+          '<span style="font-family:\'DM Mono\',monospace;font-weight:700;text-align:right;padding:6px 0;border-bottom:1px dashed rgba(0,0,0,.06)">'+p.totalPrendas+'</span>';
+      }).join('')+
+    '</div>'+
+    '<div style="margin-top:14px">'+
+      '<button class="btn btn-dark btn-sm" onclick="switchTab(\'nueva\')">+ Agregar receta para estos modelos</button>'+
+    '</div>'+
+  '</div>';
+}
+
+function toggleDesglose(id){
+  var body = document.getElementById(id);
+  var btn  = document.getElementById('btn-'+id);
+  var open = body.classList.contains('open');
+  body.classList.toggle('open',!open);
+  btn.classList.toggle('open',!open);
+}
+
+// ═══════════════════════════════════════════════
+//  UTILS: LOADER / TOAST
+// ═══════════════════════════════════════════════
+function showLoader(msg){
+  document.getElementById('loader-msg').textContent = msg||'Procesando...';
+  document.getElementById('loader').classList.add('show');
+}
+function hideLoader(){
+  document.getElementById('loader').classList.remove('show');
+}
+function toast(msg, tipo){
+  tipo = tipo||'ok';
+  var t = document.createElement('div');
+  t.className='toast '+(tipo==='ok'?'ok':tipo==='err'?'err':'');
+  t.textContent = msg;
+  document.getElementById('toast-ct').appendChild(t);
+  setTimeout(function(){ t.style.opacity='0'; t.style.transition='opacity .3s'; setTimeout(function(){t.remove();},300); },3000);
+}
+</script>
+</body>
+</html>

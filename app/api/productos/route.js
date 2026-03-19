@@ -1,13 +1,8 @@
 export const dynamic = 'force-dynamic';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase-server';
+import { generarSku as genSku } from '@/utils/generarSku';
 import { NextResponse } from 'next/server';
 
-function genSku(cat, modelo, talla) {
-  function clean(s,n){return(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,n);}
-  const c=clean(cat,3),m=clean(modelo,3),t=clean(talla,1)||'U';
-  const rand=Math.floor(100000+Math.random()*899999);
-  return c+m+t+rand;
-}
 
 // GET /api/productos
 export async function GET() {
