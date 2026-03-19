@@ -10,6 +10,12 @@ function estD(n){if(n<=0)return 'zero';if(n<=3)return 'low';return 'ok';}
 const CATEGORIAS=['BODIES','CHAQUETA','CONJUNTO','ENTERIZO','FALDA','PANTS','SHORT','TOPS','TRAJE DE BANO','TRIKINIS','VESTIDO'];
 const TALLAS=['UNICA','XS','S','M','L','XL','XXL'];
 const COLORES_COMUNES=['NEGRO','BLANCO','AZUL','ROJO','VERDE','ROSA','GRIS','AMARILLO','NARANJA','MORADO','VINOTINTO','BEIGE','CORAL','CELESTE','AZUL MARINO'];
+const TIPOS_TELA = [
+  '', // vacío = sin especificar
+  'MICRODURAZNO','ALO','SEUL','RIB','TELA JEAN','LINO','NYLON','MODAL','BAMBÚ','TELA DEPORTIVA','ENCAJE','GASA / CHIFFON','SATÉN / SEDA','LANA / POLAR','DOBLE TELA','OTRO',
+];
+
+
 
 const inp={width:'100%',padding:'9px 11px',background:'var(--bg2)',border:'1px solid var(--border)',fontFamily:'Poppins,sans-serif',fontSize:'12px',color:'#111',outline:'none'};
 const lbl={fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.16em',textTransform:'uppercase',color:'#555',display:'block',marginBottom:'4px'};
@@ -17,8 +23,13 @@ const lbl={fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.16em',t
 // ── Modal para editar UN producto (precios, categoría, modelo, talla) ─────
 function ModalEditarProducto({ prod, onClose, onSave }) {
   const [form, setForm] = useState({
-    categoria: prod.categoria, modelo: prod.modelo, talla: prod.talla,
-    precioDetal: prod.precioDetal, precioMayor: prod.precioMayor, precioCosto: prod.precioCosto || 0,
+    categoria:   prod.categoria,
+    modelo:      prod.modelo,
+    talla:       prod.talla,
+    precioDetal: prod.precioDetal,
+    precioMayor: prod.precioMayor,
+    precioCosto: prod.precioCosto || 0,
+    tela:        prod.tela || '',
   });
   const [guardando, setGuardando] = useState(false);
   const [err, setErr] = useState('');
@@ -69,6 +80,33 @@ function ModalEditarProducto({ prod, onClose, onSave }) {
               <label style={lbl}>Modelo *</label>
               <input value={form.modelo} onChange={e=>setForm(f=>({...f,modelo:e.target.value}))} style={inp} placeholder="Nombre del modelo"/>
             </div>
+
+            {/* ── CAMPO NUEVO: Tipo de Tela ── */}
+            <div style={{gridColumn:'span 2'}}>
+              <label style={lbl}>🧵 Tipo de Tela</label>
+              <div style={{display:'flex',gap:'8px'}}>
+                <select
+                  value={TIPOS_TELA.includes((form.tela||'').toUpperCase()) ? (form.tela||'').toUpperCase() : form.tela ? 'OTRO' : ''}
+                  onChange={e=>{
+                    if(e.target.value !== 'OTRO') setForm(f=>({...f,tela:e.target.value}));
+                    else setForm(f=>({...f,tela:''}));
+                  }}
+                  style={{...inp,padding:'8px 11px',flex:1}}>
+                  {TIPOS_TELA.map(t=><option key={t} value={t}>{t || '— Sin especificar'}</option>)}
+                </select>
+                <input
+                  value={form.tela}
+                  onChange={e=>setForm(f=>({...f,tela:e.target.value.toUpperCase()}))}
+                  style={{...inp,flex:1}}
+                  placeholder="O escribe directo…"/>
+              </div>
+              {form.tela && (
+                <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'var(--blue)',marginTop:'4px'}}>
+                  Tela: <strong>{form.tela}</strong>
+                </div>
+              )}
+            </div>
+
             <div>
               <label style={lbl}>Precio Detal € *</label>
               <input type="number" min="0" step="0.01" value={form.precioDetal} onChange={e=>setForm(f=>({...f,precioDetal:parseFloat(e.target.value)||0}))} style={inp}/>
@@ -275,9 +313,11 @@ function ModalNuevoProducto({ onClose, onSave }) {
 // ── Modal edición masiva por modelo — cambia precio detal/mayor/costo a todos los SKUs del grupo ──
 function ModalEditarGrupo({ modelo, variantes, onClose, onSave }) {
   const base = variantes[0] || {};
-  const [precioDetal,  setPD] = useState(base.precioDetal  || 0);
-  const [precioMayor,  setPM] = useState(base.precioMayor  || 0);
-  const [precioCosto,  setPC] = useState(base.precioCosto  || 0);
+  const [precioDetal, setPD] = useState(base.precioDetal  || 0);
+  const [precioMayor, setPM] = useState(base.precioMayor  || 0);
+  const [precioCosto, setPC] = useState(base.precioCosto  || 0);
+  const [tela,        setTela] = useState(base.tela || '');
+  const [editarTela,  setEditarTela] = useState(false); // toggle para mostrar campo tela
   const [guardando, setGuardando] = useState(false);
   const [err, setErr] = useState('');
   const [ok,  setOk]  = useState('');
@@ -285,6 +325,8 @@ function ModalEditarGrupo({ modelo, variantes, onClose, onSave }) {
   const detalesDifieren = [...new Set(variantes.map(v=>v.precioDetal))].length > 1;
   const mayoresDifieren = [...new Set(variantes.map(v=>v.precioMayor))].length > 1;
   const costosDifieren  = [...new Set(variantes.map(v=>v.precioCosto))].length > 1;
+  const telasDifieren   = [...new Set(variantes.map(v=>v.tela||''))].length > 1;
+  const telaActual      = telasDifieren ? 'Variado' : (base.tela || '— Sin especificar');
 
   const margin = precioCosto > 0 && precioDetal > 0
     ? ((precioDetal - precioCosto) / precioDetal * 100).toFixed(1) : null;
@@ -296,8 +338,12 @@ function ModalEditarGrupo({ modelo, variantes, onClose, onSave }) {
       const promises = variantes.map(v =>
         fetch(`/api/productos/${v.sku}`, {
           method: 'PUT', headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ precioDetal, precioMayor, precioCosto,
-            categoria: v.categoria, modelo: v.modelo, talla: v.talla }),
+          body: JSON.stringify({
+            precioDetal, precioMayor, precioCosto,
+            categoria: v.categoria, modelo: v.modelo, talla: v.talla,
+            // Solo incluir tela si el usuario activó la edición
+            ...(editarTela && tela !== undefined ? { tela } : {}),
+          }),
         }).then(r=>r.json())
       );
       const results = await Promise.all(promises);
@@ -312,13 +358,14 @@ function ModalEditarGrupo({ modelo, variantes, onClose, onSave }) {
     setGuardando(false);
   }
 
+  // colorHex debe estar disponible en el scope (ya está en el archivo original)
   return (
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div style={{background:'var(--bg)',border:'1px solid var(--border-strong)',width:'100%',maxWidth:'520px',borderTop:'3px solid var(--warn)'}}>
 
         <div style={{padding:'14px 20px 12px',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
           <div>
-            <div style={{fontFamily:'Playfair Display,serif',fontSize:'16px',fontWeight:700}}>✏️ Editar precios del grupo</div>
+            <div style={{fontFamily:'Playfair Display,serif',fontSize:'16px',fontWeight:700}}>✏️ Editar grupo completo</div>
             <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'var(--warn)',marginTop:'3px'}}>
               {modelo} · {variantes.length} variante{variantes.length!==1?'s':''}
             </div>
@@ -332,11 +379,11 @@ function ModalEditarGrupo({ modelo, variantes, onClose, onSave }) {
 
           {(detalesDifieren||mayoresDifieren||costosDifieren) && (
             <div style={{padding:'9px 12px',background:'#fff8e1',border:'1px solid #f59e0b44',fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#92400e',lineHeight:1.6}}>
-              ⚠️ Las variantes tienen precios distintos actualmente.
-              Al guardar se unificarán todos con los valores de abajo.
+              ⚠️ Las variantes tienen precios distintos. Al guardar se unificarán todos.
             </div>
           )}
 
+          {/* Colores afectados */}
           <div>
             <label style={lbl}>Variantes afectadas ({variantes.length})</label>
             <div style={{display:'flex',flexWrap:'wrap',gap:'5px',padding:'9px',background:'var(--bg2)',border:'1px solid var(--border)'}}>
@@ -349,6 +396,7 @@ function ModalEditarGrupo({ modelo, variantes, onClose, onSave }) {
             </div>
           </div>
 
+          {/* Precios */}
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
             <div>
               <label style={lbl}>Precio Detal € *</label>
@@ -375,6 +423,51 @@ function ModalEditarGrupo({ modelo, variantes, onClose, onSave }) {
               </div>
             )}
           </div>
+
+          {/* ── CAMPO NUEVO: Tipo de Tela (masiva) ── */}
+          <div style={{border:'1px solid var(--border)',borderRadius:'4px',overflow:'hidden'}}>
+            <button
+              onClick={()=>setEditarTela(v=>!v)}
+              style={{display:'flex',justifyContent:'space-between',alignItems:'center',width:'100%',padding:'10px 14px',background:'var(--bg2)',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'12px',fontWeight:600,textAlign:'left'}}>
+              <span>🧵 Tipo de Tela {editarTela ? '(editando)' : ''}</span>
+              <span style={{display:'flex',gap:'12px',alignItems:'center'}}>
+                <span style={{fontFamily:'DM Mono,monospace',fontSize:'10px',color:telasDifieren?'var(--warn)':'#666',fontWeight:400}}>
+                  {editarTela ? '' : telaActual}
+                </span>
+                <span style={{fontSize:'11px',color:'#999'}}>{editarTela?'▲':'▼'}</span>
+              </span>
+            </button>
+            {editarTela && (
+              <div style={{padding:'12px 14px',borderTop:'1px solid var(--border)',background:'var(--bg)'}}>
+                {telasDifieren && (
+                  <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'var(--warn)',marginBottom:'8px'}}>
+                    ⚠️ Las variantes tienen telas distintas. Se unificarán con el valor que selecciones.
+                  </div>
+                )}
+                <div style={{display:'flex',gap:'8px'}}>
+                  <select
+                    value={TIPOS_TELA.includes((tela||'').toUpperCase()) ? (tela||'').toUpperCase() : tela ? 'OTRO' : ''}
+                    onChange={e=>{
+                      if(e.target.value !== 'OTRO') setTela(e.target.value);
+                    }}
+                    style={{...inp,flex:1,padding:'8px 11px'}}>
+                    {TIPOS_TELA.map(t=><option key={t} value={t}>{t || '— Sin especificar'}</option>)}
+                  </select>
+                  <input
+                    value={tela}
+                    onChange={e=>setTela(e.target.value.toUpperCase())}
+                    style={{...inp,flex:1}}
+                    placeholder="O escribe directo…"/>
+                </div>
+                {tela && (
+                  <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'var(--blue)',marginTop:'6px'}}>
+                    Se aplicará: <strong>{tela}</strong> → {variantes.length} variantes
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
         </div>
 
         <div style={{padding:'12px 20px',borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center',background:'var(--bg2)'}}>
@@ -393,6 +486,7 @@ function ModalEditarGrupo({ modelo, variantes, onClose, onSave }) {
     </div>
   );
 }
+
 
 // ── Página principal ───────────────────────────────────────────────────────
 export default function ProductosPage() {

@@ -5,6 +5,8 @@ import Shell from '@/components/Shell';
 import CatalogoExplorer from '@/components/CatalogoExplorer';
 import BarcodeScanner from '@/components/BarcodeScanner';
 import { useAppData } from '@/lib/AppContext';
+import { fetchApi } from '@/utils/fetchApi';
+import ModalTicketEnvio from '@/components/ModalTicketEnvio';
 
 /* ─── Constantes ─────────────────────────────────────────────────── */
 const S = {
@@ -37,7 +39,7 @@ function colorHex(n){const k=(n||'').toUpperCase().trim();return CM[k]||CM[k.spl
 function fmtNum(n){return Number(n||0).toLocaleString('es-VE',{minimumFractionDigits:2,maximumFractionDigits:2});}
 
 /* ═══════════════════════════════════════════════════════════════════
-   WIDGET DE PAGO — reutilizable en nueva comanda y en gestión
+   WIDGET DE PAGO
 ═══════════════════════════════════════════════════════════════════ */
 function WidgetPago({ comandaId, saldo=0, onPagoRegistrado }) {
   const [metodo,   setMetodo]  = useState('');
@@ -51,7 +53,6 @@ function WidgetPago({ comandaId, saldo=0, onPagoRegistrado }) {
 
   const metodoCfg = METODOS.find(m=>m.id===metodo);
 
-  // Al seleccionar método → auto-set divisa
   function selMetodo(id) {
     const cfg = METODOS.find(m=>m.id===id);
     setMetodo(id);
@@ -61,7 +62,6 @@ function WidgetPago({ comandaId, saldo=0, onPagoRegistrado }) {
   const md   = parseFloat(monto)||0;
   const ts   = parseFloat(tasa)||0;
 
-  // Cálculo en tiempo real corregido
   let previewBS  = 0;
   let previewEUR = 0;
   if (divisa==='BS')   { previewBS=md; previewEUR=ts>0?md/ts:0; }
@@ -97,7 +97,6 @@ function WidgetPago({ comandaId, saldo=0, onPagoRegistrado }) {
       {err&&<div style={{padding:'7px 10px',background:'var(--red-soft)',color:'var(--red)',fontFamily:'DM Mono,monospace',fontSize:'10px',marginBottom:'10px'}}>{err}</div>}
       {ok &&<div style={{padding:'7px 10px',background:'var(--green-soft)',color:'var(--green)',fontFamily:'DM Mono,monospace',fontSize:'10px',marginBottom:'10px'}}>{ok}</div>}
 
-      {/* Métodos de pago */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'5px',marginBottom:'12px'}}>
         {METODOS.map(m=>(
           <button key={m.id} onClick={()=>selMetodo(m.id)}
@@ -109,7 +108,6 @@ function WidgetPago({ comandaId, saldo=0, onPagoRegistrado }) {
         ))}
       </div>
 
-      {/* Monto + tasa */}
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'10px'}}>
         <div>
           <label style={lbl}>Monto recibido *</label>
@@ -127,7 +125,6 @@ function WidgetPago({ comandaId, saldo=0, onPagoRegistrado }) {
         </div>
       </div>
 
-      {/* Preview conversión */}
       {md>0&&ts>0&&(
         <div style={{padding:'8px 11px',background:'var(--surface)',border:'1px solid var(--border)',marginBottom:'10px',fontFamily:'DM Mono,monospace',fontSize:'11px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <span>
@@ -137,7 +134,6 @@ function WidgetPago({ comandaId, saldo=0, onPagoRegistrado }) {
           </span>
         </div>
       )}
-      {/* Resumen tipo POS: Saldo, Pagando, Falta/Vuelto */}
       {md>0&&saldo>0&&(
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'6px',marginBottom:'10px'}}>
           <div style={{padding:'8px',background:'var(--bg2)',border:'1px solid var(--border)',textAlign:'center'}}>
@@ -242,7 +238,6 @@ function ModalNueva({ clientes, productos, onClose, onSave }) {
         if(r.ok) clienteId=r.cliente?.id||'';
       }
 
-      // Calcular monto abono en EUR si lo pusieron
       let montoAbonoEUR = 0;
       if(abono && parseFloat(abono)>0) {
         const ma=parseFloat(abono)||0, ta=parseFloat(abonoTasa)||0;
@@ -262,7 +257,6 @@ function ModalNueva({ clientes, productos, onClose, onSave }) {
 
       if(!res.ok){setErr(res.error||'Error al guardar');setGuard(false);return;}
 
-      // Si hay abono, registrar el pago
       if(montoAbonoEUR>0 && abonoMetodo) {
         await fetch('/api/pagos',{method:'POST',headers:{'Content-Type':'application/json'},
           body:JSON.stringify({
@@ -281,7 +275,6 @@ function ModalNueva({ clientes, productos, onClose, onSave }) {
     {catalogo&&<CatalogoExplorer productos={productos} modo="entrada" tipoVenta="MAYOR" onAdd={addFromCatalog} onClose={()=>setCatalogo(false)}/>}
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:200,display:'flex',alignItems:'flex-end',justifyContent:'center',padding:'0',overflowY:'auto'}} className="modal-wrap" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div className="modal-fullscreen" style={{background:'var(--bg)',border:'1px solid var(--border-strong)',width:'100%',maxWidth:'680px',borderTop:'3px solid #f59e0b',maxHeight:'96vh',display:'flex',flexDirection:'column'}}>
-        {/* Header */}
         <div style={{padding:'14px 18px',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0}}>
           <div>
             <div style={{fontFamily:'Playfair Display,serif',fontSize:'17px',fontWeight:700}}>📋 Nueva Comanda</div>
@@ -293,7 +286,6 @@ function ModalNueva({ clientes, productos, onClose, onSave }) {
         <div style={{padding:'16px 18px',overflowY:'auto',flex:1,display:'flex',flexDirection:'column',gap:'14px'}}>
           {err&&<div style={{padding:'8px 11px',background:'var(--red-soft)',color:'var(--red)',fontFamily:'DM Mono,monospace',fontSize:'10px'}}>{err}</div>}
 
-          {/* CLIENTE */}
           <div style={{position:'relative'}}>
             <label style={lbl}>Cliente *</label>
             <div style={{display:'flex',gap:'8px'}}>
@@ -320,7 +312,6 @@ function ModalNueva({ clientes, productos, onClose, onSave }) {
             )}
           </div>
 
-          {/* PRENDAS */}
           <div>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'6px'}}>
               <label style={lbl}>Prendas * ({items.length})</label>
@@ -373,13 +364,11 @@ function ModalNueva({ clientes, productos, onClose, onSave }) {
             )}
           </div>
 
-          {/* Fecha + notas */}
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
             <div><label style={lbl}>Fecha de entrega</label><input type="date" value={fechaEnt} onChange={e=>setFechaEnt(e.target.value)} style={inp}/></div>
             <div><label style={lbl}>Notas / Instrucciones</label><input value={notas} onChange={e=>setNotas(e.target.value)} placeholder="Colores, tallas, instrucciones..." style={inp}/></div>
           </div>
 
-          {/* ABONO INICIAL */}
           <div style={{border:'1px solid var(--border)',overflow:'hidden'}}>
             <button onClick={()=>setSA(s=>!s)}
               style={{width:'100%',padding:'10px 14px',background:'var(--bg2)',border:'none',cursor:'pointer',textAlign:'left',display:'flex',justifyContent:'space-between',alignItems:'center',fontFamily:'Poppins,sans-serif',fontSize:'12px',fontWeight:600}}>
@@ -388,7 +377,6 @@ function ModalNueva({ clientes, productos, onClose, onSave }) {
             </button>
             {showAbono&&(
               <div style={{padding:'14px',borderTop:'1px solid var(--border)'}}>
-                {/* Fila 1: método y monto */}
                 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'10px'}}>
                   <div>
                     <label style={lbl}>Método de pago *</label>
@@ -407,7 +395,6 @@ function ModalNueva({ clientes, productos, onClose, onSave }) {
                     </div>
                   </div>
                 </div>
-                {/* Fila 2: tasa y referencia — SIEMPRE VISIBLE */}
                 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'10px'}}>
                   <div>
                     <label style={lbl}>Tasa BS / {abonoDiv==='BS'?'EUR':abonoDiv} *</label>
@@ -418,7 +405,6 @@ function ModalNueva({ clientes, productos, onClose, onSave }) {
                     <input value={abonoRef} onChange={e=>setAR(e.target.value)} placeholder="Últimos 6 dígitos" style={inp}/>
                   </div>
                 </div>
-                {/* Preview conversión en tiempo real */}
                 {(() => {
                   const ma = parseFloat(abono)||0;
                   const ta = parseFloat(abonoTasa)||0;
@@ -478,7 +464,7 @@ function ModalNueva({ clientes, productos, onClose, onSave }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   MODAL GESTIÓN — vista clara con botones de acción
+   MODAL GESTIÓN
 ═══════════════════════════════════════════════════════════════════ */
 function ModalGestion({ cmd, onClose, onSave }) {
   const sc = S[cmd.status]||S.pendiente;
@@ -502,7 +488,6 @@ function ModalGestion({ cmd, onClose, onSave }) {
     if(res.ok){
       onSave();
     } else if (res.errorTipo === 'SIN_STOCK') {
-      // Error de stock — mostrar detalle claro
       const detalle = res.sinStock.map(x=>`• ${x.modelo}: necesitas ${x.requerido} ud${x.requerido>1?'s':''}, tienes ${x.stockReal} (faltan ${x.falta})`).join('\n');
       setErr(`❌ Sin stock suficiente:\n${detalle}\n\nRegistra una Entrada primero.`);
     } else {
@@ -514,14 +499,12 @@ function ModalGestion({ cmd, onClose, onSave }) {
   function parseProd(cmd){let p=cmd.productos;if(typeof p==='string')try{p=JSON.parse(p);}catch{p=[];}return Array.isArray(p)?p:[];}
   const prods = parseProd(cmd);
 
-  // Obtener el índice actual en el flujo
   const idxActual = FLUJO.indexOf(cmd.status);
   const sigStatus = FLUJO[idxActual+1];
 
   return (
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:200,display:'flex',alignItems:'flex-end',justifyContent:'center',padding:'0',overflowY:'auto'}} className="modal-wrap" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div className="modal-fullscreen" style={{background:'var(--bg)',border:'1px solid var(--border-strong)',width:'100%',maxWidth:'640px',borderTop:`3px solid ${sc.border}`,maxHeight:'96vh',display:'flex',flexDirection:'column'}}>
-        {/* Header */}
         <div style={{padding:'14px 18px',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexShrink:0}}>
           <div>
             <div style={{fontFamily:'Playfair Display,serif',fontSize:'17px',fontWeight:700}}>{cmd.cliente}</div>
@@ -537,7 +520,6 @@ function ModalGestion({ cmd, onClose, onSave }) {
         <div style={{padding:'14px 18px',overflowY:'auto',flex:1,display:'flex',flexDirection:'column',gap:'14px'}}>
           {err&&<div style={{padding:'8px 11px',background:'var(--red-soft)',color:'var(--red)',fontFamily:'DM Mono,monospace',fontSize:'10px',whiteSpace:'pre-line',lineHeight:1.6}}>{err}</div>}
 
-          {/* ── RESUMEN FINANCIERO ── */}
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'9px'}}>
             {[['💶 Total',`€ ${fmtNum(cmd.precio)}`,'#333'],
               ['✅ Pagado',`€ ${fmtNum(cmd.monto_pagado)}`,'var(--green)'],
@@ -550,7 +532,6 @@ function ModalGestion({ cmd, onClose, onSave }) {
             ))}
           </div>
 
-          {/* Barra de pago */}
           {cmd.precio>0&&(
             <div>
               <div style={{height:'6px',background:'var(--border)',borderRadius:'3px',overflow:'hidden'}}>
@@ -560,7 +541,6 @@ function ModalGestion({ cmd, onClose, onSave }) {
             </div>
           )}
 
-          {/* ── PRENDAS ── */}
           {prods.length>0&&(
             <div style={{padding:'11px 13px',background:'var(--bg2)',border:'1px solid var(--border)'}}>
               <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.12em',textTransform:'uppercase',color:'#555',marginBottom:'8px'}}>Prendas del pedido</div>
@@ -578,7 +558,6 @@ function ModalGestion({ cmd, onClose, onSave }) {
             </div>
           )}
 
-          {/* ── BOTONES DE ACCIÓN DEL FLUJO ── */}
           <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
             <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#555',letterSpacing:'.14em',textTransform:'uppercase',marginBottom:'4px'}}>Acciones del pedido</div>
             <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
@@ -604,7 +583,6 @@ function ModalGestion({ cmd, onClose, onSave }) {
             </div>
           </div>
 
-          {/* ── PAGO ── */}
           {saldo>0.01&&(
             <WidgetPago
               comandaId={cmd.id}
@@ -618,7 +596,6 @@ function ModalGestion({ cmd, onClose, onSave }) {
             </div>
           )}
 
-          {/* ── HISTORIAL DE PAGOS ── */}
           {!loadP&&pagos.length>0&&(
             <div>
               <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.14em',textTransform:'uppercase',color:'#555',marginBottom:'8px'}}>Historial de pagos</div>
@@ -646,7 +623,6 @@ function ModalGestion({ cmd, onClose, onSave }) {
             </div>
           )}
 
-          {/* ── NOTAS ── */}
           <div>
             <label style={lbl}>Notas</label>
             <input value={notas} onChange={e=>setNotas(e.target.value)} placeholder="Instrucciones, observaciones..." style={inp}/>
@@ -682,33 +658,29 @@ function ComandasInner() {
   const { data, recargar } = useAppData()||{};
   const { clientes=[], productos=[] } = data||{};
 
-  const [comandas, setComandas] = useState([]);
-  const [loading,  setLoading]  = useState(true);
-  const [filtro,   setFiltro]   = useState('todos');
-  const [buscar,   setBuscar]   = useState('');
-  const [desde,    setDesde]    = useState('');
-  const [hasta,    setHasta]    = useState('');
-  const [modal,    setModal]    = useState(null);
+  const [comandas,    setComandas]    = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [filtro,      setFiltro]      = useState('todos');
+  const [buscar,      setBuscar]      = useState('');
+  const [desde,       setDesde]       = useState('');
+  const [hasta,       setHasta]       = useState('');
+  const [modal,       setModal]       = useState(null);
+  const [ticketModal, setTicketModal] = useState(null);
+  const [filtroTela,  setFiltroTela]  = useState('');
 
   const searchParams = useSearchParams();
-  const verRef = useRef(null); // guardamos el ?ver= para no perderlo por timing
+  const verRef = useRef(null);
 
-  // Capturar el parámetro ?ver= apenas llega, antes de que cambie
   useEffect(() => {
     const ver = searchParams?.get('ver');
     if (ver) verRef.current = ver;
   }, [searchParams]);
 
-  // Deep link desde historial: /comandas?ver=CMD-xxx
-  // Se ejecuta cuando cargan las comandas O cuando llega el parámetro
   useEffect(()=>{
     const ver = verRef.current || searchParams?.get('ver');
     if (ver && comandas.length > 0) {
       const cmd = comandas.find(c => c.id === ver);
-      if (cmd) {
-        setModal(cmd);
-        verRef.current = null; // limpiar para no reabrir en cada render
-      }
+      if (cmd) { setModal(cmd); verRef.current = null; }
     }
   },[searchParams, comandas]);
 
@@ -721,7 +693,6 @@ function ComandasInner() {
 
   useEffect(()=>{
     cargar();
-    // ── Realtime: recargar cuando cambie cualquier comanda ──
     let channel = null;
     async function conectarRealtime() {
       try {
@@ -744,12 +715,28 @@ function ComandasInner() {
     return ()=>{ if(channel) import('@/lib/supabase-client').then(({supabasePublic})=>supabasePublic?.removeChannel(channel)).catch((e)=>console.warn('[Realtime comandas] cleanup:', e.message)); };
   },[]);
 
+  const conteos = useMemo(()=>Object.fromEntries(Object.keys(S).map(s=>[s,comandas.filter(c=>c.status===s).length])),[comandas]);
+
+  // ── Telas disponibles para el filtro ─────────────────────────────────────
+  const telasDisponibles = useMemo(() => {
+    const set = new Set();
+    comandas.forEach(cmd => {
+      let prods = cmd.productos;
+      if (typeof prods === 'string') try { prods = JSON.parse(prods); } catch { prods = []; }
+      (prods || []).forEach(p => {
+        const prod = productos.find(x => x.sku === p.sku);
+        if (prod?.tela) set.add(prod.tela);
+      });
+    });
+    return [...set].sort();
+  }, [comandas, productos]);
+
+  // ── filtradas: status + búsqueda + fechas + tela ──────────────────────────
   const filtradas = useMemo(()=>{
-    let r=filtro==='todos'?comandas:comandas.filter(c=>c.status===filtro);
+    let r = filtro==='todos' ? comandas : comandas.filter(c=>c.status===filtro);
     if(buscar){
       const q=buscar.toLowerCase();
       r=r.filter(c=>{
-        // Buscar también dentro de los productos de la comanda
         let prods=c.productos;
         if(typeof prods==='string') try{prods=JSON.parse(prods);}catch{prods=[];}
         const textoProds=Array.isArray(prods)?prods.map(p=>`${p.modelo||''} ${p.sku||''}`).join(' '):'';
@@ -758,10 +745,18 @@ function ComandasInner() {
     }
     if(desde) r=r.filter(c=>(c.fecha_creacion||c.created_at||'')>=desde);
     if(hasta) r=r.filter(c=>(c.fecha_creacion||c.created_at||'')<=hasta+'T99');
+    if(filtroTela){
+      r=r.filter(cmd=>{
+        let prods=cmd.productos;
+        if(typeof prods==='string') try{prods=JSON.parse(prods);}catch{prods=[];}
+        return (prods||[]).some(p=>{
+          const prod=productos.find(x=>x.sku===p.sku);
+          return prod?.tela===filtroTela;
+        });
+      });
+    }
     return r;
-  },[comandas,filtro,buscar,desde,hasta]);
-
-  const conteos = useMemo(()=>Object.fromEntries(Object.keys(S).map(s=>[s,comandas.filter(c=>c.status===s).length])),[comandas]);
+  },[comandas,filtro,buscar,desde,hasta,filtroTela,productos]);
 
   function onSave(){setModal(null);recargar();cargar();}
   function parseProd(cmd){let p=cmd.productos;if(typeof p==='string')try{p=JSON.parse(p);}catch{p=[];}return Array.isArray(p)?p:[];}
@@ -770,15 +765,31 @@ function ComandasInner() {
     <Shell title="Comandas">
       {modal==='nueva'&&<ModalNueva clientes={clientes} productos={productos} onClose={()=>setModal(null)} onSave={onSave}/>}
       {modal&&typeof modal==='object'&&<ModalGestion cmd={modal} onClose={()=>setModal(null)} onSave={onSave}/>}
+      {ticketModal&&(
+        <ModalTicketEnvio
+          comandas={ticketModal.cmd||ticketModal.cmds}
+          clientes={clientes}
+          onClose={()=>setTicketModal(null)}
+        />
+      )}
 
+      {/* Header */}
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'14px',flexWrap:'wrap',gap:'10px'}}>
         <div>
           <div style={{fontFamily:'Playfair Display,serif',fontSize:'16px',fontWeight:700}}>Comandas</div>
           <div style={{fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#555',marginTop:'2px'}}>Stock se descuenta al marcar LISTO · Pagos con BS/USD/EUR/USDT</div>
         </div>
-        <button onClick={()=>setModal('nueva')} style={{padding:'9px 18px',background:'#f59e0b',color:'#000',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'12px',fontWeight:700,letterSpacing:'.05em',textTransform:'uppercase'}}>
-          📋 Nueva Comanda
-        </button>
+        <div style={{display:'flex',gap:'8px'}}>
+          {filtradas.length>0&&(
+            <button onClick={()=>setTicketModal({cmds:filtradas})}
+              style={{padding:'9px 14px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:600,letterSpacing:'.04em',color:'#444'}}>
+              🖨️ Guías ({filtradas.length})
+            </button>
+          )}
+          <button onClick={()=>setModal('nueva')} style={{padding:'9px 18px',background:'#f59e0b',color:'#000',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'12px',fontWeight:700,letterSpacing:'.05em',textTransform:'uppercase'}}>
+            📋 Nueva Comanda
+          </button>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -815,6 +826,23 @@ function ComandasInner() {
           style={{padding:'6px 9px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#888'}}>✕</button>}
         <button onClick={cargar} style={{padding:'6px 10px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#555'}}>↺</button>
       </div>
+
+      {/* Filtro por tipo de tela */}
+      {telasDisponibles.length>0&&(
+        <div style={{display:'flex',gap:'6px',marginBottom:'10px',flexWrap:'wrap',alignItems:'center'}}>
+          <span style={{fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.12em',textTransform:'uppercase',color:'#888',marginRight:'2px'}}>🧵 Tela:</span>
+          <button onClick={()=>setFiltroTela('')}
+            style={{padding:'4px 11px',borderRadius:'20px',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:!filtroTela?700:500,background:!filtroTela?'var(--ink)':'#eee',color:!filtroTela?'#fff':'#333',transition:'all .12s'}}>
+            Todas
+          </button>
+          {telasDisponibles.map(t=>(
+            <button key={t} onClick={()=>setFiltroTela(filtroTela===t?'':t)}
+              style={{padding:'4px 11px',borderRadius:'20px',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:filtroTela===t?700:500,background:filtroTela===t?'#2d9e4a':'#eee',color:filtroTela===t?'#fff':'#333',transition:'all .12s'}}>
+              {t}
+            </button>
+          ))}
+        </div>
+      )}
 
       {loading&&<div style={{textAlign:'center',padding:'40px',fontFamily:'DM Mono,monospace',fontSize:'12px',color:'#666'}}>⏳ Cargando...</div>}
 
@@ -865,15 +893,26 @@ function ComandasInner() {
               {saldo<=0.01&&cmd.precio>0&&<span style={{color:'var(--green)',fontWeight:700}}>✓ Pagada</span>}
               {cmd.notas&&<span style={{color:'#888',fontStyle:'italic',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'200px',whiteSpace:'nowrap'}}>📝 {cmd.notas}</span>}
             </div>
+
             {cmd.precio>0&&(
               <div style={{height:'3px',background:'var(--border)',borderRadius:'2px',overflow:'hidden'}}>
                 <div style={{width:`${pct}%`,height:'100%',background:pct>=100?'var(--green)':pct>50?'var(--warn)':'var(--red)',borderRadius:'2px'}}/>
               </div>
             )}
+
+            {/* Botón ticket — no propaga click a la tarjeta */}
+            <div style={{marginTop:'8px',display:'flex',justifyContent:'flex-end'}}>
+              <button
+                onClick={e=>{ e.stopPropagation(); setTicketModal({cmd}); }}
+                style={{padding:'4px 11px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'10px',fontWeight:600,color:'#555'}}>
+                🖨️ Guía de envío
+              </button>
+            </div>
           </div>
         );
       })}
-    <style>{`
+
+      <style>{`
         @media (max-width: 767px) {
           .modal-footer-bar {
             padding: 12px 14px !important;
