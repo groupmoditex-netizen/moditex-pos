@@ -25,6 +25,7 @@ export default function BarcodeScanner({ productos = [], onAdd, disabled = false
   const nativeDetRef= useRef(null); // BarcodeDetector nativo
   const zxingRef    = useRef(null);  // ZXing reader
   const animRef     = useRef(null);
+  const scannedRef  = useRef(false); // bloquea re-escaneos en iOS
 
   const [camOpen,     setCamOpen]    = useState(false);
   const [camErr,      setCamErr]     = useState('');
@@ -81,6 +82,7 @@ export default function BarcodeScanner({ productos = [], onAdd, disabled = false
       streamRef.current = null;
     }
     if (videoRef.current) videoRef.current.srcObject = null;
+    scannedRef.current = false; // resetear para próximo escaneo
     setCamOpen(false);
     setLoading(false);
   }, []);
@@ -92,7 +94,8 @@ export default function BarcodeScanner({ productos = [], onAdd, disabled = false
     if (!videoRef.current || !nativeDetRef.current) return;
     nativeDetRef.current.detect(videoRef.current)
       .then(codes => {
-        if (codes.length > 0) {
+        if (codes.length > 0 && !scannedRef.current) {
+          scannedRef.current = true; // bloquear re-disparo
           cerrarCamara();
           processSku(codes[0].rawValue);
         } else {
@@ -136,7 +139,8 @@ export default function BarcodeScanner({ productos = [], onAdd, disabled = false
         const reader = new BrowserMultiFormatReader();
         zxingRef.current = reader;
         reader.decodeFromVideoElement(videoRef.current, (result, err) => {
-          if (result) {
+          if (result && !scannedRef.current) {
+            scannedRef.current = true; // bloquear re-disparo (fix iOS/iPhone)
             cerrarCamara();
             processSku(result.getText());
           }

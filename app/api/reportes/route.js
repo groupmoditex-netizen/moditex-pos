@@ -14,8 +14,8 @@ export async function GET(request) {
       .select('sku, tipo, cantidad, precio_venta, tipo_venta, contacto, cliente_id, fecha, created_at')
       .eq('tipo', 'SALIDA');
 
-    if (desde) q = q.gte('fecha', desde);
-    if (hasta) q = q.lte('fecha', hasta);
+    if (desde) q = q.gte('fecha', desde + 'T00:00:00.000Z');
+    if (hasta) q = q.lte('fecha', hasta + 'T23:59:59.999Z');
 
     const { data: movs, error } = await q;
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });

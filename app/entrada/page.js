@@ -82,7 +82,7 @@ export default function EntradaPage() {
             <span style={{color:'var(--green)'}}>{cart.length} producto{cart.length!==1?'s':''} · {totalUds} uds</span>
           </div>
           {cart.length===0?<div style={{padding:'40px',textAlign:'center',color:'#888',fontSize:'13px'}}>Busca o explora el catálogo 👆</div>:
-            cart.map(item=>(
+            [...cart].reverse().map(item=>(
               <div key={item.sku} style={{display:'flex',alignItems:'center',gap:'12px',padding:'11px 14px',borderBottom:'1px solid var(--border)'}}>
                 <div style={{flex:1}}>
                   <div style={{fontSize:'12px',fontWeight:600}}>{item.modelo} — {item.color}{item.talla&&item.talla!=='UNICA'?` T:${item.talla}`:''}</div>

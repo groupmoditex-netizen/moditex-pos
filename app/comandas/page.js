@@ -901,6 +901,7 @@ function ComandasInner() {
             )}
 
             {/* Botón ticket — no propaga click a la tarjeta */}
+            {(cmd.status === 'listo' || cmd.status === 'entregado') && (
             <div style={{marginTop:'8px',display:'flex',justifyContent:'flex-end'}}>
               <button
                 onClick={e=>{ e.stopPropagation(); setTicketModal({cmd}); }}
@@ -908,6 +909,7 @@ function ComandasInner() {
                 🖨️ Guía de envío
               </button>
             </div>
+            )}
           </div>
         );
       })}

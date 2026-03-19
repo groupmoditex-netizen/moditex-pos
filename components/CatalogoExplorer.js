@@ -1,6 +1,6 @@
 'use client';
 import { colorHex } from '@/utils/colores';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useLayoutEffect } from 'react';
 
 const CAT_ICONS = {
   'BODIES':'👙','BODY':'👙','CHAQUETA':'🧥','CONJUNTO':'👗','ENTERIZO':'🩱',
@@ -27,10 +27,24 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
   const [qtyMap, setQtyMap] = useState({});
   const [tvMap, setTvMap]   = useState({});
 
+  // Preservar scroll al actualizar qty/tv dentro de la misma vista
+  const bodyRef      = useRef(null);
+  const savedScroll  = useRef(0);
+  const skipRestore  = useRef(false);
+
+  useLayoutEffect(() => {
+    if (!bodyRef.current) return;
+    if (skipRestore.current) { skipRestore.current = false; return; }
+    bodyRef.current.scrollTop = savedScroll.current;
+  });
+
+  function saveScroll() { if (bodyRef.current) savedScroll.current = bodyRef.current.scrollTop; }
+  function resetScroll() { savedScroll.current = 0; skipRestore.current = true; }
+
   function getQty(sku) { return qtyMap[sku] || 1; }
   function getTv(sku)  { return tvMap[sku]  || tipoVentaInit; }
-  function setQty(sku, v) { setQtyMap(m=>({...m,[sku]:Math.max(1,v)})); }
-  function setTv(sku, v)  { setTvMap(m=>({...m,[sku]:v})); }
+  function setQty(sku, v) { saveScroll(); setQtyMap(m=>({...m,[sku]:Math.max(1,v)})); }
+  function setTv(sku, v)  { saveScroll(); setTvMap(m=>({...m,[sku]:v})); }
 
   // Agrupaciones
   const categorias = useMemo(()=>{
@@ -68,10 +82,10 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
       .sort((a,b)=>b.disponible-a.disponible).slice(0,20);
   },[productos,buscar]);
 
-  function irCategoria(cat){ setCatSel(cat); setModSel(''); setVista('modelos'); setBuscar(''); }
-  function irModelo(mod){ setModSel(mod); setVista('variantes'); }
-  function irCats(){ setCatSel(''); setModSel(''); setVista('categorias'); }
-  function irModelos(){ setModSel(''); setVista('modelos'); }
+  function irCategoria(cat){ resetScroll(); setCatSel(cat); setModSel(''); setVista('modelos'); setBuscar(''); }
+  function irModelo(mod){ resetScroll(); setModSel(mod); setVista('variantes'); }
+  function irCats(){ resetScroll(); setCatSel(''); setModSel(''); setVista('categorias'); }
+  function irModelos(){ resetScroll(); setModSel(''); setVista('modelos'); }
 
   function handleAdd(p) {
     onAdd(p, getQty(p.sku), getTv(p.sku));
@@ -119,7 +133,8 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
         <div style={{fontSize:'11px',color:'#666',fontFamily:'DM Mono,monospace'}}>
           {p.color}{p.talla&&p.talla!=='UNICA'?` · T:${p.talla}`:''}
         </div>
-        {/* Tipo venta toggle */}
+        {/* Tipo venta toggle — solo en modo salida */}
+        {modo !== 'entrada' && (
         <div style={{display:'flex',border:'1px solid var(--border)',overflow:'hidden'}}>
           {['DETAL','MAYOR'].map(t=>(
             <button key={t} onClick={()=>setTv(p.sku,t)}
@@ -130,6 +145,7 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
             </button>
           ))}
         </div>
+        )}
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
           <span style={{fontFamily:'DM Mono,monospace',fontSize:'11px',fontWeight:700,color:sc}}>
             {p.disponible>0?`${p.disponible} uds`:'🏭 Sin stock'}
@@ -174,7 +190,7 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
           <div style={{display:'flex',alignItems:'center',gap:'8px',background:'var(--bg2)',border:'1px solid var(--border)',padding:'8px 12px'}}>
             <span style={{color:'#555'}}>🔍</span>
             <input value={buscar}
-              onChange={e=>{setBuscar(e.target.value);if(e.target.value.length>=2)setVista('busqueda');else if(vista==='busqueda')setVista('categorias');}}
+              onChange={e=>{const v=e.target.value;setBuscar(v);if(v.length>=2){resetScroll();setVista('busqueda');}else if(vista==='busqueda'){resetScroll();setVista('categorias');}}}
               placeholder="Búsqueda rápida: modelo, color o SKU…"
               style={{background:'none',border:'none',outline:'none',fontFamily:'Poppins,sans-serif',fontSize:'12px',color:'#111',width:'100%'}}/>
             {buscar&&<button onMouseDown={e=>{e.preventDefault();setBuscar('');setVista('categorias');}} style={{background:'none',border:'none',cursor:'pointer',color:'#888',fontSize:'14px',padding:0}}>✕</button>}
