@@ -5,6 +5,7 @@ import Shell from '@/components/Shell';
 import CatalogoExplorer from '@/components/CatalogoExplorer';
 import BarcodeScanner from '@/components/BarcodeScanner';
 import { useAppData } from '@/lib/AppContext';
+import { useAuth } from '@/lib/AuthContext';
 import { fetchApi } from '@/utils/fetchApi';
 import ModalTicketEnvio from '@/components/ModalTicketEnvio';
 
@@ -809,13 +810,25 @@ function ModalNueva({ clientes, productos, onClose, onSave }) {
 /* ═══════════════════════════════════════════════════════════════════
    MODAL GESTIÓN
 ═══════════════════════════════════════════════════════════════════ */
-function ModalGestion({ cmd, productos=[], onClose, onSave }) {
+function ModalGestion({ cmd, productos=[], isAdmin=false, onClose, onSave, onDelete }) {
   const sc = S[cmd.status]||S.pendiente;
   const [pagos,    setPagos]   = useState([]);
   const [loadP,    setLoadP]   = useState(true);
   const [notas,    setNotas]   = useState(cmd.notas||'');
   const [saving,   setSaving]  = useState(false);
   const [err,      setErr]     = useState('');
+  const [deleting, setDeleting]= useState(false);
+
+  async function eliminarComanda() {
+    if (!window.confirm(`⚠️ ¿Eliminar la comanda de "${cmd.cliente}" (${cmd.id})?\n\nEsta acción no se puede deshacer. Se eliminarán también todos los pagos asociados.`)) return;
+    setDeleting(true);
+    try {
+      const res = await fetch('/api/comandas', {method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:cmd.id})}).then(r=>r.json());
+      if (res.ok) { onDelete?.(); onClose(); }
+      else setErr(res.error||'Error al eliminar');
+    } catch(e){ setErr('Error de conexión'); }
+    setDeleting(false);
+  }
 
   // ── Modo edición ──────────────────────────────────────────────────
   const [editMode,    setEditMode]  = useState(false);
@@ -1078,20 +1091,28 @@ function ModalGestion({ cmd, productos=[], onClose, onSave }) {
           </div>
         </div>
 
-        <div className="modal-footer-bar" style={{borderTop:'1px solid var(--border)',display:'flex',justifyContent:'flex-end',gap:'8px',background:'var(--bg2)',flexShrink:0}}>
+        <div className="modal-footer-bar" style={{borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center',gap:'8px',background:'var(--bg2)',flexShrink:0}}>
+          {/* Botón eliminar — solo admin */}
+          {isAdmin && !editMode ? (
+            <button onClick={eliminarComanda} disabled={deleting}
+              style={{padding:'9px 13px',background:'none',border:'1px solid var(--red)',color:'var(--red)',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'9px',fontWeight:700,letterSpacing:'.08em',opacity:deleting?.5:1,whiteSpace:'nowrap'}}>
+              {deleting?'⏳':'🗑'} ELIMINAR
+            </button>
+          ) : <div/>}
+
           {editMode ? (
-            <>
+            <div style={{display:'flex',gap:'8px'}}>
               <button onClick={()=>setEditMode(false)} style={{padding:'11px 15px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:600}}>✕ Cancelar edición</button>
               <button onClick={guardarEdicion} disabled={saving||!editItems.length}
                 style={{padding:'11px 20px',background:'#f59e0b',color:'#000',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'12px',fontWeight:700,textTransform:'uppercase',opacity:saving?.6:1}}>
                 {saving?'⏳ Guardando...':'💾 Guardar cambios'}
               </button>
-            </>
+            </div>
           ) : (
-            <>
+            <div style={{display:'flex',gap:'8px'}}>
               <button onClick={onClose} style={{padding:'11px 15px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:600}}>Cerrar</button>
               <button onClick={async()=>{const res=await fetch('/api/comandas',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:cmd.id,notas})}).then(r=>r.json());if(res.ok)onSave();else setErr(res.error);}} style={{padding:'8px 15px',background:'var(--ink)',color:'#fff',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:600}}>Guardar notas</button>
-            </>
+            </div>
           )}
         </div>
       </div>
@@ -1114,6 +1135,8 @@ export default function ComandasPage() {
 function ComandasInner() {
   const { data, recargar } = useAppData()||{};
   const { clientes=[], productos=[] } = data||{};
+  const { usuario } = useAuth()||{};
+  const isAdmin = usuario?.rol === 'admin';
 
   const [comandas,    setComandas]    = useState([]);
   const [loading,     setLoading]     = useState(true);
@@ -1124,6 +1147,7 @@ function ComandasInner() {
   const [modal,       setModal]       = useState(null);
   const [ticketModal, setTicketModal] = useState(null);
   const [filtroTela,  setFiltroTela]  = useState('');
+  const [vistaCards,  setVistaCards]  = useState(false);
 
   const searchParams = useSearchParams();
   const verRef = useRef(null);
@@ -1216,12 +1240,13 @@ function ComandasInner() {
   },[comandas,filtro,buscar,desde,hasta,filtroTela,productos]);
 
   function onSave(){setModal(null);recargar();cargar();}
+  function onDelete(){recargar();cargar();}
   function parseProd(cmd){let p=cmd.productos;if(typeof p==='string')try{p=JSON.parse(p);}catch{p=[];}return Array.isArray(p)?p:[];}
 
   return (
     <Shell title="Comandas">
       {modal==='nueva'&&<ModalNueva clientes={clientes} productos={productos} onClose={()=>setModal(null)} onSave={onSave}/>}
-      {modal&&typeof modal==='object'&&<ModalGestion cmd={modal} productos={productos} onClose={()=>setModal(null)} onSave={onSave}/>}
+      {modal&&typeof modal==='object'&&<ModalGestion cmd={modal} productos={productos} isAdmin={isAdmin} onClose={()=>setModal(null)} onSave={onSave} onDelete={onDelete}/>}
       {ticketModal&&(
         <ModalTicketEnvio
           comandas={ticketModal.cmd||ticketModal.cmds}
@@ -1236,7 +1261,20 @@ function ComandasInner() {
           <div style={{fontFamily:'Playfair Display,serif',fontSize:'16px',fontWeight:700}}>Comandas</div>
           <div style={{fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#555',marginTop:'2px'}}>Stock se descuenta al marcar LISTO · Pagos con BS/USD/EUR/USDT</div>
         </div>
-        <div style={{display:'flex',gap:'8px'}}>
+        <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
+          {/* Toggle vista */}
+          <div style={{display:'flex',border:'1px solid var(--border)',overflow:'hidden'}}>
+            <button onClick={()=>setVistaCards(false)}
+              title="Vista lista"
+              style={{padding:'7px 11px',background:!vistaCards?'var(--ink)':'var(--bg2)',color:!vistaCards?'#fff':'#666',border:'none',cursor:'pointer',fontSize:'13px',transition:'all .15s'}}>
+              ☰
+            </button>
+            <button onClick={()=>setVistaCards(true)}
+              title="Vista tarjetas"
+              style={{padding:'7px 11px',background:vistaCards?'var(--ink)':'var(--bg2)',color:vistaCards?'#fff':'#666',border:'none',cursor:'pointer',fontSize:'13px',transition:'all .15s'}}>
+              ⊞
+            </button>
+          </div>
           {filtradas.length>0&&(
             <button onClick={()=>setTicketModal({cmds:filtradas})}
               style={{padding:'9px 14px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:600,letterSpacing:'.04em',color:'#444'}}>
@@ -1313,7 +1351,8 @@ function ComandasInner() {
         </div>
       )}
 
-      {!loading&&filtradas.map(cmd=>{
+      {/* ── VISTA LISTA ─────────────────────────────────────────── */}
+      {!loading&&!vistaCards&&filtradas.map(cmd=>{
         const sc=S[cmd.status]||S.pendiente;
         const saldo=Math.max(0,(cmd.precio||0)-(cmd.monto_pagado||0));
         const pct=cmd.precio>0?Math.min(100,((cmd.monto_pagado||0)/cmd.precio)*100):0;
@@ -1331,7 +1370,6 @@ function ComandasInner() {
               </div>
               <span style={{background:sc.bg,color:sc.color,fontFamily:'DM Mono,monospace',fontSize:'9px',padding:'3px 12px',fontWeight:700}}>{sc.icon} {sc.label}</span>
             </div>
-
             {prods.length>0&&(
               <div style={{display:'flex',gap:'5px',flexWrap:'wrap',marginBottom:'7px'}}>
                 {prods.slice(0,5).map((p,i)=>(
@@ -1342,7 +1380,6 @@ function ComandasInner() {
                 {prods.length>5&&<span style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888'}}>+{prods.length-5} más</span>}
               </div>
             )}
-
             <div style={{display:'flex',gap:'16px',flexWrap:'wrap',fontSize:'11px',fontFamily:'DM Mono,monospace',color:'#555',marginBottom:'6px'}}>
               <span>💶 <strong style={{color:sc.color}}>€ {fmtNum(cmd.precio)}</strong></span>
               <span>✅ <strong style={{color:'var(--green)'}}>€ {fmtNum(cmd.monto_pagado)}</strong></span>
@@ -1350,26 +1387,114 @@ function ComandasInner() {
               {saldo<=0.01&&cmd.precio>0&&<span style={{color:'var(--green)',fontWeight:700}}>✓ Pagada</span>}
               {cmd.notas&&<span style={{color:'#888',fontStyle:'italic',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'200px',whiteSpace:'nowrap'}}>📝 {cmd.notas}</span>}
             </div>
-
             {cmd.precio>0&&(
               <div style={{height:'3px',background:'var(--border)',borderRadius:'2px',overflow:'hidden'}}>
                 <div style={{width:`${pct}%`,height:'100%',background:pct>=100?'var(--green)':pct>50?'var(--warn)':'var(--red)',borderRadius:'2px'}}/>
               </div>
             )}
-
-            {/* Botón ticket — no propaga click a la tarjeta */}
-            {(cmd.status === 'listo' || cmd.status === 'entregado') && (
-            <div style={{marginTop:'8px',display:'flex',justifyContent:'flex-end'}}>
-              <button
-                onClick={e=>{ e.stopPropagation(); setTicketModal({cmd}); }}
-                style={{padding:'4px 11px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'10px',fontWeight:600,color:'#555'}}>
-                🖨️ Guía de envío
-              </button>
-            </div>
+            {(cmd.status==='listo'||cmd.status==='entregado')&&(
+              <div style={{marginTop:'8px',display:'flex',justifyContent:'flex-end'}}>
+                <button onClick={e=>{e.stopPropagation();setTicketModal({cmd});}}
+                  style={{padding:'4px 11px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'10px',fontWeight:600,color:'#555'}}>
+                  🖨️ Guía de envío
+                </button>
+              </div>
             )}
           </div>
         );
       })}
+
+      {/* ── VISTA TARJETAS (Kanban) ──────────────────────────────── */}
+      {!loading&&vistaCards&&filtradas.length>0&&(()=>{
+        // Agrupar por status en el orden del flujo
+        const cols = ['pendiente','produccion','listo','entregado','cancelado'];
+        const grupos = {};
+        cols.forEach(s=>{ grupos[s]=[]; });
+        filtradas.forEach(cmd=>{ (grupos[cmd.status]||grupos['pendiente']).push(cmd); });
+        const colsVisibles = filtro==='todos' ? cols.filter(s=>grupos[s].length>0) : [filtro].filter(s=>grupos[s]);
+        if(colsVisibles.length===0) return null;
+        return(
+          <div style={{display:'grid',gridTemplateColumns:`repeat(${Math.min(colsVisibles.length,4)},1fr)`,gap:'12px',alignItems:'start'}}>
+            {colsVisibles.map(status=>{
+              const cfg=S[status]||S.pendiente;
+              const cmds=grupos[status]||[];
+              return(
+                <div key={status}>
+                  {/* Cabecera columna */}
+                  <div style={{padding:'8px 12px',background:cfg.bg,border:`1px solid ${cfg.border}44`,borderTop:`3px solid ${cfg.border}`,marginBottom:'8px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                    <span style={{fontFamily:'DM Mono,monospace',fontSize:'9px',fontWeight:700,color:cfg.color,letterSpacing:'.1em',textTransform:'uppercase'}}>{cfg.icon} {cfg.label}</span>
+                    <span style={{fontFamily:'DM Mono,monospace',fontSize:'10px',fontWeight:700,color:cfg.color,background:'rgba(255,255,255,.6)',borderRadius:'12px',padding:'1px 8px'}}>{cmds.length}</span>
+                  </div>
+                  {/* Cards */}
+                  {cmds.map(cmd=>{
+                    const saldo=Math.max(0,(cmd.precio||0)-(cmd.monto_pagado||0));
+                    const pct=cmd.precio>0?Math.min(100,((cmd.monto_pagado||0)/cmd.precio)*100):0;
+                    const prods=parseProd(cmd);
+                    const hoy=new Date().toISOString().slice(0,10);
+                    const vencida=cmd.fecha_entrega&&cmd.fecha_entrega<hoy&&status!=='entregado'&&status!=='cancelado';
+                    return(
+                      <div key={cmd.id} onClick={()=>setModal(cmd)}
+                        style={{background:'var(--surface)',border:`1px solid ${vencida?'var(--red)':'var(--border)'}`,borderTop:`2px solid ${cfg.border}`,padding:'11px 12px',marginBottom:'7px',cursor:'pointer',transition:'all .13s',boxShadow:'0 1px 4px rgba(0,0,0,.06)'}}
+                        onMouseEnter={e=>{e.currentTarget.style.background='var(--bg2)';e.currentTarget.style.boxShadow='0 3px 12px rgba(0,0,0,.1)';e.currentTarget.style.transform='translateY(-1px)';}}
+                        onMouseLeave={e=>{e.currentTarget.style.background='var(--surface)';e.currentTarget.style.boxShadow='0 1px 4px rgba(0,0,0,.06)';e.currentTarget.style.transform='translateY(0)';}}>
+                        {/* Cliente + fecha */}
+                        <div style={{marginBottom:'7px'}}>
+                          <div style={{fontFamily:'Playfair Display,serif',fontSize:'13px',fontWeight:700,lineHeight:1.2,marginBottom:'3px'}}>{cmd.cliente}</div>
+                          <div style={{display:'flex',gap:'6px',alignItems:'center',flexWrap:'wrap'}}>
+                            <span style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#aaa'}}>{cmd.id}</span>
+                            {cmd.fecha_entrega&&(
+                              <span style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:vencida?'var(--red)':'#777',fontWeight:vencida?700:400}}>
+                                {vencida?'⚠️':'📅'} {cmd.fecha_entrega}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {/* Prendas */}
+                        {prods.length>0&&(
+                          <div style={{display:'flex',gap:'4px',flexWrap:'wrap',marginBottom:'8px'}}>
+                            {prods.slice(0,3).map((p,i)=>(
+                              <span key={i} style={{background:'var(--bg3)',padding:'2px 6px',fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#555'}}>
+                                {p.cant}× {(p.modelo||p.sku||'—').split('—')[0].trim().slice(0,12)}
+                              </span>
+                            ))}
+                            {prods.length>3&&<span style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#aaa'}}>+{prods.length-3}</span>}
+                          </div>
+                        )}
+                        {/* Precio + saldo */}
+                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'6px'}}>
+                          <span style={{fontFamily:'Playfair Display,serif',fontSize:'15px',fontWeight:700,color:'var(--ink)'}}>€ {fmtNum(cmd.precio)}</span>
+                          {saldo>0.01
+                            ?<span style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'var(--red)',fontWeight:700,background:'var(--red-soft)',padding:'2px 6px'}}>⏳ -€{fmtNum(saldo)}</span>
+                            :<span style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'var(--green)',fontWeight:700}}>✓ Pagada</span>
+                          }
+                        </div>
+                        {/* Barra de pago */}
+                        {cmd.precio>0&&(
+                          <div style={{height:'3px',background:'var(--border)',borderRadius:'2px',overflow:'hidden',marginBottom:'6px'}}>
+                            <div style={{width:`${pct}%`,height:'100%',background:pct>=100?'var(--green)':pct>50?'var(--warn)':'var(--red)',borderRadius:'2px',transition:'width .4s'}}/>
+                          </div>
+                        )}
+                        {/* Ticket button */}
+                        {(status==='listo'||status==='entregado')&&(
+                          <button onClick={e=>{e.stopPropagation();setTicketModal({cmd});}}
+                            style={{width:'100%',padding:'4px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'10px',fontWeight:600,color:'#666',marginTop:'2px'}}>
+                            🖨️ Guía
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {cmds.length===0&&(
+                    <div style={{padding:'20px',textAlign:'center',fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#ccc',border:'1px dashed var(--border)',borderRadius:'2px'}}>
+                      Sin pedidos
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       <style>{`
         @media (max-width: 767px) {
@@ -1389,6 +1514,12 @@ function ComandasInner() {
           .modal-footer-bar { padding: 12px 18px; }
           .modal-fullscreen { max-height: 96vh !important; border-radius: 0 !important; }
           .modal-wrap { align-items: center !important; }
+        }
+        @media (max-width: 900px) {
+          .kanban-grid { grid-template-columns: repeat(2,1fr) !important; }
+        }
+        @media (max-width: 560px) {
+          .kanban-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
     </Shell>
