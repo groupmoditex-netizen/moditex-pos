@@ -2,20 +2,8 @@
 import { useState, useMemo, useRef } from 'react';
 import Shell from '@/components/Shell';
 import { useAppData } from '@/lib/AppContext';
+import { colorHex } from '@/utils/colores';
 
-// ── Color map ──
-const CM = {
-  'BLANCO':'#d0d0d0','BLANCO CREMA':'#f5f0e0','NEGRO':'#1a1a1a',
-  'GRIS':'#6b7280','GRIS CLARO':'#b0b7c3','GRIS OSCURO':'#374151',
-  'AZUL':'#3b6fd4','AZUL REY':'#1a4fc4','AZUL MARINO':'#0f1f5c','AZUL CLARO':'#7ec8e3',
-  'CELESTE':'#7ec8e3','ROJO':'#d63b3b','ROJO OSCURO':'#8b1515',
-  'ROSA':'#f07aa0','ROSA CLARO':'#f9b8cc','VINOTINTO':'#8b2035','CORAL':'#f26e5b',
-  'VERDE':'#2d9e4a','VERDE CLARO':'#5dc878','VERDE OSCURO':'#1a6b32','VERDE PISTACHO':'#8db84a',
-  'AMARILLO':'#f5c842','NARANJA':'#f57c42','MORADO':'#7c4fd4','LILA':'#b48fe8',
-  'BEIGE':'#d4b896','BEIGE CLARO':'#ecdfc8','BEIGE OSCURO':'#b89a6e',
-  'MARRON':'#7a4a2a','MARRON CLARO':'#a06040','MARRON OSCURO':'#4a2a14',
-};
-function colorHex(n) { const k = (n||'').toUpperCase().trim(); return CM[k]||CM[k.split(' ')[0]]||'#9ca3af'; }
 function fmt(n) { return '€ ' + Number(n||0).toFixed(2); }
 
 // ── Layouts ──
@@ -100,13 +88,42 @@ export default function EtiquetasPage() {
   const { productos = [] } = data || {};
 
   // ── Estado ──
-  const [buscar, setBuscar]   = useState('');
-  const [cat, setCat]         = useState('');
-  const [carrito, setCarrito] = useState({}); // { sku: cantidad }
-  const [layout, setLayout]   = useState('pent10');
-  const [precio, setPrecio]   = useState('detal');
-  const [vista, setVista]     = useState(false);
+  const [buscar, setBuscar]       = useState('');
+  const [cat, setCat]             = useState('');
+  const [carrito, setCarrito]     = useState({}); // { sku: cantidad }
+  const [layout, setLayout]       = useState('pent10');
+  const [precio, setPrecio]       = useState('detal');
+  const [vista, setVista]         = useState(false);
+  const [importando, setImport]   = useState(false);
+  const [importMsg, setImportMsg] = useState(null);
   const searchRef = useRef(null);
+
+  async function importarAEntradas() {
+    const skus = Object.keys(carrito);
+    if (!skus.length) return;
+    if (!confirm(`¿Registrar ${totalEtiquetas} unidades como entrada al almacén?`)) return;
+    setImport(true);
+    try {
+      const fecha = new Date().toISOString().split('T')[0];
+      const lote = skus.map(sku => ({
+        sku, tipo: 'ENTRADA', cantidad: carrito[sku],
+        fecha, concepto: 'Importado desde etiquetas',
+      }));
+      const res = await fetch('/api/movimientos', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(lote),
+      }).then(r => r.json());
+      if (res.ok) {
+        setImportMsg({ t: 'ok', m: `✓ ${totalEtiquetas} uds registradas en el almacén` });
+      } else {
+        setImportMsg({ t: 'error', m: res.error || 'Error al registrar' });
+      }
+    } catch {
+      setImportMsg({ t: 'error', m: 'Error de conexión' });
+    }
+    setImport(false);
+    setTimeout(() => setImportMsg(null), 5000);
+  }
 
   const lay = LAYOUTS[layout];
 
@@ -245,6 +262,17 @@ export default function EtiquetasPage() {
         📄 <strong>Papel A4 vertical</strong> — 210 × 297 mm · Márgenes 3mm ·
         Busca un producto y haz clic en <strong>+</strong> para añadirlo al carrito · Ajusta las copias y pulsa Imprimir
       </div>
+
+      {/* Mensaje importar a entradas */}
+      {importMsg && (
+        <div className="no-print" style={{padding:'10px 14px',marginBottom:'12px',borderRadius:'3px',
+          background: importMsg.t === 'ok' ? 'var(--green-soft)' : 'var(--red-soft)',
+          border: `1px solid ${importMsg.t === 'ok' ? 'rgba(26,122,60,.3)' : 'rgba(217,30,30,.3)'}`,
+          color: importMsg.t === 'ok' ? 'var(--green)' : 'var(--red)',
+          fontFamily:'DM Mono,monospace',fontSize:'11px'}}>
+          {importMsg.m}
+        </div>
+      )}
 
       {/* ── Layout principal: 3 columnas ── */}
       <div className="no-print" style={{display:'grid',gridTemplateColumns:'1fr 1fr auto',gap:'12px',alignItems:'start'}}>
@@ -420,7 +448,7 @@ export default function EtiquetasPage() {
                 ✓ {totalEtiquetas} etiquetas · {pages.length} hoja{pages.length !== 1 ? 's' : ''} A4
                 {' '}({lay.cols}×{lay.rows})
               </div>
-              <div style={{display:'flex',gap:'6px'}}>
+              <div style={{display:'flex',gap:'6px',marginBottom:'6px'}}>
                 <button onClick={() => setVista(v => !v)}
                   style={{flex:1,padding:'8px',background:'var(--ink)',color:'#fff',border:'none',
                     cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',
@@ -434,6 +462,15 @@ export default function EtiquetasPage() {
                   🖨 Imprimir ({totalEtiquetas})
                 </button>
               </div>
+              {/* Importar a Entradas — opcional */}
+              <button onClick={importarAEntradas} disabled={importando}
+                style={{width:'100%',padding:'7px',background:'none',
+                  border:'1px dashed rgba(26,122,60,.5)',color:'var(--green)',
+                  cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'10px',
+                  borderRadius:'3px',transition:'all .12s',
+                  opacity: importando ? .6 : 1}}>
+                {importando ? 'Registrando...' : '↑ Importar como entrada al almacén (opcional)'}
+              </button>
             </div>
           )}
         </div>
