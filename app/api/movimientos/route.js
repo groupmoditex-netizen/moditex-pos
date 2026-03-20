@@ -151,3 +151,96 @@ export async function POST(request) {
     return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
   }
 }
+
+export async function PUT(request) {
+  try {
+    const body = await request.json();
+    const { id, sku: nuevoSku, cantidad, concepto, fecha, tipo } = body;
+    if (!id) return NextResponse.json({ ok: false, error: 'ID requerido' }, { status: 400 });
+    if (cantidad !== undefined && cantidad < 1)
+      return NextResponse.json({ ok: false, error: 'Cantidad mínima: 1' }, { status: 400 });
+
+    // ── Obtener el movimiento ANTES de modificar para saber el SKU original ──
+    const { data: movAntes, error: errLeer } = await supabase
+      .from('movimientos').select('sku').eq('id', id).single();
+    if (errLeer || !movAntes)
+      return NextResponse.json({ ok: false, error: 'Movimiento no encontrado' }, { status: 404 });
+
+    const skuOriginal = movAntes.sku;
+
+    // ── Armar los campos a actualizar ─────────────────────────────────────────
+    const campos = {};
+    if (nuevoSku  !== undefined && nuevoSku)  campos.sku      = nuevoSku.toUpperCase();
+    if (cantidad  !== undefined) campos.cantidad  = parseInt(cantidad);
+    if (concepto  !== undefined) campos.concepto  = concepto;
+    if (fecha     !== undefined) campos.fecha     = new Date(fecha).toISOString();
+    if (tipo      !== undefined) campos.tipo      = tipo.toUpperCase();
+
+    const { error } = await supabase.from('movimientos').update(campos).eq('id', id);
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+
+    // ── Recalcular inventario: si cambió el SKU, recalcular ambos ─────────────
+    async function recalcularSku(sku) {
+      const { data: prod } = await supabase
+        .from('productos').select('sku,stock_inicial').eq('sku', sku).single();
+      const { data: movs } = await supabase
+        .from('movimientos').select('tipo,cantidad').eq('sku', sku);
+      let stock = prod?.stock_inicial || 0;
+      (movs || []).forEach(m => {
+        if (m.tipo === 'ENTRADA') stock += m.cantidad;
+        else if (m.tipo === 'SALIDA') stock -= m.cantidad;
+      });
+      stock = Math.max(0, stock);
+      const { error: eInv } = await supabase
+        .from('inventario')
+        .update({ stock, updated_at: new Date().toISOString() })
+        .eq('sku', sku);
+      if (eInv) await supabase.from('inventario').insert({ sku, stock });
+    }
+
+    await recalcularSku(skuOriginal);
+    if (nuevoSku && nuevoSku.toUpperCase() !== skuOriginal) {
+      await recalcularSku(nuevoSku.toUpperCase());
+    }
+
+    const skuFinal = nuevoSku ? nuevoSku.toUpperCase() : skuOriginal;
+    try { await supabase.from('logs').insert({
+      usuario: 'admin', accion: 'EDITAR_MOVIMIENTO',
+      detalle: `ID: ${id} | SKU: ${skuOriginal}${skuFinal !== skuOriginal ? ' → '+skuFinal : ''} | Cant: ${cantidad||'—'} | Tipo: ${tipo||'—'}`,
+      resultado: 'OK'
+    }); } catch(_){}
+    return NextResponse.json({ ok: true, id });
+  } catch (err) {
+    return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    if (!id) return NextResponse.json({ ok: false, error: 'ID requerido' }, { status: 400 });
+
+    // Guardar datos del movimiento antes de borrar para recalcular inventario
+    const { data: mov } = await supabase.from('movimientos').select('sku,tipo,cantidad').eq('id', id).single();
+
+    const { error } = await supabase.from('movimientos').delete().eq('id', id);
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+
+    // Recalcular inventario
+    if (mov?.sku) {
+      const { data: prod } = await supabase.from('productos').select('sku,stock_inicial').eq('sku', mov.sku).single();
+      const { data: movs } = await supabase.from('movimientos').select('tipo,cantidad').eq('sku', mov.sku);
+      let stock = prod?.stock_inicial || 0;
+      (movs || []).forEach(m => { if (m.tipo === 'ENTRADA') stock += m.cantidad; else stock -= m.cantidad; });
+      stock = Math.max(0, stock);
+      const { error: eInv } = await supabase.from('inventario').update({ stock, updated_at: new Date().toISOString() }).eq('sku', mov.sku);
+      if (eInv) await supabase.from('inventario').insert({ sku: mov.sku, stock });
+    }
+
+    try { await supabase.from('logs').insert({ usuario: 'admin', accion: 'ELIMINAR_MOVIMIENTO', detalle: `ID: ${id} | SKU: ${mov?.sku} | ${mov?.tipo} ${mov?.cantidad} uds`, resultado: 'OK' }); } catch(_){}
+    return NextResponse.json({ ok: true, id });
+  } catch (err) {
+    return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
+  }
+}

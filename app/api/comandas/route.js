@@ -49,7 +49,7 @@ export async function POST(request) {
 export async function PUT(request) {
   try {
     const body = await request.json();
-    const {id,status,monto_pagado,notas,fecha_entrega} = body;
+    const {id,status,monto_pagado,notas,fecha_entrega,productos,precio} = body;
     if (!id) return NextResponse.json({ok:false,error:'ID requerido'},{status:400});
 
     // ── Si cambia a LISTO → descontar stock ──────────────────────────
@@ -160,6 +160,8 @@ export async function PUT(request) {
     if (monto_pagado  !== undefined) campos.monto_pagado  = parseFloat(monto_pagado)||0;
     if (notas         !== undefined) campos.notas         = notas;
     if (fecha_entrega !== undefined) campos.fecha_entrega = fecha_entrega||null;
+    if (productos     !== undefined) campos.productos     = JSON.stringify(productos);
+    if (precio        !== undefined) campos.precio        = parseFloat(precio)||0;
 
     let {error} = await supabase.from('comandas').update(campos).eq('id',id);
     if (error?.message?.includes('column')||error?.message?.includes('schema cache')) {

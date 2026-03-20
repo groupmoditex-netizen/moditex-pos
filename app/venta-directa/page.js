@@ -49,7 +49,6 @@ export default function VentaDirectaPage() {
   }
 
   function addFromCatalog(p, qty, tv) {
-    setCat(false);
     setCart(prev=>{
       const ex=prev.find(x=>x.sku===p.sku);
       if(ex) return prev.map(x=>x.sku===p.sku?{...x,qty:x.qty+qty,tipoVenta:tv}:x);

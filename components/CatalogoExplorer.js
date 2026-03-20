@@ -7,38 +7,52 @@ const CAT_ICONS = {
   'FALDA':'👘','PANTS':'👖','SHORT':'🩳','TOPS':'👕','TOP':'👕',
   'TRAJE DE BANO':'🩱','TRIKINIS':'🩱','VESTIDO':'💃','DEFAULT':'🏷️',
 };
-
 function catIcon(c){const k=(c||'').toUpperCase();for(const [key,v] of Object.entries(CAT_ICONS)){if(k.includes(key))return v;}return CAT_ICONS.DEFAULT;}
 
 /**
- * CatalogoExplorer
+ * CatalogoExplorer — Multi-selección acumulativa
  * Props:
  *   productos: []
  *   modo: 'entrada' | 'salida'
  *   tipoVenta: 'DETAL' | 'MAYOR'
- *   onAdd: (prod, qty, tipoVenta) => void
+ *   onAdd: (prod, qty, tipoVenta) => void   ← llamado POR CADA ítem al confirmar
  *   onClose: () => void
  */
 export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVentaInit = 'DETAL', onAdd, onClose }) {
-  const [vista, setVista]   = useState('categorias'); // 'categorias' | 'modelos' | 'variantes' | 'busqueda'
-  const [catSel, setCatSel] = useState('');
-  const [modSel, setModSel] = useState('');
-  const [buscar, setBuscar] = useState('');
-  const [qtyMap, setQtyMap] = useState({});
-  const [tvMap, setTvMap]   = useState({});
+  const [vista,   setVista]  = useState('categorias');
+  const [catSel,  setCatSel] = useState('');
+  const [modSel,  setModSel] = useState('');
+  const [buscar,  setBuscar] = useState('');
+  const [qtyMap,  setQtyMap] = useState({});
+  const [tvMap,   setTvMap]  = useState({});
 
-  // Preservar scroll al actualizar qty/tv dentro de la misma vista
-  const bodyRef      = useRef(null);
-  const savedScroll  = useRef(0);
-  const skipRestore  = useRef(false);
+  // ── Carrito acumulativo interno ───────────────────────────────────
+  // pending: { [sku]: { prod, qty, tv } }
+  const [pending, setPending] = useState({});
+
+  const totalPendingUds = Object.values(pending).reduce((a,x)=>a+x.qty, 0);
+  const totalPendingItems = Object.keys(pending).length;
+
+  // ── Preservar scroll al cambiar qty/tv ───────────────────────────
+  const bodyRef     = useRef(null);
+  const savedScroll = useRef(0);
+  const skipRestore = useRef(false);
 
   useLayoutEffect(() => {
     if (!bodyRef.current) return;
     if (skipRestore.current) { skipRestore.current = false; return; }
+    // Si el usuario está escribiendo en un input dentro del catálogo, no restaurar.
+    // Actualizar savedScroll con la posición actual para que quede en sync.
+    const active = document.activeElement;
+    if (active && bodyRef.current.contains(active) &&
+        (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+      savedScroll.current = bodyRef.current.scrollTop;
+      return;
+    }
     bodyRef.current.scrollTop = savedScroll.current;
   });
 
-  function saveScroll() { if (bodyRef.current) savedScroll.current = bodyRef.current.scrollTop; }
+  function saveScroll()  { if (bodyRef.current) savedScroll.current = bodyRef.current.scrollTop; }
   function resetScroll() { savedScroll.current = 0; skipRestore.current = true; }
 
   function getQty(sku) { return qtyMap[sku] || 1; }
@@ -87,19 +101,42 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
   function irCats(){ resetScroll(); setCatSel(''); setModSel(''); setVista('categorias'); }
   function irModelos(){ resetScroll(); setModSel(''); setVista('modelos'); }
 
+  // ── Agregar al carrito interno (NO cierra el catálogo) ────────────
   function handleAdd(p) {
-    onAdd(p, getQty(p.sku), getTv(p.sku));
+    const qty = getQty(p.sku);
+    const tv  = getTv(p.sku);
+    saveScroll();
+    setPending(prev => {
+      const ex = prev[p.sku];
+      if (ex) return { ...prev, [p.sku]: { ...ex, qty: ex.qty + qty, tv } };
+      return { ...prev, [p.sku]: { prod: p, qty, tv } };
+    });
+    // Resetear qty a 1 después de agregar
+    setQtyMap(m => ({ ...m, [p.sku]: 1 }));
+  }
+
+  // ── Quitar del carrito ────────────────────────────────────────────
+  function removeFromPending(sku) {
+    saveScroll();
+    setPending(prev => { const n={...prev}; delete n[sku]; return n; });
+  }
+
+  // ── Confirmar: enviar todos los ítems pendientes al padre ─────────
+  function confirmar() {
+    Object.values(pending).forEach(({ prod, qty, tv }) => {
+      onAdd(prod, qty, tv);
+    });
+    onClose();
   }
 
   const estilo = {
     overlay: {position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:'16px',backdropFilter:'blur(3px)'},
-    box:     {background:'var(--bg)',border:'1px solid var(--border-strong)',borderTop:'3px solid var(--red)',width:'100%',maxWidth:'840px',maxHeight:'88vh',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'0 20px 60px rgba(0,0,0,.2)'},
+    box:     {background:'var(--bg)',border:'1px solid var(--border-strong)',borderTop:'3px solid var(--red)',width:'100%',maxWidth:'900px',maxHeight:'92vh',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'0 20px 60px rgba(0,0,0,.2)'},
     hdr:     {display:'flex',alignItems:'center',gap:'12px',padding:'14px 20px',borderBottom:'1px solid var(--border)',background:'var(--bg2)',flexShrink:0},
-    body:    {flex:1,overflowY:'auto',padding:'18px 20px'},
+    body:    {flex:1,overflowY:'auto',padding:'16px 20px'},
     secLbl:  {fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#666',letterSpacing:'.18em',textTransform:'uppercase',marginBottom:'13px'},
   };
 
-  // Breadcrumb
   function Breadcrumb() {
     return (
       <div style={{display:'flex',alignItems:'center',gap:'5px',fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#666',flexWrap:'wrap',marginTop:'4px'}}>
@@ -116,13 +153,20 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
   function ProdCard({ p }) {
     const tv      = getTv(p.sku);
     const qty     = getQty(p.sku);
-    const precio  = tv==='MAYOR' ? p.precioMayor : p.precioDetal;
     const noStock = modo==='salida' && p.disponible<=0;
     const dot     = colorHex(p.color);
     const sc      = p.disponible>3?'var(--green)':p.disponible>0?'var(--warn)':'var(--red)';
+    const inPending = pending[p.sku];
+    const pendQty   = inPending?.qty || 0;
 
     return (
-      <div style={{background:'var(--surface)',border:'1.5px solid var(--border)',padding:'13px',display:'flex',flexDirection:'column',gap:'8px',opacity:noStock?.45:1}}>
+      <div style={{background:'var(--surface)',border:`1.5px solid ${inPending?'var(--green)':'var(--border)'}`,padding:'13px',display:'flex',flexDirection:'column',gap:'8px',opacity:noStock?.45:1,position:'relative',transition:'border-color .15s'}}>
+        {/* Badge de cantidad en carrito */}
+        {inPending && (
+          <div style={{position:'absolute',top:'-8px',right:'-8px',background:'var(--green)',color:'#fff',borderRadius:'50%',width:'22px',height:'22px',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:'10px',fontWeight:700,boxShadow:'0 2px 6px rgba(0,0,0,.2)',zIndex:2}}>
+            {pendQty}
+          </div>
+        )}
         <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
           <span style={{width:'12px',height:'12px',borderRadius:'50%',background:dot,border:'1px solid rgba(0,0,0,.12)',flexShrink:0}}/>
           <div>
@@ -150,6 +194,11 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
           <span style={{fontFamily:'DM Mono,monospace',fontSize:'11px',fontWeight:700,color:sc}}>
             {p.disponible>0?`${p.disponible} uds`:'🏭 Sin stock'}
           </span>
+          {inPending && (
+            <button onClick={()=>removeFromPending(p.sku)} style={{background:'none',border:'1px solid var(--red)',color:'var(--red)',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'8px',padding:'2px 6px',fontWeight:700}}>
+              ✕ Quitar
+            </button>
+          )}
         </div>
         <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
           <div style={{display:'flex',border:'1px solid var(--border)',overflow:'hidden'}}>
@@ -160,8 +209,12 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
           </div>
           <button onClick={()=>!noStock&&handleAdd(p)}
             disabled={noStock}
-            style={{flex:1,padding:'7px 10px',background:'var(--ink)',color:'#fff',border:'none',cursor:noStock?'not-allowed':'pointer',fontFamily:'DM Mono,monospace',fontSize:'9px',fontWeight:700,letterSpacing:'.1em',textTransform:'uppercase',opacity:noStock?.4:1}}>
-            + AGREGAR
+            style={{flex:1,padding:'7px 10px',
+              background: inPending ? 'var(--green)' : 'var(--ink)',
+              color:'#fff',border:'none',cursor:noStock?'not-allowed':'pointer',
+              fontFamily:'DM Mono,monospace',fontSize:'9px',fontWeight:700,letterSpacing:'.1em',textTransform:'uppercase',
+              opacity:noStock?.4:1,transition:'background .15s'}}>
+            {inPending ? `✓ EN LISTA (${pendQty})` : '+ AGREGAR'}
           </button>
         </div>
       </div>
@@ -198,9 +251,8 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
         </div>
 
         {/* Body */}
-        <div style={estilo.body}>
+        <div style={estilo.body} ref={bodyRef}>
 
-          {/* CATEGORIAS */}
           {vista==='categorias'&&(
             <>
               <div style={estilo.secLbl}>Categorías ({categorias.length})</div>
@@ -219,7 +271,6 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
             </>
           )}
 
-          {/* MODELOS */}
           {vista==='modelos'&&(
             <>
               <div style={estilo.secLbl}>{catSel} — {modelos.length} modelos</div>
@@ -239,7 +290,6 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
             </>
           )}
 
-          {/* VARIANTES */}
           {vista==='variantes'&&(
             <>
               <div style={estilo.secLbl}>{modSel} — {variantes.length} variante{variantes.length!==1?'s':''}</div>
@@ -249,7 +299,6 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
             </>
           )}
 
-          {/* BUSQUEDA */}
           {vista==='busqueda'&&(
             <>
               <div style={estilo.secLbl}>{resultadosBusq.length} resultado{resultadosBusq.length!==1?'s':''}</div>
@@ -263,13 +312,27 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
           )}
         </div>
 
-        {/* Footer */}
-        <div style={{padding:'11px 20px',borderTop:'1px solid var(--border)',background:'var(--bg2)',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0}}>
-          <span style={{fontFamily:'DM Mono,monospace',fontSize:'10px',color:'var(--green)',fontWeight:700}}>
-            Selecciona un producto y ajusta la cantidad
-          </span>
-          <button onClick={onClose} style={{padding:'7px 16px',background:'var(--ink)',color:'#fff',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:600,letterSpacing:'.05em',textTransform:'uppercase'}}>
-            ✓ Listo — volver al formulario
+        {/* Footer — barra de confirmación */}
+        <div style={{padding:'12px 20px',borderTop:'1px solid var(--border)',background:'var(--bg2)',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0,gap:'12px'}}>
+          <div>
+            {totalPendingItems > 0 ? (
+              <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                <span style={{background:'var(--green)',color:'#fff',borderRadius:'50%',width:'22px',height:'22px',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:'10px',fontWeight:700,flexShrink:0}}>
+                  {totalPendingItems}
+                </span>
+                <span style={{fontFamily:'DM Mono,monospace',fontSize:'10px',color:'var(--green)',fontWeight:700}}>
+                  {totalPendingItems} SKU{totalPendingItems!==1?'s':''} · {totalPendingUds} ud{totalPendingUds!==1?'s':''} seleccionada{totalPendingUds!==1?'s':''}
+                </span>
+              </div>
+            ) : (
+              <span style={{fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#888'}}>
+                Selecciona productos y agrégalos al carrito
+              </span>
+            )}
+          </div>
+          <button onClick={confirmar}
+            style={{padding:'9px 20px',background: totalPendingItems>0 ? 'var(--green)' : 'var(--ink)',color:'#fff',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'12px',fontWeight:700,textTransform:'uppercase',letterSpacing:'.05em',transition:'background .15s',whiteSpace:'nowrap'}}>
+            {totalPendingItems>0 ? `✓ Confirmar ${totalPendingUds} ud${totalPendingUds!==1?'s':''}` : '✓ Listo — volver al formulario'}
           </button>
         </div>
       </div>

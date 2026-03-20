@@ -119,7 +119,7 @@ export default function SalidaPage() {
 
   return (
     <Shell title="Nueva Salida">
-      {catalogo&&<CatalogoExplorer productos={productos} modo="salida" tipoVenta="DETAL" onAdd={(p,qty,tv)=>{addFromCatalog(p,qty,tv);setCatalogo(false);}} onClose={()=>setCatalogo(false)}/>}
+      {catalogo&&<CatalogoExplorer productos={productos} modo="salida" tipoVenta="DETAL" onAdd={(p,qty,tv)=>{addFromCatalog(p,qty,tv);}} onClose={()=>setCatalogo(false)}/>}
       <div style={{maxWidth:'800px'}}>
 
         {/* Header */}

@@ -14,7 +14,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
  *  onAdd      — callback(producto) cuando se detecta un SKU válido
  *  disabled   — deshabilitar el lector mientras se procesa
  */
-export default function BarcodeScanner({ productos = [], onAdd, disabled = false }) {
+export default function BarcodeScanner({ productos = [], onAdd, disabled = false, skipStockCheck = false }) {
   // ── Lector físico ─────────────────────────────────────────────────
   const bufRef     = useRef('');
   const lastKeyRef = useRef(0);
@@ -38,14 +38,14 @@ export default function BarcodeScanner({ productos = [], onAdd, disabled = false
     const prod = productos.find(p => p.sku?.toUpperCase() === clean);
     if (!prod) {
       setScannerMsg({ t: 'error', m: `⚠ SKU no encontrado: ${clean}` });
-    } else if ((prod.disponible ?? prod.stock ?? 0) <= 0) {
+    } else if (!skipStockCheck && (prod.disponible ?? prod.stock ?? 0) <= 0) {
       setScannerMsg({ t: 'warn',  m: `⚠ Sin stock: ${prod.modelo} — ${prod.color}` });
     } else {
       onAdd?.(prod);
       setScannerMsg({ t: 'ok',   m: `✓ ${prod.modelo} — ${prod.color}` });
     }
     setTimeout(() => setScannerMsg(null), 2800);
-  }, [productos, onAdd]);
+  }, [productos, onAdd, skipStockCheck]);
 
   // ── Lector físico: keydown global ────────────────────────────────
   useEffect(() => {
@@ -55,6 +55,13 @@ export default function BarcodeScanner({ productos = [], onAdd, disabled = false
       const gap = now - lastKeyRef.current;
       lastKeyRef.current = now;
 
+      // Si hay un input de texto con foco Y el gap es > 50ms → es escritura humana, ignorar.
+      // Si el gap < 50ms → es un lector físico (dispara chars a ~10-30ms), procesar siempre.
+      const active = document.activeElement;
+      const isTextInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') &&
+                          active.type !== 'hidden' && active.type !== 'number';
+      if (isTextInput && gap > 50) return;
+
       if (e.key === 'Enter') {
         const sku = bufRef.current.trim();
         bufRef.current = '';
@@ -62,7 +69,7 @@ export default function BarcodeScanner({ productos = [], onAdd, disabled = false
         return;
       }
       if (e.key.length === 1) {
-        if (gap > 500) bufRef.current = ''; // reset si hubo pausa larga (escritura manual)
+        if (gap > 500) bufRef.current = ''; // reset si hubo pausa larga
         bufRef.current += e.key;
       }
     };

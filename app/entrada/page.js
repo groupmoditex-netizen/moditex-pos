@@ -50,7 +50,7 @@ export default function EntradaPage() {
 
   return (
     <Shell title="Nueva Entrada">
-      {catalogo && <CatalogoExplorer productos={productos} modo="entrada" onAdd={(p,qty)=>{addToCartQty(p,qty);setCatalogo(false);}} onClose={()=>setCatalogo(false)}/>}
+      {catalogo && <CatalogoExplorer productos={productos} modo="entrada" onAdd={(p,qty)=>{addToCartQty(p,qty);}} onClose={()=>setCatalogo(false)}/>}
       <div style={{maxWidth:'760px'}}>
         <div style={{display:'flex',alignItems:'center',gap:'14px',padding:'13px 18px',background:'var(--bg2)',border:'1px solid var(--border)',borderLeft:'3px solid var(--green)',marginBottom:'20px'}}>
           <span style={{fontSize:'20px'}}>↑</span>

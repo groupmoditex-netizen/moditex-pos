@@ -30,6 +30,61 @@ export default function HistorialPage() {
   const [desde,  setDesde]  = useState('');
   const [hasta,  setHasta]  = useState('');
 
+  // ── Edición inline ────────────────────────────────────────────────
+  const [editando,   setEditando]  = useState(null); // { id, sku, cantidad, concepto, fecha, tipo }
+  const [guardandoE, setGuardandoE]= useState(false);
+  const [msgE,       setMsgE]      = useState(null);
+  const [skuBuscar,  setSkuBuscar] = useState('');   // búsqueda de nuevo SKU al editar
+
+  // Productos filtrados para el buscador de SKU en el modal de edición
+  const skuResultados = useMemo(() => {
+    if (!skuBuscar || skuBuscar.length < 2) return [];
+    const q = skuBuscar.toLowerCase();
+    return productos.filter(p =>
+      `${p.sku} ${p.modelo} ${p.color}`.toLowerCase().includes(q)
+    ).slice(0, 8);
+  }, [skuBuscar, productos]);
+
+  function abrirEdicion(m) {
+    setEditando({ id: m.id, sku: m.sku, cantidad: m.cantidad, concepto: m.concepto, fecha: m.fecha, tipo: m.tipo });
+    setSkuBuscar('');
+  }
+
+  async function guardarEdicion() {
+    if (!editando) return;
+    setGuardandoE(true);
+    try {
+      const res = await fetch('/api/movimientos', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editando),
+      }).then(r => r.json());
+      if (res.ok) {
+        setMsgE({ t: 'ok', m: '✓ Movimiento actualizado' });
+        setEditando(null);
+        cargarMovimientos(pagina);
+      } else {
+        setMsgE({ t: 'err', m: res.error || 'Error al guardar' });
+      }
+    } catch(e) { setMsgE({ t: 'err', m: 'Error de conexión' }); }
+    setGuardandoE(false);
+    setTimeout(() => setMsgE(null), 3500);
+  }
+
+  async function eliminarMovimiento(id, sku, tipo, cantidad) {
+    if (!confirm(`¿Eliminar este movimiento?\n${tipo} ${cantidad} uds de ${sku}\n\nEl inventario se recalculará automáticamente.`)) return;
+    try {
+      const res = await fetch(`/api/movimientos?id=${id}`, { method: 'DELETE' }).then(r => r.json());
+      if (res.ok) {
+        setMsgE({ t: 'ok', m: `✓ Movimiento ${id} eliminado. Inventario recalculado.` });
+        cargarMovimientos(pagina);
+      } else {
+        setMsgE({ t: 'err', m: res.error || 'Error al eliminar' });
+      }
+    } catch(e) { setMsgE({ t: 'err', m: 'Error de conexión' }); }
+    setTimeout(() => setMsgE(null), 4000);
+  }
+
   const LIMIT = 25;
 
   const cargarMovimientos = useCallback(async (pag = 1) => {
@@ -100,6 +155,118 @@ export default function HistorialPage() {
 
   return (
     <Shell title="Historial de Movimientos">
+
+      {/* ── Modal edición de movimiento ───────────────────────────── */}
+      {editando && (() => {
+        const prodActual = productos.find(p => p.sku === editando.sku);
+        return (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:300,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}
+          onClick={e=>{if(e.target===e.currentTarget){setEditando(null);setSkuBuscar('');}}}>
+          <div style={{background:'var(--bg)',border:'1px solid var(--border-strong)',width:'100%',maxWidth:'500px',borderTop:'3px solid #f59e0b'}}>
+            <div style={{padding:'14px 18px',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+              <div>
+                <div style={{fontFamily:'Playfair Display,serif',fontSize:'16px',fontWeight:700}}>✏️ Editar Movimiento</div>
+                <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888',marginTop:'2px'}}>{editando.id}</div>
+              </div>
+              <button onClick={()=>{setEditando(null);setSkuBuscar('');}} style={{background:'none',border:'1px solid var(--border)',width:'28px',height:'28px',cursor:'pointer',fontSize:'13px',display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
+            </div>
+            <div style={{padding:'16px 18px',display:'flex',flexDirection:'column',gap:'12px'}}>
+
+              {/* Producto actual */}
+              <div style={{padding:'11px 13px',background:'var(--bg2)',border:'1px solid var(--border)',display:'flex',alignItems:'center',gap:'12px'}}>
+                {prodActual ? (
+                  <>
+                    <span style={{width:'14px',height:'14px',borderRadius:'50%',background:colorHex(prodActual.color),border:'1px solid rgba(0,0,0,.12)',flexShrink:0}}/>
+                    <div>
+                      <div style={{fontSize:'13px',fontWeight:700}}>{prodActual.modelo} — {prodActual.color}</div>
+                      <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'var(--blue)',marginTop:'1px'}}>{prodActual.sku} · {prodActual.categoria}</div>
+                    </div>
+                  </>
+                ) : (
+                  <div style={{fontFamily:'DM Mono,monospace',fontSize:'11px',color:'#888'}}>SKU: <strong style={{color:'var(--blue)'}}>{editando.sku}</strong></div>
+                )}
+              </div>
+
+              {/* Buscador de SKU — para cambiar producto */}
+              <div style={{position:'relative'}}>
+                <label style={{fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.15em',textTransform:'uppercase',color:'#555',display:'block',marginBottom:'5px',fontWeight:700}}>
+                  Cambiar producto (opcional)
+                </label>
+                <input
+                  value={skuBuscar}
+                  onChange={e => setSkuBuscar(e.target.value)}
+                  placeholder="Buscar por SKU, modelo o color..."
+                  style={{width:'100%',padding:'8px 10px',background:'var(--bg2)',border:'1px solid var(--border)',fontFamily:'Poppins,sans-serif',fontSize:'12px',outline:'none',boxSizing:'border-box'}}
+                />
+                {skuResultados.length > 0 && (
+                  <div style={{position:'absolute',top:'100%',left:0,right:0,background:'var(--surface)',border:'1px solid var(--border-strong)',borderTop:'none',zIndex:99,maxHeight:'180px',overflowY:'auto',boxShadow:'0 8px 24px rgba(0,0,0,.12)'}}>
+                    {skuResultados.map(p => (
+                      <div key={p.sku}
+                        onMouseDown={e => { e.preventDefault(); setEditando(v => ({...v, sku: p.sku})); setSkuBuscar(''); }}
+                        style={{padding:'9px 12px',cursor:'pointer',display:'flex',alignItems:'center',gap:'10px',borderBottom:'1px solid var(--border)'}}
+                        onMouseEnter={e=>e.currentTarget.style.background='var(--bg2)'}
+                        onMouseLeave={e=>e.currentTarget.style.background=''}>
+                        <span style={{width:'10px',height:'10px',borderRadius:'50%',background:colorHex(p.color),border:'1px solid rgba(0,0,0,.12)',flexShrink:0}}/>
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:'12px',fontWeight:600}}>{p.modelo} — {p.color}</div>
+                          <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'var(--blue)'}}>{p.sku}</div>
+                        </div>
+                        <span style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:p.disponible>0?'var(--green)':'#aaa'}}>{p.disponible} uds</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div style={{padding:'9px 12px',background:'#fff8e1',border:'1px solid #f59e0b44',borderLeft:'3px solid #f59e0b',fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#92400e'}}>
+                ⚠️ El inventario del SKU <strong>{editando.sku}</strong> se recalculará automáticamente al guardar.
+              </div>
+
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
+                <div>
+                  <label style={{fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.15em',textTransform:'uppercase',color:'#555',display:'block',marginBottom:'5px',fontWeight:700}}>Tipo</label>
+                  <select value={editando.tipo} onChange={e=>setEditando(v=>({...v,tipo:e.target.value}))}
+                    style={{width:'100%',padding:'8px 10px',background:'var(--bg2)',border:'1px solid var(--border)',fontFamily:'Poppins,sans-serif',fontSize:'12px',outline:'none'}}>
+                    <option value="ENTRADA">↑ ENTRADA</option>
+                    <option value="SALIDA">↓ SALIDA</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.15em',textTransform:'uppercase',color:'#555',display:'block',marginBottom:'5px',fontWeight:700}}>Cantidad *</label>
+                  <input type="number" min="1" value={editando.cantidad} onChange={e=>setEditando(v=>({...v,cantidad:parseInt(e.target.value)||1}))}
+                    style={{width:'100%',padding:'8px 10px',background:'var(--bg2)',border:'1px solid var(--border)',fontFamily:'DM Mono,monospace',fontSize:'14px',fontWeight:700,outline:'none'}}/>
+                </div>
+              </div>
+              <div>
+                <label style={{fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.15em',textTransform:'uppercase',color:'#555',display:'block',marginBottom:'5px',fontWeight:700}}>Fecha</label>
+                <input type="date" value={editando.fecha} onChange={e=>setEditando(v=>({...v,fecha:e.target.value}))}
+                  style={{width:'100%',padding:'8px 10px',background:'var(--bg2)',border:'1px solid var(--border)',fontFamily:'Poppins,sans-serif',fontSize:'12px',outline:'none'}}/>
+              </div>
+              <div>
+                <label style={{fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.15em',textTransform:'uppercase',color:'#555',display:'block',marginBottom:'5px',fontWeight:700}}>Concepto</label>
+                <input value={editando.concepto||''} onChange={e=>setEditando(v=>({...v,concepto:e.target.value}))}
+                  placeholder="Descripción del movimiento..."
+                  style={{width:'100%',padding:'8px 10px',background:'var(--bg2)',border:'1px solid var(--border)',fontFamily:'Poppins,sans-serif',fontSize:'12px',outline:'none'}}/>
+              </div>
+            </div>
+            <div style={{padding:'12px 18px',borderTop:'1px solid var(--border)',background:'var(--bg2)',display:'flex',justifyContent:'flex-end',gap:'8px'}}>
+              <button onClick={()=>{setEditando(null);setSkuBuscar('');}} style={{padding:'9px 15px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:600}}>Cancelar</button>
+              <button onClick={guardarEdicion} disabled={guardandoE}
+                style={{padding:'9px 20px',background:'#f59e0b',color:'#000',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'12px',fontWeight:700,textTransform:'uppercase',opacity:guardandoE?.6:1}}>
+                {guardandoE?'⏳ Guardando...':'💾 Guardar cambios'}
+              </button>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
+
+      {/* Banner de resultado */}
+      {msgE&&(
+        <div style={{padding:'10px 14px',marginBottom:'12px',background:msgE.t==='ok'?'var(--green-soft)':'var(--red-soft)',border:`1px solid ${msgE.t==='ok'?'rgba(26,122,60,.3)':'rgba(217,30,30,.3)'}`,color:msgE.t==='ok'?'var(--green)':'var(--red)',fontFamily:'DM Mono,monospace',fontSize:'11px',fontWeight:700}}>
+          {msgE.m}
+        </div>
+      )}
       <div style={{display:'flex',gap:'8px',flexWrap:'wrap',marginBottom:'14px',alignItems:'center'}}>
         <div style={{display:'flex',alignItems:'center',gap:'8px',background:'var(--bg2)',border:'1px solid var(--border)',padding:'7px 12px',flex:1,minWidth:'200px'}}>
           <span>🔍</span>
@@ -133,7 +300,7 @@ export default function HistorialPage() {
           <div style={{overflowX:'auto'}}>
             <table style={{width:'100%',borderCollapse:'collapse',minWidth:'900px'}}>
               <thead><tr style={{background:'#efefef'}}>
-                {['ID','Fecha','SKU','Cat.','Modelo','Color','Tipo','Cant.','Precio','Concepto','Cliente'].map(h=>(
+                {['ID','Fecha','SKU','Cat.','Modelo','Color','Tipo','Cant.','Precio','Concepto','Cliente','Acciones'].map(h=>(
                   <th key={h} style={{padding:'7px 11px',textAlign:'left',fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.12em',textTransform:'uppercase',color:'#444',whiteSpace:'nowrap'}}>{h}</th>
                 ))}
               </tr></thead>
@@ -160,10 +327,26 @@ export default function HistorialPage() {
                       <td style={{padding:'7px 11px',fontFamily:'DM Mono,monospace',fontSize:'11px'}}>{m.precioVenta>0?`€ ${m.precioVenta.toFixed(2)}`:'—'}</td>
                       <td style={{padding:'7px 11px',fontSize:'11px',maxWidth:'160px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.concepto||'—'}</td>
                       <td style={{padding:'7px 11px',fontSize:'11px'}}>{m.contacto||'—'}</td>
+                      <td style={{padding:'7px 11px',whiteSpace:'nowrap'}}>
+                        <div style={{display:'flex',gap:'5px'}}>
+                          <button
+                            onClick={()=>abrirEdicion(m)}
+                            title="Editar movimiento"
+                            style={{padding:'3px 8px',background:'none',border:'1px solid #f59e0b',color:'#f59e0b',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'9px',fontWeight:700}}>
+                            ✏️
+                          </button>
+                          <button
+                            onClick={()=>eliminarMovimiento(m.id,m.sku,m.tipo,m.cantidad)}
+                            title="Eliminar movimiento"
+                            style={{padding:'3px 8px',background:'none',border:'1px solid var(--red)',color:'var(--red)',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'9px',fontWeight:700}}>
+                            🗑️
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
-                {!filtrados.length&&<tr><td colSpan={11} style={{textAlign:'center',padding:'40px',color:'#666',fontFamily:'DM Mono,monospace',fontSize:'11px'}}>{movimientos.length===0?'Sin movimientos registrados aún':'Sin resultados'}</td></tr>}
+                {!filtrados.length&&<tr><td colSpan={12} style={{textAlign:'center',padding:'40px',color:'#666',fontFamily:'DM Mono,monospace',fontSize:'11px'}}>{movimientos.length===0?'Sin movimientos registrados aún':'Sin resultados'}</td></tr>}
               </tbody>
             </table>
           </div>

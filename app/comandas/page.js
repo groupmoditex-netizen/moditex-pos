@@ -211,7 +211,6 @@ function ModalNueva({ clientes, productos, onClose, onSave }) {
   }
 
   function addFromCatalog(p,qty,tv){
-    setCatalogo(false);
     setItems(prev=>{
       const ex=prev.find(x=>x.sku===p.sku);
       if(ex) return prev.map(x=>x.sku===p.sku?{...x,qty:x.qty+qty,tipoVenta:tv}:x);
@@ -219,9 +218,113 @@ function ModalNueva({ clientes, productos, onClose, onSave }) {
     });
   }
 
-  function setItemTV(sku,tv){setItems(prev=>prev.map(x=>x.sku===sku?{...x,tipoVenta:tv}:x));}
+  // ── Campo SKU con auto-submit y cámara ────────────────────────────
+  const skuRef       = useRef(null);
+  const autoTimer    = useRef(null);
+  const lastCharMs   = useRef(0);
+  const [skuVal,  setSkuVal]  = useState('');
+  const [skuMsg,  setSkuMsg]  = useState(null);
+  const [camOpen, setCamOpen] = useState(false);
+  const [camErr,  setCamErr]  = useState('');
+  const [camLoad, setCamLoad] = useState(false);
+  const videoRef     = useRef(null);
+  const streamRef    = useRef(null);
+  const nativeDetRef = useRef(null);
+  const zxingRef     = useRef(null);
+  const animRef      = useRef(null);
+  const scannedRef   = useRef(false);
+
+  function agregarPorSku(raw) {
+    const sku = (raw||'').trim().toUpperCase();
+    if (!sku) return;
+    setSkuVal('');
+    if (autoTimer.current) { clearTimeout(autoTimer.current); autoTimer.current = null; }
+    const prod = productos.find(p => p.sku?.toUpperCase() === sku);
+    if (!prod) {
+      setSkuMsg({ t: 'err', m: `⚠ SKU no encontrado: ${sku}` });
+      setTimeout(() => setSkuMsg(null), 3000);
+      setTimeout(() => skuRef.current?.focus(), 50);
+      return;
+    }
+    setItems(prev => {
+      const ex = prev.find(x => x.sku === prod.sku);
+      if (ex) return prev.map(x => x.sku === prod.sku ? {...x, qty: x.qty + 1} : x);
+      return [...prev, {...prod, qty: 1, tipoVenta: 'MAYOR'}];
+    });
+    setSkuMsg({ t: 'ok', m: `✓ ${prod.modelo} — ${prod.color}` });
+    setTimeout(() => setSkuMsg(null), 2500);
+    setTimeout(() => skuRef.current?.focus(), 30);
+  }
+
+  function handleSkuChange(e) {
+    const val = e.target.value;
+    setSkuVal(val);
+    const now = Date.now();
+    const gap = now - lastCharMs.current;
+    lastCharMs.current = now;
+    // Lector físico: chars llegan en < 50ms entre sí → auto-submit tras 100ms de silencio
+    if (gap < 50 && val.trim()) {
+      if (autoTimer.current) clearTimeout(autoTimer.current);
+      autoTimer.current = setTimeout(() => {
+        const cur = skuRef.current?.value || val;
+        if (cur.trim()) agregarPorSku(cur);
+      }, 100);
+    }
+  }
+
+  const cerrarCamara = useCallback(() => {
+    if (animRef.current) cancelAnimationFrame(animRef.current);
+    if (zxingRef.current) { try { zxingRef.current.reset(); } catch(_){} zxingRef.current = null; }
+    if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
+    if (videoRef.current) videoRef.current.srcObject = null;
+    scannedRef.current = false;
+    setCamOpen(false); setCamLoad(false);
+  }, []);
+
+  useEffect(() => () => { cerrarCamara(); if (autoTimer.current) clearTimeout(autoTimer.current); }, []);
+
+  const processCamSku = useCallback((sku) => { cerrarCamara(); agregarPorSku(sku); }, []); // eslint-disable-line
+
+  const scanFrameNative = useCallback(() => {
+    if (!videoRef.current || !nativeDetRef.current) return;
+    nativeDetRef.current.detect(videoRef.current)
+      .then(codes => {
+        if (codes.length > 0 && !scannedRef.current) { scannedRef.current = true; processCamSku(codes[0].rawValue); }
+        else animRef.current = requestAnimationFrame(scanFrameNative);
+      })
+      .catch(() => { animRef.current = requestAnimationFrame(scanFrameNative); });
+  }, [processCamSku]);
+
+  async function abrirCamara() {
+    setCamErr(''); setCamLoad(true);
+    const hasNative = typeof window !== 'undefined' && 'BarcodeDetector' in window;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } });
+      streamRef.current = stream; setCamOpen(true); setCamLoad(false);
+      await new Promise(r => setTimeout(r, 150));
+      if (!videoRef.current) { cerrarCamara(); return; }
+      videoRef.current.srcObject = stream;
+      await videoRef.current.play();
+      if (hasNative) {
+        nativeDetRef.current = new window.BarcodeDetector({ formats: ['code_128','ean_13','ean_8','qr_code','upc_a','upc_e','code_39','itf'] });
+        scanFrameNative();
+      } else {
+        const { BrowserMultiFormatReader } = await import('@zxing/browser');
+        const reader = new BrowserMultiFormatReader();
+        zxingRef.current = reader;
+        reader.decodeFromVideoElement(videoRef.current, (result) => {
+          if (result && !scannedRef.current) { scannedRef.current = true; processCamSku(result.getText()); }
+        });
+      }
+    } catch(e) {
+      cerrarCamara();
+      setCamErr(e.name === 'NotAllowedError' ? '❌ Permiso de cámara denegado.' : '❌ Error al abrir cámara: ' + e.message);
+    }
+  }
+
   function changeQty(sku,d){setItems(prev=>prev.map(x=>x.sku===sku?{...x,qty:Math.max(1,x.qty+d)}:x));}
   function removeItem(sku){setItems(prev=>prev.filter(x=>x.sku!==sku));}
+  function setItemTV(sku,tv){setItems(prev=>prev.map(x=>x.sku===sku?{...x,tipoVenta:tv}:x));}
 
   const totalCalc = items.reduce((a,it)=>a+precioItem(it)*it.qty,0);
 
@@ -320,18 +423,59 @@ function ModalNueva({ clientes, productos, onClose, onSave }) {
               </button>
             </div>
 
-            <BarcodeScanner
-              productos={productos}
-              onAdd={(prod)=>{setItems(prev=>{const ex=prev.find(x=>x.sku===prod.sku);if(ex)return prev.map(x=>x.sku===prod.sku?{...x,qty:x.qty+1}:x);return[...prev,{...prod,qty:1,tipoVenta:'MAYOR'}];});}}
-              disabled={guardando}
-            />
+            {/* ── Modal cámara ──────────────────────────────────── */}
+            {camOpen && (
+              <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.92)',zIndex:500,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'16px',padding:'20px'}}>
+                <div style={{fontFamily:'DM Mono,monospace',fontSize:'11px',color:'#fff',letterSpacing:'.12em',textTransform:'uppercase'}}>📷 Apunta al código de barras</div>
+                <div style={{position:'relative',width:'min(92vw,400px)',aspectRatio:'4/3',background:'#000',overflow:'hidden',borderRadius:'4px',border:'2px solid #f59e0b',boxShadow:'0 0 0 4px rgba(245,158,11,.15)'}}>
+                  <video ref={videoRef} style={{width:'100%',height:'100%',objectFit:'cover'}} muted playsInline autoPlay/>
+                  <div style={{position:'absolute',inset:'15%',border:'2px solid rgba(245,158,11,.5)',borderRadius:'6px',pointerEvents:'none'}}/>
+                  <div style={{position:'absolute',left:'15%',right:'15%',height:'2px',background:'rgba(245,158,11,.7)',borderRadius:'1px',animation:'scanline 2s ease-in-out infinite',pointerEvents:'none'}}/>
+                </div>
+                <button onClick={cerrarCamara} style={{padding:'10px 28px',background:'none',border:'1px solid rgba(255,255,255,.4)',color:'#fff',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'12px',fontWeight:600}}>✕ Cancelar</button>
+                <style>{`@keyframes scanline{0%,100%{top:18%;opacity:.4;}50%{top:78%;opacity:1;}}`}</style>
+              </div>
+            )}
+
+            {/* ── Campo de escaneo / SKU ──────────────────────────── */}
+            <div style={{marginBottom:'8px'}}>
+              <div style={{display:'flex',gap:'0'}}>
+                <div style={{display:'flex',alignItems:'center',gap:'10px',flex:1,background:'#111',border:'1px solid #333',borderRight:'none',padding:'10px 14px'}}>
+                  <span style={{fontSize:'18px',flexShrink:0}}>🔫</span>
+                  <input
+                    ref={skuRef}
+                    value={skuVal}
+                    onChange={handleSkuChange}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); agregarPorSku(skuVal); } }}
+                    placeholder="Escanea el código — se agrega automáticamente…"
+                    autoComplete="off"
+                    spellCheck={false}
+                    style={{background:'none',border:'none',outline:'none',fontFamily:'DM Mono,monospace',fontSize:'12px',color:'#fff',width:'100%',letterSpacing:'.04em'}}
+                  />
+                </div>
+                <button
+                  onClick={abrirCamara}
+                  disabled={camLoad || guardando}
+                  title="Escanear con cámara"
+                  style={{padding:'10px 13px',background:camLoad?'#555':'#f59e0b',color:'#000',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:700,flexShrink:0,display:'flex',alignItems:'center',gap:'5px',opacity:guardando?.5:1}}
+                >
+                  {camLoad ? '⏳' : '📷'}
+                </button>
+              </div>
+              {camErr && <div style={{padding:'6px 12px',fontFamily:'DM Mono,monospace',fontSize:'10px',background:'var(--red-soft)',color:'var(--red)',borderLeft:'3px solid var(--red)'}}>{camErr}</div>}
+              {skuMsg && (
+                <div style={{padding:'6px 12px',fontFamily:'DM Mono,monospace',fontSize:'10px',fontWeight:700,background:skuMsg.t==='ok'?'var(--green-soft)':'var(--red-soft)',color:skuMsg.t==='ok'?'var(--green)':'var(--red)',borderLeft:`3px solid ${skuMsg.t==='ok'?'var(--green)':'var(--red)'}`}}>
+                  {skuMsg.m}
+                </div>
+              )}
+            </div>
             {items.length===0?(
               <div style={{padding:'24px',textAlign:'center',background:'var(--bg2)',border:'1px dashed var(--border-strong)',color:'#888',fontSize:'12px',borderRadius:'2px'}}>
                 Escanea un código o toca "Abrir Catálogo"
               </div>
             ):(
               <div style={{background:'var(--surface)',border:'1px solid var(--border)',overflow:'hidden'}}>
-                {items.map(item=>{
+                {[...items].reverse().map(item=>{
                   const precio=precioItem(item); const dot=colorHex(item.color);
                   return(
                     <div key={item.sku} style={{display:'grid',gridTemplateColumns:'1fr auto auto auto auto',gap:'8px',padding:'10px 13px',borderBottom:'1px solid var(--border)',alignItems:'center'}}>
@@ -466,13 +610,63 @@ function ModalNueva({ clientes, productos, onClose, onSave }) {
 /* ═══════════════════════════════════════════════════════════════════
    MODAL GESTIÓN
 ═══════════════════════════════════════════════════════════════════ */
-function ModalGestion({ cmd, onClose, onSave }) {
+function ModalGestion({ cmd, productos=[], onClose, onSave }) {
   const sc = S[cmd.status]||S.pendiente;
   const [pagos,    setPagos]   = useState([]);
   const [loadP,    setLoadP]   = useState(true);
   const [notas,    setNotas]   = useState(cmd.notas||'');
   const [saving,   setSaving]  = useState(false);
   const [err,      setErr]     = useState('');
+
+  // ── Modo edición ──────────────────────────────────────────────────
+  const [editMode,    setEditMode]  = useState(false);
+  const [editItems,   setEditItems] = useState([]);
+  const [editCatalog, setEditCat]   = useState(false);
+
+  function parseProd(c){let p=c.productos;if(typeof p==='string')try{p=JSON.parse(p);}catch{p=[];}return Array.isArray(p)?p:[];}
+
+  function abrirEdicion() {
+    // Convertir productos guardados al formato editable
+    const prods = parseProd(cmd).map(p => ({
+      sku: p.sku||'', modelo: p.modelo||p.sku||'', color: p.color||'', talla: p.talla||'',
+      precioDetal: p.precio||0, precioMayor: p.precio||0,
+      tipoVenta: p.tipoVenta||'MAYOR', qty: parseInt(p.cant||p.cantidad||1),
+      disponible: 999,
+    }));
+    setEditItems(prods);
+    setEditMode(true);
+    setErr('');
+  }
+
+  function editChangeQty(sku,d){ setEditItems(prev=>prev.map(x=>x.sku===sku?{...x,qty:Math.max(1,x.qty+d)}:x)); }
+  function editSetTV(sku,tv)   { setEditItems(prev=>prev.map(x=>x.sku===sku?{...x,tipoVenta:tv}:x)); }
+  function editRemove(sku)     { setEditItems(prev=>prev.filter(x=>x.sku!==sku)); }
+  function editAddFromCatalog(p,qty,tv) {
+    setEditItems(prev=>{
+      const ex=prev.find(x=>x.sku===p.sku);
+      if(ex) return prev.map(x=>x.sku===p.sku?{...x,qty:x.qty+qty,tipoVenta:tv}:x);
+      return[...prev,{...p,qty,tipoVenta:tv}];
+    });
+  }
+
+  const editTotal = editItems.reduce((a,it)=>a+(it.tipoVenta==='MAYOR'?(it.precioMayor||0):(it.precioDetal||0))*it.qty, 0);
+
+  async function guardarEdicion() {
+    if (!editItems.length) { setErr('Agrega al menos un producto'); return; }
+    setSaving(true); setErr('');
+    const productosPayload = editItems.map(it=>({
+      sku: it.sku,
+      modelo: `${it.modelo}${it.color?' — '+it.color:''}${it.talla&&it.talla!=='UNICA'?' '+it.talla:''}`,
+      cant: it.qty,
+      precio: it.tipoVenta==='MAYOR'?(it.precioMayor||0):(it.precioDetal||0),
+      tipoVenta: it.tipoVenta,
+    }));
+    const res = await fetch('/api/comandas',{method:'PUT',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id:cmd.id, productos:productosPayload, precio:editTotal, notas})}).then(r=>r.json());
+    if(res.ok){ setEditMode(false); onSave(); }
+    else setErr(res.error||'Error al guardar');
+    setSaving(false);
+  }
 
   const saldo = Math.max(0,(cmd.precio||0)-(cmd.monto_pagado||0));
   const pct   = cmd.precio>0?Math.min(100,((cmd.monto_pagado||0)/cmd.precio)*100):0;
@@ -496,15 +690,16 @@ function ModalGestion({ cmd, onClose, onSave }) {
     setSaving(false);
   }
 
-  function parseProd(cmd){let p=cmd.productos;if(typeof p==='string')try{p=JSON.parse(p);}catch{p=[];}return Array.isArray(p)?p:[];}
   const prods = parseProd(cmd);
 
   const idxActual = FLUJO.indexOf(cmd.status);
   const sigStatus = FLUJO[idxActual+1];
 
   return (
+    <>
+    {editCatalog&&<CatalogoExplorer productos={productos} modo="salida" tipoVenta="MAYOR" onAdd={editAddFromCatalog} onClose={()=>setEditCat(false)}/>}
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:200,display:'flex',alignItems:'flex-end',justifyContent:'center',padding:'0',overflowY:'auto'}} className="modal-wrap" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
-      <div className="modal-fullscreen" style={{background:'var(--bg)',border:'1px solid var(--border-strong)',width:'100%',maxWidth:'640px',borderTop:`3px solid ${sc.border}`,maxHeight:'96vh',display:'flex',flexDirection:'column'}}>
+      <div className="modal-fullscreen" style={{background:'var(--bg)',border:'1px solid var(--border-strong)',width:'100%',maxWidth:'640px',borderTop:`3px solid ${editMode?'#f59e0b':sc.border}`,maxHeight:'96vh',display:'flex',flexDirection:'column'}}>
         <div style={{padding:'14px 18px',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexShrink:0}}>
           <div>
             <div style={{fontFamily:'Playfair Display,serif',fontSize:'17px',fontWeight:700}}>{cmd.cliente}</div>
@@ -512,6 +707,7 @@ function ModalGestion({ cmd, onClose, onSave }) {
               <span style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888'}}>{cmd.id}</span>
               <span style={{background:sc.bg,color:sc.color,fontFamily:'DM Mono,monospace',fontSize:'9px',padding:'2px 10px',fontWeight:700,border:`1px solid ${sc.border}44`}}>{sc.icon} {sc.label}</span>
               {cmd.fecha_entrega&&<span style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#666'}}>📅 {cmd.fecha_entrega}</span>}
+              {editMode&&<span style={{background:'#fff8e1',color:'#f59e0b',fontFamily:'DM Mono,monospace',fontSize:'9px',padding:'2px 8px',fontWeight:700,border:'1px solid #f59e0b44'}}>✏️ MODO EDICIÓN</span>}
             </div>
           </div>
           <button onClick={onClose} style={{background:'none',border:'1px solid var(--border)',width:'28px',height:'28px',cursor:'pointer',fontSize:'13px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>✕</button>
@@ -520,107 +716,161 @@ function ModalGestion({ cmd, onClose, onSave }) {
         <div style={{padding:'14px 18px',overflowY:'auto',flex:1,display:'flex',flexDirection:'column',gap:'14px'}}>
           {err&&<div style={{padding:'8px 11px',background:'var(--red-soft)',color:'var(--red)',fontFamily:'DM Mono,monospace',fontSize:'10px',whiteSpace:'pre-line',lineHeight:1.6}}>{err}</div>}
 
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'9px'}}>
-            {[['💶 Total',`€ ${fmtNum(cmd.precio)}`,'#333'],
-              ['✅ Pagado',`€ ${fmtNum(cmd.monto_pagado)}`,'var(--green)'],
-              ['⏳ Saldo',`€ ${fmtNum(saldo)}`,saldo>0.01?'var(--red)':'var(--green)']
-            ].map(([l,v,c])=>(
-              <div key={l} style={{padding:'11px 10px',background:'var(--bg2)',border:'1px solid var(--border)',textAlign:'center'}}>
-                <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#555',marginBottom:'4px'}}>{l}</div>
-                <div style={{fontFamily:'DM Mono,monospace',fontSize:'16px',fontWeight:700,color:c}}>{v}</div>
+          {/* ── MODO EDICIÓN ─────────────────────────────────────── */}
+          {editMode ? (
+            <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
+              <div style={{padding:'10px 12px',background:'#fff8e1',border:'1px solid #f59e0b44',borderLeft:'3px solid #f59e0b',fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#92400e'}}>
+                ✏️ Editando prendas del pedido. Los cambios se guardan al presionar <strong>Guardar cambios</strong>.
+                {cmd.status==='listo'&&<span style={{display:'block',marginTop:'4px',color:'var(--red)',fontWeight:700}}>⚠️ Esta comanda ya está en LISTO. El stock se recalculará al avanzar de nuevo.</span>}
               </div>
-            ))}
-          </div>
-
-          {cmd.precio>0&&(
-            <div>
-              <div style={{height:'6px',background:'var(--border)',borderRadius:'3px',overflow:'hidden'}}>
-                <div style={{width:`${pct}%`,height:'100%',background:pct>=100?'var(--green)':pct>50?'var(--warn)':'var(--red)',borderRadius:'3px',transition:'width .4s'}}/>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#555',letterSpacing:'.14em',textTransform:'uppercase'}}>Prendas ({editItems.length})</div>
+                <button onClick={()=>setEditCat(true)} style={{padding:'6px 12px',background:'#f59e0b',color:'#000',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:700,textTransform:'uppercase'}}>
+                  ⊞ Agregar del Catálogo
+                </button>
               </div>
-              <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888',marginTop:'4px',textAlign:'right'}}>{pct.toFixed(0)}% pagado</div>
+              {editItems.length===0 ? (
+                <div style={{padding:'20px',textAlign:'center',background:'var(--bg2)',border:'1px dashed var(--border-strong)',color:'#888',fontSize:'12px'}}>Sin productos. Abre el catálogo para agregar.</div>
+              ) : (
+                <div style={{background:'var(--surface)',border:'1px solid var(--border)',overflow:'hidden'}}>
+                  {[...editItems].reverse().map(item=>{
+                    const precio=item.tipoVenta==='MAYOR'?(item.precioMayor||0):(item.precioDetal||0);
+                    const dot=colorHex(item.color||'')||'#9ca3af';
+                    return(
+                      <div key={item.sku} style={{display:'grid',gridTemplateColumns:'1fr auto auto auto auto',gap:'6px',padding:'9px 12px',borderBottom:'1px solid var(--border)',alignItems:'center'}}>
+                        <div>
+                          <div style={{display:'flex',alignItems:'center',gap:'5px'}}>
+                            <span style={{width:'8px',height:'8px',borderRadius:'50%',background:dot,border:'1px solid rgba(0,0,0,.1)',flexShrink:0}}/>
+                            <span style={{fontSize:'12px',fontWeight:600}}>{item.modelo}</span>
+                          </div>
+                          <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888',marginTop:'2px'}}>{item.sku} · €{precio.toFixed(2)} × {item.qty} = <strong>€{(precio*item.qty).toFixed(2)}</strong></div>
+                        </div>
+                        <div style={{display:'flex',border:'1px solid var(--border)',overflow:'hidden',flexShrink:0}}>
+                          {['DETAL','MAYOR'].map(tv=><button key={tv} onClick={()=>editSetTV(item.sku,tv)} style={{padding:'4px 6px',border:'none',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'9px',fontWeight:700,background:item.tipoVenta===tv?(tv==='DETAL'?'var(--blue)':' var(--warn)'):'var(--bg3)',color:item.tipoVenta===tv?'#fff':'#777'}}>{tv[0]}</button>)}
+                        </div>
+                        <div style={{display:'flex',alignItems:'center',border:'1px solid var(--border)',flexShrink:0}}>
+                          <button onClick={()=>editChangeQty(item.sku,-1)} style={{width:'24px',height:'24px',background:'var(--bg3)',border:'none',cursor:'pointer',fontSize:'14px'}}>−</button>
+                          <span style={{fontFamily:'DM Mono,monospace',fontSize:'13px',fontWeight:700,width:'28px',textAlign:'center',borderLeft:'1px solid var(--border)',borderRight:'1px solid var(--border)',lineHeight:'24px'}}>{item.qty}</span>
+                          <button onClick={()=>editChangeQty(item.sku,1)} style={{width:'24px',height:'24px',background:'var(--bg3)',border:'none',cursor:'pointer',fontSize:'14px'}}>+</button>
+                        </div>
+                        <div style={{fontFamily:'DM Mono,monospace',fontSize:'12px',fontWeight:700,minWidth:'52px',textAlign:'right',flexShrink:0}}>€{(precio*item.qty).toFixed(2)}</div>
+                        <button onClick={()=>editRemove(item.sku)} style={{width:'22px',height:'22px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontSize:'11px',color:'#888'}}>✕</button>
+                      </div>
+                    );
+                  })}
+                  <div style={{padding:'8px 13px',background:'var(--bg3)',display:'flex',justifyContent:'flex-end',fontFamily:'DM Mono,monospace',fontSize:'13px',fontWeight:700,color:'#f59e0b'}}>
+                    Nuevo total: € {editTotal.toFixed(2)}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-
-          {prods.length>0&&(
-            <div style={{padding:'11px 13px',background:'var(--bg2)',border:'1px solid var(--border)'}}>
-              <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.12em',textTransform:'uppercase',color:'#555',marginBottom:'8px'}}>Prendas del pedido</div>
-              <div style={{display:'flex',gap:'5px',flexWrap:'wrap'}}>
-                {prods.map((p,i)=>(
-                  <span key={i} style={{background:'var(--surface)',border:'1px solid var(--border)',padding:'3px 9px',fontFamily:'DM Mono,monospace',fontSize:'9px',display:'flex',alignItems:'center',gap:'4px'}}>
-                    <strong>{p.cant}×</strong> {p.modelo||p.sku||'—'}
-                    {p.tipoVenta&&<span style={{background:p.tipoVenta==='MAYOR'?'var(--warn-soft)':'var(--blue-soft)',color:p.tipoVenta==='MAYOR'?'var(--warn)':'var(--blue)',padding:'0 3px',fontSize:'8px'}}>{p.tipoVenta[0]}</span>}
-                    {p.precio>0&&<span style={{color:'var(--red)',fontSize:'9px'}}>€{p.precio}</span>}
-                  </span>
+          ) : (
+            /* ── VISTA NORMAL ──────────────────────────────────────── */
+            <>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'9px'}}>
+                {[['💶 Total',`€ ${fmtNum(cmd.precio)}`,'#333'],
+                  ['✅ Pagado',`€ ${fmtNum(cmd.monto_pagado)}`,'var(--green)'],
+                  ['⏳ Saldo',`€ ${fmtNum(saldo)}`,saldo>0.01?'var(--red)':'var(--green)']
+                ].map(([l,v,c])=>(
+                  <div key={l} style={{padding:'11px 10px',background:'var(--bg2)',border:'1px solid var(--border)',textAlign:'center'}}>
+                    <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#555',marginBottom:'4px'}}>{l}</div>
+                    <div style={{fontFamily:'DM Mono,monospace',fontSize:'16px',fontWeight:700,color:c}}>{v}</div>
+                  </div>
                 ))}
               </div>
-              {cmd.status==='listo'&&<div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'var(--green)',marginTop:'7px',fontWeight:700}}>✅ Stock descontado al marcar LISTO</div>}
-              {cmd.status!=='listo'&&cmd.status!=='entregado'&&cmd.status!=='cancelado'&&<div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888',marginTop:'7px'}}>⚠️ El stock se descuenta automáticamente al marcar como LISTO</div>}
-            </div>
-          )}
 
-          <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
-            <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#555',letterSpacing:'.14em',textTransform:'uppercase',marginBottom:'4px'}}>Acciones del pedido</div>
-            <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
-              {sigStatus&&(
-                <button onClick={()=>cambiarStatus(sigStatus)} disabled={saving}
-                  style={{flex:2,padding:'11px 16px',background:S[sigStatus].border,color:'#fff',border:`2px solid ${S[sigStatus].border}`,cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'13px',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',gap:'8px',opacity:saving?.6:1}}>
-                  {S[sigStatus].icon} Avanzar a {S[sigStatus].label}
-                  {sigStatus==='listo'&&<span style={{fontSize:'10px',fontWeight:400,opacity:.8}}>(descuenta stock)</span>}
-                </button>
+              {cmd.precio>0&&(
+                <div>
+                  <div style={{height:'6px',background:'var(--border)',borderRadius:'3px',overflow:'hidden'}}>
+                    <div style={{width:`${pct}%`,height:'100%',background:pct>=100?'var(--green)':pct>50?'var(--warn)':'var(--red)',borderRadius:'3px',transition:'width .4s'}}/>
+                  </div>
+                  <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888',marginTop:'4px',textAlign:'right'}}>{pct.toFixed(0)}% pagado</div>
+                </div>
               )}
-              {cmd.status!=='cancelado'&&(
-                <button onClick={()=>cambiarStatus('cancelado')} disabled={saving}
-                  style={{flex:1,padding:'11px 10px',background:'var(--bg2)',color:'var(--red)',border:'1px solid var(--red)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:600,opacity:saving?.6:1}}>
-                  ❌ Cancelar
-                </button>
-              )}
-              {cmd.status==='cancelado'&&(
-                <button onClick={()=>cambiarStatus('pendiente')} disabled={saving}
-                  style={{flex:1,padding:'11px 10px',background:'var(--warn-soft)',color:'var(--warn)',border:'1px solid var(--warn)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:600}}>
-                  ↩ Reactivar
-                </button>
-              )}
-            </div>
-          </div>
 
-          {saldo>0.01&&(
-            <WidgetPago
-              comandaId={cmd.id}
-              saldo={saldo}
-              onPagoRegistrado={()=>{ onSave(); }}
-            />
-          )}
-          {saldo<=0.01&&cmd.precio>0&&(
-            <div style={{padding:'11px',background:'var(--green-soft)',border:'1px solid rgba(26,122,60,.2)',fontFamily:'DM Mono,monospace',fontSize:'11px',color:'var(--green)',textAlign:'center',fontWeight:700}}>
-              ✅ Comanda pagada completamente
-            </div>
-          )}
+              {prods.length>0&&(
+                <div style={{padding:'11px 13px',background:'var(--bg2)',border:'1px solid var(--border)'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
+                    <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.12em',textTransform:'uppercase',color:'#555'}}>Prendas del pedido</div>
+                    {cmd.status!=='entregado'&&cmd.status!=='cancelado'&&(
+                      <button onClick={abrirEdicion} style={{padding:'3px 10px',background:'none',border:'1px solid #f59e0b',color:'#f59e0b',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'9px',fontWeight:700}}>
+                        ✏️ Editar
+                      </button>
+                    )}
+                  </div>
+                  <div style={{display:'flex',gap:'5px',flexWrap:'wrap'}}>
+                    {prods.map((p,i)=>(
+                      <span key={i} style={{background:'var(--surface)',border:'1px solid var(--border)',padding:'3px 9px',fontFamily:'DM Mono,monospace',fontSize:'9px',display:'flex',alignItems:'center',gap:'4px'}}>
+                        <strong>{p.cant}×</strong> {p.modelo||p.sku||'—'}
+                        {p.tipoVenta&&<span style={{background:p.tipoVenta==='MAYOR'?'var(--warn-soft)':'var(--blue-soft)',color:p.tipoVenta==='MAYOR'?'var(--warn)':'var(--blue)',padding:'0 3px',fontSize:'8px'}}>{p.tipoVenta[0]}</span>}
+                        {p.precio>0&&<span style={{color:'var(--red)',fontSize:'9px'}}>€{p.precio}</span>}
+                      </span>
+                    ))}
+                  </div>
+                  {cmd.status==='listo'&&<div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'var(--green)',marginTop:'7px',fontWeight:700}}>✅ Stock descontado al marcar LISTO</div>}
+                  {cmd.status!=='listo'&&cmd.status!=='entregado'&&cmd.status!=='cancelado'&&<div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888',marginTop:'7px'}}>⚠️ El stock se descuenta automáticamente al marcar como LISTO</div>}
+                </div>
+              )}
 
-          {!loadP&&pagos.length>0&&(
-            <div>
-              <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.14em',textTransform:'uppercase',color:'#555',marginBottom:'8px'}}>Historial de pagos</div>
-              <div style={{background:'var(--surface)',border:'1px solid var(--border)',overflow:'hidden'}}>
-                {pagos.map((p,i)=>{
-                  const mcfg=METODOS.find(m=>m.id===p.metodo);
-                  return(
-                    <div key={i} style={{display:'flex',alignItems:'center',gap:'10px',padding:'9px 13px',borderBottom:'1px solid var(--border)'}}>
-                      <span style={{fontSize:'16px',flexShrink:0}}>{mcfg?.icon||'💰'}</span>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:'12px',fontWeight:600}}>{mcfg?.label||p.metodo}</div>
-                        <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#666'}}>{p.fecha}{p.referencia?` · Ref: ${p.referencia}`:''}</div>
-                      </div>
-                      <div style={{textAlign:'right',flexShrink:0}}>
-                        <div style={{fontFamily:'DM Mono,monospace',fontSize:'13px',fontWeight:700,color:'var(--green)'}}>
-                          {p.divisa==='BS'?`Bs. ${fmtNum(p.monto_bs||p.monto_divisa)}`:`${p.divisa} ${fmtNum(p.monto_divisa)}`}
-                        </div>
-                        {p.tasa_bs>0&&<div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888'}}>@ {fmtNum(p.tasa_bs)} Bs/{p.divisa}</div>}
-                        {p.monto_bs>0&&p.divisa!=='BS'&&<div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#666'}}>= Bs. {fmtNum(p.monto_bs)}</div>}
-                      </div>
-                    </div>
-                  );
-                })}
+              <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+                <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#555',letterSpacing:'.14em',textTransform:'uppercase',marginBottom:'4px'}}>Acciones del pedido</div>
+                <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
+                  {sigStatus&&(
+                    <button onClick={()=>cambiarStatus(sigStatus)} disabled={saving}
+                      style={{flex:2,padding:'11px 16px',background:S[sigStatus].border,color:'#fff',border:`2px solid ${S[sigStatus].border}`,cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'13px',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',gap:'8px',opacity:saving?.6:1}}>
+                      {S[sigStatus].icon} Avanzar a {S[sigStatus].label}
+                      {sigStatus==='listo'&&<span style={{fontSize:'10px',fontWeight:400,opacity:.8}}>(descuenta stock)</span>}
+                    </button>
+                  )}
+                  {cmd.status!=='cancelado'&&(
+                    <button onClick={()=>cambiarStatus('cancelado')} disabled={saving}
+                      style={{flex:1,padding:'11px 10px',background:'var(--bg2)',color:'var(--red)',border:'1px solid var(--red)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:600,opacity:saving?.6:1}}>
+                      ❌ Cancelar
+                    </button>
+                  )}
+                  {cmd.status==='cancelado'&&(
+                    <button onClick={()=>cambiarStatus('pendiente')} disabled={saving}
+                      style={{flex:1,padding:'11px 10px',background:'var(--warn-soft)',color:'var(--warn)',border:'1px solid var(--warn)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:600}}>
+                      ↩ Reactivar
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
+
+              {saldo>0.01&&<WidgetPago comandaId={cmd.id} saldo={saldo} onPagoRegistrado={()=>onSave()}/>}
+              {saldo<=0.01&&cmd.precio>0&&(
+                <div style={{padding:'11px',background:'var(--green-soft)',border:'1px solid rgba(26,122,60,.2)',fontFamily:'DM Mono,monospace',fontSize:'11px',color:'var(--green)',textAlign:'center',fontWeight:700}}>
+                  ✅ Comanda pagada completamente
+                </div>
+              )}
+
+              {!loadP&&pagos.length>0&&(
+                <div>
+                  <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.14em',textTransform:'uppercase',color:'#555',marginBottom:'8px'}}>Historial de pagos</div>
+                  <div style={{background:'var(--surface)',border:'1px solid var(--border)',overflow:'hidden'}}>
+                    {pagos.map((p,i)=>{
+                      const mcfg=METODOS.find(m=>m.id===p.metodo);
+                      return(
+                        <div key={i} style={{display:'flex',alignItems:'center',gap:'10px',padding:'9px 13px',borderBottom:'1px solid var(--border)'}}>
+                          <span style={{fontSize:'16px',flexShrink:0}}>{mcfg?.icon||'💰'}</span>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:'12px',fontWeight:600}}>{mcfg?.label||p.metodo}</div>
+                            <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#666'}}>{p.fecha}{p.referencia?` · Ref: ${p.referencia}`:''}</div>
+                          </div>
+                          <div style={{textAlign:'right',flexShrink:0}}>
+                            <div style={{fontFamily:'DM Mono,monospace',fontSize:'13px',fontWeight:700,color:'var(--green)'}}>
+                              {p.divisa==='BS'?`Bs. ${fmtNum(p.monto_bs||p.monto_divisa)}`:`${p.divisa} ${fmtNum(p.monto_divisa)}`}
+                            </div>
+                            {p.tasa_bs>0&&<div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888'}}>@ {fmtNum(p.tasa_bs)} Bs/{p.divisa}</div>}
+                            {p.monto_bs>0&&p.divisa!=='BS'&&<div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#666'}}>= Bs. {fmtNum(p.monto_bs)}</div>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           <div>
@@ -630,16 +880,24 @@ function ModalGestion({ cmd, onClose, onSave }) {
         </div>
 
         <div className="modal-footer-bar" style={{borderTop:'1px solid var(--border)',display:'flex',justifyContent:'flex-end',gap:'8px',background:'var(--bg2)',flexShrink:0}}>
-          <button onClick={onClose} style={{padding:'11px 15px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:600}}>Cerrar</button>
-          <button onClick={async()=>{
-            const res=await fetch('/api/comandas',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:cmd.id,notas})}).then(r=>r.json());
-            if(res.ok)onSave();else setErr(res.error);
-          }} style={{padding:'8px 15px',background:'var(--ink)',color:'#fff',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:600}}>
-            Guardar notas
-          </button>
+          {editMode ? (
+            <>
+              <button onClick={()=>setEditMode(false)} style={{padding:'11px 15px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:600}}>✕ Cancelar edición</button>
+              <button onClick={guardarEdicion} disabled={saving||!editItems.length}
+                style={{padding:'11px 20px',background:'#f59e0b',color:'#000',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'12px',fontWeight:700,textTransform:'uppercase',opacity:saving?.6:1}}>
+                {saving?'⏳ Guardando...':'💾 Guardar cambios'}
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={onClose} style={{padding:'11px 15px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:600}}>Cerrar</button>
+              <button onClick={async()=>{const res=await fetch('/api/comandas',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:cmd.id,notas})}).then(r=>r.json());if(res.ok)onSave();else setErr(res.error);}} style={{padding:'8px 15px',background:'var(--ink)',color:'#fff',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:600}}>Guardar notas</button>
+            </>
+          )}
         </div>
       </div>
     </div>
+    </>
   );
 }
 
@@ -764,7 +1022,7 @@ function ComandasInner() {
   return (
     <Shell title="Comandas">
       {modal==='nueva'&&<ModalNueva clientes={clientes} productos={productos} onClose={()=>setModal(null)} onSave={onSave}/>}
-      {modal&&typeof modal==='object'&&<ModalGestion cmd={modal} onClose={()=>setModal(null)} onSave={onSave}/>}
+      {modal&&typeof modal==='object'&&<ModalGestion cmd={modal} productos={productos} onClose={()=>setModal(null)} onSave={onSave}/>}
       {ticketModal&&(
         <ModalTicketEnvio
           comandas={ticketModal.cmd||ticketModal.cmds}
