@@ -3,6 +3,7 @@ import { colorHex } from '@/utils/colores';
 import { useState, useRef } from 'react';
 import Shell from '@/components/Shell';
 import CatalogoExplorer from '@/components/CatalogoExplorer';
+import BarcodeScanner from '@/components/BarcodeScanner';
 import { useAppData } from '@/lib/AppContext';
 
 /* ─── Motivos de entrada con icono, color y concepto auto ─────────── */
@@ -143,12 +144,23 @@ export default function EntradaPage() {
         {/* ── Scanner + catálogo ── */}
         <div>
           <label style={{...lbl,marginBottom:'8px'}}>Agregar productos</label>
-          <div style={{display:'flex'}}>
+          <BarcodeScanner
+            productos={productos}
+            skipStockCheck={true}
+            onAdd={(prod, qty = 1) => {
+              setCart(prev => {
+                const ex = prev.find(x => x.sku === prod.sku);
+                if (ex) return prev.map(x => x.sku === prod.sku ? {...x, qty: x.qty + qty} : x);
+                return [...prev, {...prod, qty}];
+              });
+            }}
+          />
+          <div style={{display:'flex',marginTop:'6px'}}>
             <div style={{display:'flex',alignItems:'center',gap:'10px',flex:1,background:'#111',border:'1px solid #333',borderRight:'none',padding:'10px 14px'}}>
               <span style={{fontSize:'18px',flexShrink:0}}>🔫</span>
               <input ref={skuRef} value={skuVal} onChange={handleSkuChange}
                 onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();agregarPorSku(skuVal);}}}
-                placeholder="Escanea el código de barras — se agrega automáticamente…"
+                placeholder="O escribe el SKU manualmente y pulsa Enter…"
                 autoComplete="off" spellCheck={false}
                 style={{background:'none',border:'none',outline:'none',fontFamily:'DM Mono,monospace',fontSize:'12px',color:'#fff',width:'100%',letterSpacing:'.04em'}}/>
             </div>
