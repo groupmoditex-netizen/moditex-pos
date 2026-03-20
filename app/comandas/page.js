@@ -65,8 +65,8 @@ function WidgetPago({ comandaId, saldo=0, onPagoRegistrado }) {
   let previewBS  = 0;
   let previewEUR = 0;
   if (divisa==='BS')                   { previewBS=md; previewEUR=ts>0?md/ts:0; }
-  if (divisa==='EUR')                  { previewEUR=md; previewBS=0; }  // EUR directo, sin tasa
-  if (divisa==='USD'||divisa==='USDT') { previewEUR=md*0.93; previewBS=ts>0?md*ts:0; }
+  if (divisa==='EUR')                  { previewEUR=md; previewBS=0; }
+  if (divisa==='USD'||divisa==='USDT') { previewEUR=md; previewBS=0; }
 
   async function registrar() {
     setErr(''); setOk('');
@@ -119,28 +119,27 @@ function WidgetPago({ comandaId, saldo=0, onPagoRegistrado }) {
             <input type="number" min="0" step="0.01" value={monto} onChange={e=>setMonto(e.target.value)} placeholder="0.00" style={{...inp,flex:1}}/>
           </div>
         </div>
-        {/* Tasa solo cuando NO es EUR */}
-        {divisa !== 'EUR' && (
+        {/* Tasa solo cuando la divisa es BS */}
+        {divisa === 'BS' && (
           <div>
             <label style={lbl}>Tasa BS / {divisa} *</label>
             <input type="number" min="0" step="0.01" value={tasa} onChange={e=>setTasa(e.target.value)} placeholder="Ej: 96.50" style={inp}/>
           </div>
         )}
-        {divisa === 'EUR' && (
+        {divisa !== 'BS' && (
           <div style={{display:'flex',alignItems:'flex-end',paddingBottom:'2px'}}>
             <div style={{padding:'9px 12px',background:'var(--green-soft)',border:'1px solid rgba(26,122,60,.2)',fontFamily:'DM Mono,monospace',fontSize:'10px',color:'var(--green)',fontWeight:700,width:'100%'}}>
-              ✓ Divisa EUR — precio directo
+              ✓ Precio divisa — sin conversión
             </div>
           </div>
         )}
       </div>
 
-      {md>0&&(divisa==='EUR'||ts>0)&&(
+      {md>0&&(divisa!=='BS'||ts>0)&&(
         <div style={{padding:'8px 11px',background:'var(--surface)',border:'1px solid var(--border)',marginBottom:'10px',fontFamily:'DM Mono,monospace',fontSize:'11px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <span>
             {divisa==='BS'&&<><strong style={{color:'#333'}}>Bs. {fmtNum(previewBS)}</strong><span style={{color:'#888',margin:'0 6px'}}>÷</span>{fmtNum(ts)} BS/€<span style={{margin:'0 6px'}}>→</span><strong style={{color:'var(--green)'}}>€ {fmtNum(previewEUR)}</strong></>}
-            {divisa==='EUR'&&<><strong style={{color:'var(--green)'}}>€ {fmtNum(md)}</strong><span style={{color:'#888',margin:'0 6px',fontSize:'9px'}}>precio divisa sin conversión</span></>}
-            {(divisa==='USD'||divisa==='USDT')&&<><strong style={{color:'#1a9e4e'}}>{divisa} {fmtNum(md)}</strong><span style={{color:'#888',margin:'0 6px'}}>→</span><strong style={{color:'var(--green)'}}>≈ € {fmtNum(previewEUR)}</strong><span style={{color:'#888',margin:'0 6px'}}>/ Bs. {fmtNum(previewBS)}</span></>}
+            {divisa!=='BS'&&<><strong style={{color:'var(--green)'}}>{divisa} {fmtNum(md)}</strong><span style={{color:'#888',margin:'0 6px',fontSize:'9px'}}>precio divisa sin conversión → </span><strong style={{color:'var(--green)'}}>€ {fmtNum(previewEUR)}</strong></>}
           </span>
         </div>
       )}
@@ -363,8 +362,7 @@ function ModalNueva({ clientes, productos, onClose, onSave }) {
       if(abono && parseFloat(abono)>0) {
         const ma=parseFloat(abono)||0, ta=parseFloat(abonoTasa)||0;
         if(abonoDiv==='BS')        montoAbonoEUR = ta>0?ma/ta:0;
-        else if(abonoDiv==='EUR')  montoAbonoEUR = ma;
-        else montoAbonoEUR = ma*0.93;
+        else                       montoAbonoEUR = ma; // EUR, USD, USDT = precio directo
         montoAbonoEUR = Math.round(montoAbonoEUR*100)/100;
       }
 
@@ -463,13 +461,20 @@ function ModalNueva({ clientes, productos, onClose, onSave }) {
       </div>
     )}
 
-    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:200,display:'flex',alignItems:'flex-end',justifyContent:'center',padding:'0',overflowY:'auto'}} className="modal-wrap" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:200,display:'flex',alignItems:'flex-end',justifyContent:'center',padding:'0',overflowY:'auto'}} className="modal-wrap">
       <div className="modal-fullscreen" style={{background:'var(--bg)',border:'1px solid var(--border-strong)',width:'100%',maxWidth:'620px',borderTop:'3px solid #f59e0b',maxHeight:'96vh',display:'flex',flexDirection:'column'}}>
 
         {/* ── Cabecera ─────────────────────────────────────────── */}
         <div style={{padding:'13px 18px',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0}}>
           <div style={{fontFamily:'Playfair Display,serif',fontSize:'16px',fontWeight:700}}>📋 Nueva Comanda</div>
-          <button onClick={onClose} style={{background:'none',border:'1px solid var(--border)',width:'28px',height:'28px',cursor:'pointer',fontSize:'13px',display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
+          <button onClick={()=>{
+            const tieneContenido = cliQuery.trim() || items.length > 0;
+            if (tieneContenido) {
+              if (window.confirm('¿Seguro que quieres cerrar? Se perderán los datos ingresados.')) onClose();
+            } else {
+              onClose();
+            }
+          }} style={{background:'none',border:'1px solid var(--border)',width:'28px',height:'28px',cursor:'pointer',fontSize:'13px',display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
         </div>
 
         {/* ── Barra de pasos ───────────────────────────────────── */}
@@ -732,8 +737,8 @@ function ModalNueva({ clientes, productos, onClose, onSave }) {
                     <input type="number" min="0" step="0.01" value={abono} onChange={e=>setAbono(e.target.value)} placeholder="0.00" style={{...inp,flex:1}}/>
                   </div>
                 </div>
-                {/* Tasa solo cuando NO es EUR — en EUR el precio ya está en EUR */}
-                {abonoMetodo && abonoDiv !== 'EUR' && (
+                {/* Tasa solo cuando la divisa es BS */}
+                {abonoMetodo && abonoDiv === 'BS' && (
                   <div>
                     <label style={lbl}>Tasa BS / {abonoDiv}</label>
                     <input type="number" value={abonoTasa} onChange={e=>setAT(e.target.value)} placeholder="Ej: 96.50" style={inp}/>
@@ -747,49 +752,46 @@ function ModalNueva({ clientes, productos, onClose, onSave }) {
                 )}
               </div>
 
-              {/* Preview abono — siempre al fondo del contenedor scrollable */}
-              {(()=>{
-                const ma=parseFloat(abono)||0; const ta=parseFloat(abonoTasa)||0;
-                if(!abonoMetodo || ma<=0) return null;
-                let abonoEUR=0;
-                if(abonoDiv==='EUR')              abonoEUR=ma;          // EUR directo, sin tasa
-                else if(abonoDiv==='BS')           abonoEUR=ta>0?ma/ta:0;
-                else                               abonoEUR=ma*0.93;    // USD/USDT aprox
-                const falta=totalCalc-abonoEUR;
-                return(
-                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'6px',padding:'10px 14px',borderTop:'1px solid var(--border)',background:'var(--bg2)'}}>
-                    <div style={{textAlign:'center'}}>
-                      <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#555',marginBottom:'3px',textTransform:'uppercase'}}>Total pedido</div>
-                      <div style={{fontFamily:'DM Mono,monospace',fontSize:'14px',fontWeight:700,color:'var(--red)'}}>€ {fmtNum(totalCalc)}</div>
-                    </div>
-                    <div style={{textAlign:'center'}}>
-                      <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#555',marginBottom:'3px',textTransform:'uppercase'}}>Abonando</div>
-                      <div style={{fontFamily:'DM Mono,monospace',fontSize:'14px',fontWeight:700,color:'var(--green)'}}>€ {fmtNum(abonoEUR)}</div>
-                      {abonoDiv!=='EUR'&&ta>0&&<div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888'}}>{abonoDiv} {fmtNum(ma)}</div>}
-                    </div>
-                    {falta>0.01
-                      ?<div style={{textAlign:'center',background:'#fff8e1',padding:'6px 4px',border:'1px solid #f59e0b44'}}>
-                        <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#92400e',marginBottom:'3px',textTransform:'uppercase'}}>Falta</div>
-                        <div style={{fontFamily:'DM Mono,monospace',fontSize:'14px',fontWeight:700,color:'#f59e0b'}}>€ {fmtNum(falta)}</div>
-                        {abonoDiv==='BS'&&ta>0&&<div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888'}}>Bs {fmtNum(falta*ta)}</div>}
-                      </div>
-                      :<div style={{textAlign:'center',background:'var(--green-soft)',padding:'6px 4px',border:'1px solid rgba(26,122,60,.2)'}}>
-                        <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'var(--green)',marginBottom:'3px',textTransform:'uppercase'}}>Vuelto</div>
-                        <div style={{fontFamily:'DM Mono,monospace',fontSize:'14px',fontWeight:700,color:'var(--green)'}}>€ {fmtNum(-falta)}</div>
-                        {abonoDiv==='BS'&&ta>0&&<div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'var(--green)'}}>Bs {fmtNum(-falta*ta)}</div>}
-                      </div>
-                    }
-                  </div>
-                );
-              })()}
             </div>
           </div>
 
+          {/* ── Preview pago — barra fija siempre visible ──────────── */}
+          {(()=>{
+            const ma=parseFloat(abono)||0; const ta=parseFloat(abonoTasa)||0;
+            let abonoEUR = abonoDiv==='BS' ? (ta>0?ma/ta:0) : ma;
+            const falta=totalCalc-abonoEUR;
+            return(
+              <div style={{borderTop:'1px solid #f59e0b55',background:'#fffbeb',flexShrink:0,display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'0',padding:'0'}}>
+                <div style={{textAlign:'center',padding:'10px 8px',borderRight:'1px solid #f59e0b33'}}>
+                  <div style={{fontFamily:'DM Mono,monospace',fontSize:'7px',color:'#92400e',marginBottom:'3px',textTransform:'uppercase',letterSpacing:'.1em'}}>Total</div>
+                  <div style={{fontFamily:'DM Mono,monospace',fontSize:'16px',fontWeight:700,color:'var(--red)'}}>€ {fmtNum(totalCalc)}</div>
+                </div>
+                <div style={{textAlign:'center',padding:'10px 8px',borderRight:'1px solid #f59e0b33'}}>
+                  <div style={{fontFamily:'DM Mono,monospace',fontSize:'7px',color:'#92400e',marginBottom:'3px',textTransform:'uppercase',letterSpacing:'.1em'}}>Abonando</div>
+                  <div style={{fontFamily:'DM Mono,monospace',fontSize:'16px',fontWeight:700,color:'var(--green)'}}>€ {fmtNum(abonoEUR)}</div>
+                  {abonoDiv==='BS'&&ma>0&&<div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#888'}}>Bs. {fmtNum(ma)}</div>}
+                  {(abonoDiv==='USD'||abonoDiv==='USDT')&&ma>0&&<div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#888'}}>{abonoDiv} {fmtNum(ma)}</div>}
+                </div>
+                {ma>0&&abonoMetodo
+                  ? falta>0.01
+                    ? <div style={{textAlign:'center',padding:'10px 8px',background:'#fff8e1'}}>
+                        <div style={{fontFamily:'DM Mono,monospace',fontSize:'7px',color:'#92400e',marginBottom:'3px',textTransform:'uppercase',letterSpacing:'.1em'}}>Falta</div>
+                        <div style={{fontFamily:'DM Mono,monospace',fontSize:'16px',fontWeight:700,color:'#f59e0b'}}>€ {fmtNum(falta)}</div>
+                      </div>
+                    : <div style={{textAlign:'center',padding:'10px 8px',background:'var(--green-soft)'}}>
+                        <div style={{fontFamily:'DM Mono,monospace',fontSize:'7px',color:'var(--green)',marginBottom:'3px',textTransform:'uppercase',letterSpacing:'.1em'}}>Vuelto</div>
+                        <div style={{fontFamily:'DM Mono,monospace',fontSize:'16px',fontWeight:700,color:'var(--green)'}}>€ {fmtNum(-falta)}</div>
+                      </div>
+                  : <div style={{textAlign:'center',padding:'10px 8px',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                      <span style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#bbb'}}>sin abono</span>
+                    </div>
+                }
+              </div>
+            );
+          })()}
+
           <div className="modal-footer-bar" style={{borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center',background:'var(--bg2)',flexShrink:0}}>
-            <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
-              <button onClick={retroceder} style={{padding:'11px 14px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'12px',fontWeight:600}}>← Volver</button>
-              <span style={{fontFamily:'Playfair Display,serif',fontSize:'18px',fontWeight:700,color:'#f59e0b'}}>€ {totalCalc.toFixed(2)}</span>
-            </div>
+            <button onClick={retroceder} style={{padding:'11px 14px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'12px',fontWeight:600}}>← Volver</button>
             <button onClick={guardar} disabled={guardando}
               style={{padding:'11px 22px',background:'#f59e0b',color:'#000',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'12px',fontWeight:700,textTransform:'uppercase',letterSpacing:'.05em',opacity:guardando?.6:1}}>
               {guardando?'⏳ Guardando...':'📋 Crear Comanda'}

@@ -25,7 +25,6 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
   const [buscar,  setBuscar] = useState('');
   const [qtyMap,  setQtyMap]   = useState({});
   const [tvMap,   setTvMap]    = useState({});
-  const [draftMap,setDraftMap] = useState({});  // valor temporal mientras el usuario escribe qty
 
   // ── Carrito acumulativo interno ───────────────────────────────────
   // pending: { [sku]: { prod, qty, tv } }
@@ -205,14 +204,14 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
           <div style={{display:'flex',border:'1px solid var(--border)',overflow:'hidden'}}>
             <button onClick={()=>setQty(p.sku,qty-1)} style={{width:'28px',height:'28px',background:'var(--bg3)',border:'none',cursor:'pointer',fontSize:'16px',display:'flex',alignItems:'center',justifyContent:'center'}}>−</button>
             <input
+              key={qty}
               type="number" min="1"
-              value={draftMap[p.sku] !== undefined ? draftMap[p.sku] : qty}
-              onChange={e => setDraftMap(d => ({...d, [p.sku]: e.target.value}))}
+              defaultValue={qty}
               onBlur={e => {
                 const v = Math.max(1, parseInt(e.target.value) || 1);
-                setDraftMap(d => { const n={...d}; delete n[p.sku]; return n; });
                 setQty(p.sku, v);
               }}
+              onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
               style={{width:'40px',textAlign:'center',border:'none',borderLeft:'1px solid var(--border)',borderRight:'1px solid var(--border)',fontFamily:'DM Mono,monospace',fontSize:'13px',fontWeight:700,outline:'none',background:'var(--surface)'}}/>
             <button onClick={()=>setQty(p.sku,qty+1)} style={{width:'28px',height:'28px',background:'var(--bg3)',border:'none',cursor:'pointer',fontSize:'16px',display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>
           </div>
@@ -231,8 +230,7 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
   }
 
   return (
-    <div style={estilo.overlay} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
-      <div style={estilo.box}>
+    <div style={estilo.overlay}>      <div style={estilo.box}>
         {/* Header */}
         <div style={estilo.hdr}>
           <div style={{flex:1}}>
