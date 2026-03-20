@@ -22,7 +22,7 @@ export async function GET() {
     const resultado = (prods||[]).map(p=>({
       sku:p.sku, categoria:p.categoria, modelo:p.modelo, talla:p.talla, color:p.color,
       precioDetal:p.precio_detal, precioMayor:p.precio_mayor, precioCosto:p.precio_costo||0,
-      stockInicial:p.stock_inicial, codigoBarra:p.codigo_barra||'',
+      stockInicial:p.stock_inicial, tela:p.tela||'',
       disponible: stockMap[p.sku] !== undefined ? stockMap[p.sku] : p.stock_inicial,
       entradas:entMap[p.sku]||0, salidas:salMap[p.sku]||0,
     }));
