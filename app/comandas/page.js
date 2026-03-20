@@ -64,8 +64,8 @@ function WidgetPago({ comandaId, saldo=0, onPagoRegistrado }) {
 
   let previewBS  = 0;
   let previewEUR = 0;
-  if (divisa==='BS')   { previewBS=md; previewEUR=ts>0?md/ts:0; }
-  if (divisa==='EUR')  { previewEUR=md; previewBS=ts>0?md*ts:0; }
+  if (divisa==='BS')                   { previewBS=md; previewEUR=ts>0?md/ts:0; }
+  if (divisa==='EUR')                  { previewEUR=md; previewBS=0; }  // EUR directo, sin tasa
   if (divisa==='USD'||divisa==='USDT') { previewEUR=md*0.93; previewBS=ts>0?md*ts:0; }
 
   async function registrar() {
@@ -119,17 +119,27 @@ function WidgetPago({ comandaId, saldo=0, onPagoRegistrado }) {
             <input type="number" min="0" step="0.01" value={monto} onChange={e=>setMonto(e.target.value)} placeholder="0.00" style={{...inp,flex:1}}/>
           </div>
         </div>
-        <div>
-          <label style={lbl}>Tasa BS / {divisa==='BS'?'EUR':divisa==='EUR'?'EUR':divisa} *</label>
-          <input type="number" min="0" step="0.01" value={tasa} onChange={e=>setTasa(e.target.value)} placeholder="Ej: 96.50" style={inp}/>
-        </div>
+        {/* Tasa solo cuando NO es EUR */}
+        {divisa !== 'EUR' && (
+          <div>
+            <label style={lbl}>Tasa BS / {divisa} *</label>
+            <input type="number" min="0" step="0.01" value={tasa} onChange={e=>setTasa(e.target.value)} placeholder="Ej: 96.50" style={inp}/>
+          </div>
+        )}
+        {divisa === 'EUR' && (
+          <div style={{display:'flex',alignItems:'flex-end',paddingBottom:'2px'}}>
+            <div style={{padding:'9px 12px',background:'var(--green-soft)',border:'1px solid rgba(26,122,60,.2)',fontFamily:'DM Mono,monospace',fontSize:'10px',color:'var(--green)',fontWeight:700,width:'100%'}}>
+              ✓ Divisa EUR — precio directo
+            </div>
+          </div>
+        )}
       </div>
 
-      {md>0&&ts>0&&(
+      {md>0&&(divisa==='EUR'||ts>0)&&(
         <div style={{padding:'8px 11px',background:'var(--surface)',border:'1px solid var(--border)',marginBottom:'10px',fontFamily:'DM Mono,monospace',fontSize:'11px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <span>
             {divisa==='BS'&&<><strong style={{color:'#333'}}>Bs. {fmtNum(previewBS)}</strong><span style={{color:'#888',margin:'0 6px'}}>÷</span>{fmtNum(ts)} BS/€<span style={{margin:'0 6px'}}>→</span><strong style={{color:'var(--green)'}}>€ {fmtNum(previewEUR)}</strong></>}
-            {divisa==='EUR'&&<><strong style={{color:'var(--green)'}}>€ {fmtNum(previewEUR)}</strong><span style={{color:'#888',margin:'0 6px'}}>×</span>{fmtNum(ts)} BS/€<span style={{margin:'0 6px'}}>→</span><strong style={{color:'#333'}}>Bs. {fmtNum(previewBS)}</strong></>}
+            {divisa==='EUR'&&<><strong style={{color:'var(--green)'}}>€ {fmtNum(md)}</strong><span style={{color:'#888',margin:'0 6px',fontSize:'9px'}}>precio divisa sin conversión</span></>}
             {(divisa==='USD'||divisa==='USDT')&&<><strong style={{color:'#1a9e4e'}}>{divisa} {fmtNum(md)}</strong><span style={{color:'#888',margin:'0 6px'}}>→</span><strong style={{color:'var(--green)'}}>≈ € {fmtNum(previewEUR)}</strong><span style={{color:'#888',margin:'0 6px'}}>/ Bs. {fmtNum(previewBS)}</span></>}
           </span>
         </div>
@@ -477,7 +487,7 @@ function ModalNueva({ clientes, productos, onClose, onSave }) {
         ══════════════════════════════════════════════════════ */}
         {paso === 1 && (
           <>
-          <div style={{padding:'20px 18px',overflowY:'auto',flex:1,display:'flex',flexDirection:'column',gap:'14px'}}>
+          <div style={{padding:'20px 18px',flex:1,display:'flex',flexDirection:'column',gap:'14px'}}>
             <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888',letterSpacing:'.14em',textTransform:'uppercase',marginBottom:'-6px'}}>
               ¿Para quién es este pedido?
             </div>
@@ -694,8 +704,8 @@ function ModalNueva({ clientes, productos, onClose, onSave }) {
                 value={notas}
                 onChange={e=>setNotas(e.target.value)}
                 placeholder="Colores específicos, tallas, instrucciones de entrega, observaciones..."
-                rows={3}
-                style={{...inp,resize:'vertical',minHeight:'72px',lineHeight:'1.5'}}
+                rows={2}
+                style={{...inp,resize:'vertical',minHeight:'54px',lineHeight:'1.5'}}
               />
             </div>
 
@@ -722,47 +732,51 @@ function ModalNueva({ clientes, productos, onClose, onSave }) {
                     <input type="number" min="0" step="0.01" value={abono} onChange={e=>setAbono(e.target.value)} placeholder="0.00" style={{...inp,flex:1}}/>
                   </div>
                 </div>
-                {abonoMetodo&&(
-                  <>
+                {/* Tasa solo cuando NO es EUR — en EUR el precio ya está en EUR */}
+                {abonoMetodo && abonoDiv !== 'EUR' && (
                   <div>
-                    <label style={lbl}>Tasa BS / {abonoDiv==='BS'?'EUR':abonoDiv}</label>
+                    <label style={lbl}>Tasa BS / {abonoDiv}</label>
                     <input type="number" value={abonoTasa} onChange={e=>setAT(e.target.value)} placeholder="Ej: 96.50" style={inp}/>
                   </div>
+                )}
+                {abonoMetodo && (
                   <div>
                     <label style={lbl}>Referencia</label>
                     <input value={abonoRef} onChange={e=>setAR(e.target.value)} placeholder="Últimos 6 dígitos" style={inp}/>
                   </div>
-                  </>
                 )}
               </div>
 
-              {/* Preview abono */}
+              {/* Preview abono — siempre al fondo del contenedor scrollable */}
               {(()=>{
                 const ma=parseFloat(abono)||0; const ta=parseFloat(abonoTasa)||0;
-                if(ma<=0) return null;
+                if(!abonoMetodo || ma<=0) return null;
                 let abonoEUR=0;
-                if(abonoDiv==='BS')              abonoEUR=ta>0?ma/ta:0;
-                else if(abonoDiv==='EUR')         abonoEUR=ma;
-                else                              abonoEUR=ma*0.93;
+                if(abonoDiv==='EUR')              abonoEUR=ma;          // EUR directo, sin tasa
+                else if(abonoDiv==='BS')           abonoEUR=ta>0?ma/ta:0;
+                else                               abonoEUR=ma*0.93;    // USD/USDT aprox
                 const falta=totalCalc-abonoEUR;
                 return(
                   <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'6px',padding:'10px 14px',borderTop:'1px solid var(--border)',background:'var(--bg2)'}}>
                     <div style={{textAlign:'center'}}>
-                      <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#555',marginBottom:'3px',textTransform:'uppercase'}}>Total</div>
+                      <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#555',marginBottom:'3px',textTransform:'uppercase'}}>Total pedido</div>
                       <div style={{fontFamily:'DM Mono,monospace',fontSize:'14px',fontWeight:700,color:'var(--red)'}}>€ {fmtNum(totalCalc)}</div>
                     </div>
                     <div style={{textAlign:'center'}}>
                       <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#555',marginBottom:'3px',textTransform:'uppercase'}}>Abonando</div>
                       <div style={{fontFamily:'DM Mono,monospace',fontSize:'14px',fontWeight:700,color:'var(--green)'}}>€ {fmtNum(abonoEUR)}</div>
+                      {abonoDiv!=='EUR'&&ta>0&&<div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888'}}>{abonoDiv} {fmtNum(ma)}</div>}
                     </div>
                     {falta>0.01
-                      ?<div style={{textAlign:'center',background:'#fff8e1',padding:'4px',borderRadius:'2px'}}>
+                      ?<div style={{textAlign:'center',background:'#fff8e1',padding:'6px 4px',border:'1px solid #f59e0b44'}}>
                         <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#92400e',marginBottom:'3px',textTransform:'uppercase'}}>Falta</div>
                         <div style={{fontFamily:'DM Mono,monospace',fontSize:'14px',fontWeight:700,color:'#f59e0b'}}>€ {fmtNum(falta)}</div>
+                        {abonoDiv==='BS'&&ta>0&&<div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888'}}>Bs {fmtNum(falta*ta)}</div>}
                       </div>
-                      :<div style={{textAlign:'center',background:'var(--green-soft)',padding:'4px',borderRadius:'2px'}}>
+                      :<div style={{textAlign:'center',background:'var(--green-soft)',padding:'6px 4px',border:'1px solid rgba(26,122,60,.2)'}}>
                         <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'var(--green)',marginBottom:'3px',textTransform:'uppercase'}}>Vuelto</div>
                         <div style={{fontFamily:'DM Mono,monospace',fontSize:'14px',fontWeight:700,color:'var(--green)'}}>€ {fmtNum(-falta)}</div>
+                        {abonoDiv==='BS'&&ta>0&&<div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'var(--green)'}}>Bs {fmtNum(-falta*ta)}</div>}
                       </div>
                     }
                   </div>
