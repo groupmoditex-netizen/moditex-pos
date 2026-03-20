@@ -1,333 +1,262 @@
 'use client';
 import { colorHex } from '@/utils/colores';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useRef } from 'react';
 import Shell from '@/components/Shell';
-import ProductSearch from '@/components/ProductSearch';
 import CatalogoExplorer from '@/components/CatalogoExplorer';
-import BarcodeScanner from '@/components/BarcodeScanner';
 import { useAppData } from '@/lib/AppContext';
 
-const inpS={width:'100%',padding:'9px 12px',background:'var(--bg2)',border:'1px solid var(--border)',fontFamily:'Poppins,sans-serif',fontSize:'12px',outline:'none'};
-const lblS={fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.16em',textTransform:'uppercase',color:'#555',display:'block',marginBottom:'5px'};
+/* ─── Motivos de salida sin venta ─────────────────────────────────── */
+const MOTIVOS_SALIDA = [
+  { id:'cortesia',    label:'Cortesía',       icon:'🎁',  color:'#ec4899', desc:'Regalo o muestra sin cobro al cliente' },
+  { id:'descarte',    label:'Descarte',       icon:'🗑️',  color:'#ef4444', desc:'Prenda dañada, defectuosa o en mal estado' },
+  { id:'muestra',     label:'Muestra',        icon:'👀',  color:'#8b5cf6', desc:'Enviada para evaluación o exhibición' },
+  { id:'prestamo',    label:'Préstamo',       icon:'🤝',  color:'#f59e0b', desc:'Prenda prestada temporalmente' },
+  { id:'consignacion',label:'Consignación',   icon:'📤',  color:'#06b6d4', desc:'Enviada en consignación a terceros' },
+  { id:'perdida',     label:'Pérdida',        icon:'❓',  color:'#6b7280', desc:'Extravío, robo o desaparición' },
+  { id:'devolucion',  label:'Devolución',     icon:'↩️',  color:'#3b82f6', desc:'Regresada al proveedor o fabricante' },
+  { id:'ajuste',      label:'Ajuste −',       icon:'⚖️',  color:'#f97316', desc:'Corrección negativa de inventario' },
+];
 
-/* ── Cada item del carrito tiene: sku, modelo, color, talla, disponible,
-       precioDetal, precioMayor, qty, tipoVenta ('DETAL'|'MAYOR') ── */
+const inp = {width:'100%',padding:'9px 11px',background:'var(--bg2)',border:'1px solid var(--border)',fontFamily:'Poppins,sans-serif',fontSize:'13px',outline:'none',boxSizing:'border-box'};
+const lbl = {fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.16em',textTransform:'uppercase',color:'#666',display:'block',marginBottom:'5px'};
+function fmtNum(n){return Number(n||0).toLocaleString('es-VE',{minimumFractionDigits:0,maximumFractionDigits:0});}
 
 export default function SalidaPage() {
-  const { data, recargar } = useAppData() || {};
+  const { data, recargar } = useAppData()||{};
   const productos = data?.productos || [];
-  const clientes  = data?.clientes  || [];
 
-  const [cart, setCart]           = useState([]);
-  const [fecha, setFecha]         = useState(()=>new Date().toISOString().split('T')[0]);
-  const [concepto, setConcepto]   = useState('');
-  const [cliNombre, setCliNombre] = useState('');
-  const [cliId, setCliId]         = useState('');
-  const [cliQuery, setCliQuery]   = useState('');
-  const [cliRes, setCliRes]       = useState([]);
-  const [cliOpen, setCliOpen]     = useState(false);
-  const [guardando, setGuardando] = useState(false);
-  const [msg, setMsg]             = useState(null);
-  const [confirmar, setConfirmar] = useState(false);
-  const [catalogo, setCatalogo]   = useState(false);
-  const [ventaDirecta, setVD]     = useState(false);
+  const [motivo,   setMotivo]   = useState('descarte');
+  const [fecha,    setFecha]    = useState(()=>new Date().toISOString().split('T')[0]);
+  const [contacto, setContacto] = useState('');
+  const [notas,    setNotas]    = useState('');
+  const [cart,     setCart]     = useState([]);
+  const [catalogo, setCatalogo] = useState(false);
+  const [guardando,setGuard]    = useState(false);
+  const [msg,      setMsg]      = useState(null);
 
-  // Búsqueda de cliente
-  useEffect(()=>{
-    if(ventaDirecta||!cliQuery||cliQuery.length<2){setCliRes([]);setCliOpen(false);return;}
-    const q=cliQuery.toLowerCase();
-    const m=clientes.filter(c=>`${c.nombre} ${c.cedula||''} ${c.telefono||''}`.toLowerCase().includes(q)).slice(0,6);
-    setCliRes(m); setCliOpen(m.length>0);
-  },[cliQuery,clientes,ventaDirecta]);
+  /* ── Scanner ─────────────────────────────────────── */
+  const skuRef     = useRef(null);
+  const autoTimer  = useRef(null);
+  const lastCharMs = useRef(0);
+  const [skuVal, setSkuVal] = useState('');
+  const [skuMsg, setSkuMsg] = useState(null);
 
-  function toggleVD(){
-    const n=!ventaDirecta; setVD(n);
-    if(n){setCliNombre('CONSUMIDOR FINAL');setCliId('');setCliQuery('CONSUMIDOR FINAL');}
-    else{setCliNombre('');setCliId('');setCliQuery('');}
+  function agregarPorSku(raw) {
+    const sku=(raw||'').trim().toUpperCase();
+    if(!sku) return;
+    setSkuVal('');
+    if(autoTimer.current){ clearTimeout(autoTimer.current); autoTimer.current=null; }
+    const prod=productos.find(p=>p.sku?.toUpperCase()===sku);
+    if(!prod){ setSkuMsg({t:'err',m:`⚠ SKU no encontrado: ${sku}`}); setTimeout(()=>setSkuMsg(null),3000); setTimeout(()=>skuRef.current?.focus(),50); return; }
+    if(prod.disponible<=0){ setSkuMsg({t:'err',m:`⚠ Sin stock: ${prod.modelo}`}); setTimeout(()=>setSkuMsg(null),3000); return; }
+    setCart(prev=>{ const ex=prev.find(x=>x.sku===prod.sku); if(ex) return prev.map(x=>x.sku===prod.sku?{...x,qty:Math.min(x.qty+1,prod.disponible)}:x); return [...prev,{...prod,qty:1}]; });
+    setSkuMsg({t:'ok',m:`✓ ${prod.modelo} — ${prod.color}`});
+    setTimeout(()=>setSkuMsg(null),2000); setTimeout(()=>skuRef.current?.focus(),30);
+  }
+  function handleSkuChange(e){
+    const val=e.target.value; setSkuVal(val);
+    const now=Date.now(); const gap=now-lastCharMs.current; lastCharMs.current=now;
+    if(gap<50&&val.trim()){ if(autoTimer.current) clearTimeout(autoTimer.current); autoTimer.current=setTimeout(()=>{ const cur=skuRef.current?.value||val; if(cur.trim()) agregarPorSku(cur); },100); }
   }
 
-  // Precio de un item según su tipoVenta
-  function precioItem(p, tv){ return tv==='MAYOR'?(p.precioMayor||0):(p.precioDetal||0); }
-
-  // Agregar al carrito (desde buscador) — toma tipo venta por defecto DETAL
-  function addToCart(p){
-    const pa = productos.find(x=>x.sku===p.sku)||p;
-    if(pa.disponible<=0){showMsg('error',`Sin stock: ${pa.modelo} — ${pa.color}`);return;}
-    setCart(prev=>{
-      const ex=prev.find(x=>x.sku===p.sku);
-      if(ex){
-        if(ex.qty>=pa.disponible){showMsg('error',`Stock máximo: ${pa.disponible}`);return prev;}
-        return prev.map(x=>x.sku===p.sku?{...x,qty:x.qty+1}:x);
-      }
-      return[...prev,{...pa,qty:1,tipoVenta:'DETAL'}];
-    });
+  function addFromCatalog(p, qty) {
+    const prod=productos.find(x=>x.sku===p.sku)||p;
+    if(prod.disponible<=0){ setMsg({t:'error',m:`Sin stock: ${prod.modelo}`}); return; }
+    setCart(prev=>{ const ex=prev.find(x=>x.sku===p.sku); if(ex) return prev.map(x=>x.sku===p.sku?{...x,qty:Math.min(x.qty+qty,prod.disponible)}:x); return [...prev,{...prod,qty:Math.min(qty,prod.disponible)}]; });
   }
-
-  // Agregar desde el catálogo (ya incluye tipoVenta elegido)
-  function addFromCatalog(p, qty, tv){
-    const pa=productos.find(x=>x.sku===p.sku)||p;
-    if(pa.disponible<=0){showMsg('error',`Sin stock: ${pa.modelo} — ${pa.color}`);return;}
-    setCart(prev=>{
-      const ex=prev.find(x=>x.sku===p.sku);
-      if(ex) return prev.map(x=>x.sku===p.sku?{...x,qty:x.qty+qty,tipoVenta:tv}:x);
-      return[...prev,{...pa,qty,tipoVenta:tv}];
-    });
+  function changeQty(sku,d){
+    setCart(prev=>prev.map(x=>{ if(x.sku!==sku) return x; const max=productos.find(p=>p.sku===sku)?.disponible||999; return {...x,qty:Math.max(1,Math.min(x.qty+d,max))}; }));
   }
+  function removeItem(sku){ setCart(prev=>prev.filter(x=>x.sku!==sku)); }
+  const totalUds = cart.reduce((a,i)=>a+i.qty, 0);
 
-  function setItemTV(sku,tv){setCart(prev=>prev.map(x=>x.sku===sku?{...x,tipoVenta:tv}:x));}
-  function changeQty(sku,delta){
-    setCart(prev=>prev.map(x=>{
-      if(x.sku!==sku) return x;
-      const nq=Math.max(1,x.qty+delta);
-      if(delta>0&&nq>x.disponible){showMsg('error',`Stock disponible: ${x.disponible}`);return x;}
-      return{...x,qty:nq};
-    }));
-  }
-  function removeItem(sku){setCart(prev=>prev.filter(x=>x.sku!==sku));}
+  const motivoCfg = MOTIVOS_SALIDA.find(m=>m.id===motivo)||MOTIVOS_SALIDA[0];
 
-  // Totales calculados por tipo de venta
-  const totalDetal = cart.reduce((a,i)=>a+(i.tipoVenta==='DETAL'?(i.precioDetal||0)*i.qty:0),0);
-  const totalMayor = cart.reduce((a,i)=>a+(i.tipoVenta==='MAYOR'?(i.precioMayor||0)*i.qty:0),0);
-  const totalVenta = totalDetal + totalMayor;
-  const totalUds   = cart.reduce((a,i)=>a+i.qty,0);
-
-  async function registrar(){
-    if(!cart.length){showMsg('error','Agrega al menos un producto');return;}
-    setGuardando(true);
+  async function registrar() {
+    if(!cart.length){ setMsg({t:'error',m:'Agrega al menos un producto'}); return; }
+    setGuard(true);
+    const conceptoFinal = `${motivoCfg.label}${contacto?' — '+contacto:''}${notas?' | '+notas:''}`;
     try{
-      const lote=cart.map(item=>({
-        sku:item.sku, tipo:'SALIDA', cantidad:item.qty, fecha,
-        concepto: concepto||(ventaDirecta?'Venta directa':''),
-        contacto: ventaDirecta?'CONSUMIDOR FINAL':cliNombre,
-        tipo_venta: item.tipoVenta,
-        precio_venta: precioItem(item, item.tipoVenta),
-        cliente_id: cliId,
-      }));
+      const lote=cart.map(item=>({sku:item.sku,tipo:'SALIDA',cantidad:item.qty,fecha,concepto:conceptoFinal,contacto}));
       const res=await fetch('/api/movimientos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(lote)}).then(r=>r.json());
       if(res.ok){
-        showMsg('success',`✓ Venta de ${totalUds} uds · € ${totalVenta.toFixed(2)}`);
-        setCart([]); setConcepto('');
-        if(!ventaDirecta){setCliNombre('');setCliId('');setCliQuery('');}
-        recargar();
-      } else { showMsg('error',res.error||'Error al guardar'); }
-    }catch(e){showMsg('error','Error de conexión');}
-    setGuardando(false);
+        setMsg({t:'success',m:`✅ Salida registrada: ${totalUds} uds — ${motivoCfg.label}`});
+        setCart([]); setContacto(''); setNotas(''); recargar();
+      } else setMsg({t:'error',m:res.error||'Error al guardar'});
+    }catch(e){ setMsg({t:'error',m:'Error de conexión'}); }
+    setGuard(false); setTimeout(()=>setMsg(null),5000);
   }
-
-  function showMsg(type,text){setMsg({type,text});setTimeout(()=>setMsg(null),5000);}
-
 
   return (
     <Shell title="Nueva Salida">
-      {catalogo&&<CatalogoExplorer productos={productos} modo="salida" tipoVenta="DETAL" onAdd={(p,qty,tv)=>{addFromCatalog(p,qty,tv);}} onClose={()=>setCatalogo(false)}/>}
-      <div style={{maxWidth:'800px'}}>
+      {catalogo&&<CatalogoExplorer productos={productos} modo="salida" onAdd={addFromCatalog} onClose={()=>setCatalogo(false)}/>}
 
-        {/* Header */}
-        <div style={{display:'flex',alignItems:'center',gap:'14px',padding:'12px 16px',background:'var(--bg2)',border:'1px solid var(--border)',borderLeft:'3px solid var(--red)',marginBottom:'14px'}}>
-          <span style={{fontSize:'18px'}}>↓</span>
-          <div>
-            <div style={{fontSize:'12px',fontWeight:700,color:'var(--red)',textTransform:'uppercase',letterSpacing:'.03em'}}>Registro de Salida — Múltiples Productos</div>
-            <div style={{fontSize:'11px',color:'#666',fontFamily:'DM Mono,monospace'}}>Cada producto puede ser Detal o Mayor por separado</div>
-          </div>
-        </div>
-
-        {/* ⚡ Toggle Venta Directa */}
-        <div onClick={toggleVD} style={{display:'flex',alignItems:'center',gap:'14px',padding:'11px 16px',background:ventaDirecta?'rgba(26,122,60,.06)':'var(--bg2)',border:`1px solid ${ventaDirecta?'rgba(26,122,60,.3)':'var(--border)'}`,cursor:'pointer',marginBottom:'14px',transition:'all .15s'}}>
-          <div style={{width:'36px',height:'20px',background:ventaDirecta?'var(--green)':'#ccc',borderRadius:'10px',position:'relative',transition:'background .2s',flexShrink:0}}>
-            <div style={{width:'14px',height:'14px',background:'#fff',borderRadius:'50%',position:'absolute',top:'3px',left:ventaDirecta?'19px':'3px',transition:'left .2s',boxShadow:'0 1px 3px rgba(0,0,0,.2)'}}/>
-          </div>
-          <div>
-            <div style={{fontSize:'12px',fontWeight:700,color:ventaDirecta?'var(--green)':'#444'}}>⚡ Venta Directa — Consumidor Final</div>
-            <div style={{fontSize:'10px',color:'#777',fontFamily:'DM Mono,monospace'}}>{ventaDirecta?'Activo — sin datos del cliente':'Activa para registrar sin datos del cliente'}</div>
-          </div>
-          {ventaDirecta&&<span style={{marginLeft:'auto',background:'var(--green)',color:'#fff',fontFamily:'DM Mono,monospace',fontSize:'9px',padding:'2px 9px',flexShrink:0}}>ACTIVO</span>}
-        </div>
-
-        {/* Mensaje */}
-        {msg&&<div style={{padding:'10px 14px',marginBottom:'12px',background:msg.type==='error'?'var(--red-soft)':'var(--green-soft)',border:`1px solid ${msg.type==='error'?'rgba(217,30,30,.3)':'rgba(26,122,60,.3)'}`,color:msg.type==='error'?'var(--red)':'var(--green)',fontFamily:'DM Mono,monospace',fontSize:'11px'}}>{msg.text}</div>}
-
-        {/* Datos — cliente o consumidor final */}
-        {!ventaDirecta ? (
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px',marginBottom:'14px'}}>
-            <div style={{position:'relative'}}>
-              <label style={lblS}>Cliente</label>
-              <input type="text" placeholder="Buscar cliente..." value={cliQuery}
-                onChange={e=>{setCliQuery(e.target.value);setCliNombre(e.target.value);setCliId('');}}
-                onFocus={()=>cliRes.length>0&&setCliOpen(true)}
-                onBlur={()=>setTimeout(()=>setCliOpen(false),150)}
-                style={inpS} autoComplete="off"/>
-              {cliId&&<span style={{position:'absolute',right:'10px',top:'62%',fontFamily:'DM Mono,monospace',fontSize:'9px',color:'var(--green)'}}>✓</span>}
-              {cliOpen&&cliRes.length>0&&(
-                <div style={{position:'absolute',top:'100%',left:0,right:0,background:'var(--surface)',border:'1px solid var(--border-strong)',borderTop:'none',zIndex:999,maxHeight:'200px',overflowY:'auto',boxShadow:'0 8px 24px rgba(0,0,0,.1)'}}>
-                  {cliRes.map(c=><div key={c.id} onMouseDown={e=>{e.preventDefault();setCliNombre(c.nombre);setCliId(c.id);setCliQuery(c.nombre);setCliOpen(false);}} style={{padding:'9px 12px',cursor:'pointer',borderBottom:'1px solid var(--border)',fontSize:'12px'}} onMouseEnter={e=>e.currentTarget.style.background='var(--bg2)'} onMouseLeave={e=>e.currentTarget.style.background=''}><strong>{c.nombre}</strong><span style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#666',marginLeft:'8px'}}>{c.id}</span></div>)}
-                </div>
-              )}
-            </div>
-            <div><label style={lblS}>Fecha *</label><input type="date" value={fecha} onChange={e=>setFecha(e.target.value)} style={inpS}/></div>
-            <div style={{gridColumn:'span 2'}}><label style={lblS}>Concepto</label><input type="text" placeholder="Descripción de la venta..." value={concepto} onChange={e=>setConcepto(e.target.value)} style={inpS}/></div>
-          </div>
-        ) : (
-          <div style={{display:'flex',alignItems:'center',gap:'14px',padding:'10px 14px',background:'var(--green-soft)',border:'1px solid rgba(26,122,60,.2)',marginBottom:'14px'}}>
-            <span style={{fontFamily:'DM Mono,monospace',fontSize:'11px',color:'var(--green)',fontWeight:700}}>👤 CONSUMIDOR FINAL</span>
-            <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:'8px'}}>
-              <label style={{...lblS,marginBottom:0,color:'#555'}}>Fecha:</label>
-              <input type="date" value={fecha} onChange={e=>setFecha(e.target.value)} style={{...inpS,width:'auto',padding:'6px 9px'}}/>
-            </div>
-          </div>
-        )}
-
-        {/* AVISO sobre tipo de venta por item */}
-        <div style={{padding:'8px 13px',background:'var(--blue-soft)',border:'1px solid rgba(20,64,176,.18)',marginBottom:'10px',fontFamily:'DM Mono,monospace',fontSize:'10px',color:'var(--blue)',lineHeight:1.6}}>
-          💡 Cada producto tiene su propio selector <strong>D (Detal)</strong> / <strong>M (Mayor)</strong>. Puedes mezclar tipos en la misma venta.
-        </div>
-
-        {/* Buscador + Scanner */}
-        <BarcodeScanner productos={productos} onAdd={addToCart} disabled={guardando}/>
-        <div style={{display:'flex',gap:'8px',marginBottom:'8px'}}>
-          <div style={{flex:1}}><ProductSearch productos={productos} onAdd={addToCart} modo="salida"/></div>
-          <button onClick={()=>setCatalogo(true)} style={{padding:'8px 14px',background:'var(--bg2)',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:600,letterSpacing:'.05em',textTransform:'uppercase',color:'var(--ink)',whiteSpace:'nowrap',flexShrink:0}}>
-            ⊞ Catálogo
-          </button>
-        </div>
-
-        {/* Carrito */}
-        <div style={{background:'var(--bg2)',border:'1px solid var(--border)',overflow:'hidden'}}>
-          <div style={{display:'flex',justifyContent:'space-between',padding:'8px 14px',borderBottom:'1px solid var(--border)',fontFamily:'DM Mono,monospace',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'#555'}}>
-            <span>Productos a despachar</span>
-            <span style={{color:'var(--red)'}}>{cart.length} ref · {totalUds} uds</span>
-          </div>
-
-          {cart.length===0?(
-            <div style={{padding:'36px',textAlign:'center',color:'#888',fontSize:'13px'}}>Busca o explora el catálogo 👆</div>
-          ):cart.map(item=>{
-            const precio = precioItem(item,item.tipoVenta);
-            const dot    = colorHex(item.color);
-            return(
-              <div key={item.sku} style={{display:'grid',gridTemplateColumns:'1fr auto auto auto auto',alignItems:'center',gap:'10px',padding:'10px 14px',borderBottom:'1px solid var(--border)'}}>
-                {/* Info producto */}
-                <div style={{minWidth:0}}>
-                  <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'1px'}}>
-                    <span style={{width:'8px',height:'8px',borderRadius:'50%',background:dot,border:'1px solid rgba(0,0,0,.1)',flexShrink:0}}/>
-                    <span style={{fontSize:'12px',fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.modelo} — {item.color}{item.talla&&item.talla!=='UNICA'?` T:${item.talla}`:''}</span>
-                  </div>
-                  <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'var(--blue)'}}>{item.sku} · Stock: {item.disponible}</div>
-                  <div style={{fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#555',marginTop:'1px'}}>
-                    D: €{item.precioDetal?.toFixed(2)} · M: €{item.precioMayor?.toFixed(2)} →
-                    <strong style={{color:item.tipoVenta==='MAYOR'?'var(--warn)':'var(--blue)',marginLeft:'3px'}}>€{precio.toFixed(2)} c/u</strong>
-                  </div>
-                </div>
-
-                {/* Toggle D / M por item */}
-                <div style={{display:'flex',border:'1px solid var(--border)',overflow:'hidden',flexShrink:0}}>
-                  {['DETAL','MAYOR'].map(tv=>(
-                    <button key={tv} onClick={()=>setItemTV(item.sku,tv)}
-                      style={{
-                        padding:'5px 9px', border:'none', cursor:'pointer',
-                        fontFamily:'DM Mono,monospace', fontSize:'9px', fontWeight:700,
-                        letterSpacing:'.06em', textTransform:'uppercase',
-                        background: item.tipoVenta===tv ? (tv==='DETAL'?'var(--blue)':'var(--warn)') : 'var(--bg3)',
-                        color: item.tipoVenta===tv ? '#fff' : '#777',
-                        transition:'all .12s',
-                      }}>
-                      {tv==='DETAL'?'D':'M'}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Cantidad */}
-                <div style={{display:'flex',alignItems:'center',border:'1px solid var(--border)',overflow:'hidden',flexShrink:0}}>
-                  <button onClick={()=>changeQty(item.sku,-1)} style={{width:'28px',height:'28px',background:'var(--bg3)',border:'none',cursor:'pointer',fontSize:'15px',display:'flex',alignItems:'center',justifyContent:'center'}}>−</button>
-                  <span style={{fontFamily:'DM Mono,monospace',fontSize:'14px',fontWeight:700,minWidth:'32px',textAlign:'center',borderLeft:'1px solid var(--border)',borderRight:'1px solid var(--border)',lineHeight:'28px'}}>{item.qty}</span>
-                  <button onClick={()=>changeQty(item.sku,1)} style={{width:'28px',height:'28px',background:'var(--bg3)',border:'none',cursor:'pointer',fontSize:'15px',display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>
-                </div>
-
-                {/* Subtotal */}
-                <div style={{fontFamily:'DM Mono,monospace',fontSize:'13px',fontWeight:700,minWidth:'70px',textAlign:'right',flexShrink:0}}>€{(precio*item.qty).toFixed(2)}</div>
-
-                {/* Eliminar */}
-                <button onClick={()=>removeItem(item.sku)} style={{width:'24px',height:'24px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontSize:'12px',color:'#888',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>✕</button>
-              </div>
-            );
-          })}
-
-          {/* Footer carrito */}
-          <div style={{padding:'12px 14px',background:'var(--bg3)',borderTop:'1px solid var(--border)'}}>
-            {cart.length>0&&(
-              <div style={{display:'flex',gap:'18px',flexWrap:'wrap',marginBottom:'10px',fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#555'}}>
-                {totalDetal>0&&<span>🏷️ Detal: <strong style={{color:'var(--blue)'}}>€{totalDetal.toFixed(2)}</strong></span>}
-                {totalMayor>0&&<span>📦 Mayor: <strong style={{color:'var(--warn)'}}>€{totalMayor.toFixed(2)}</strong></span>}
-                <span>🛒 Unidades: <strong>{totalUds}</strong></span>
-              </div>
-            )}
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-              <div>
-                <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#555',letterSpacing:'.12em',textTransform:'uppercase'}}>Total venta</div>
-                <div style={{fontFamily:'Playfair Display,serif',fontSize:'24px',fontWeight:700,lineHeight:1.1}}>€ {totalVenta.toFixed(2)}</div>
-              </div>
-              <div style={{display:'flex',gap:'9px'}}>
-                <button onClick={()=>setCart([])} style={{padding:'8px 14px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:600,textTransform:'uppercase',letterSpacing:'.06em'}}>Limpiar</button>
-                <button onClick={()=>{if(!cart.length){showMsg('error','Agrega al menos un producto');return;}if(!ventaDirecta&&!cliNombre.trim()){showMsg('error','Indica el cliente');return;}setConfirmar(true);}} disabled={guardando||!cart.length}
-                  style={{padding:'9px 22px',background:ventaDirecta?'var(--green)':'var(--red)',color:'#fff',border:'none',cursor:guardando?'not-allowed':'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase',minWidth:'200px',opacity:guardando?.6:1}}>
-                  {guardando?'⏳ Guardando...':`${ventaDirecta?'⚡ Venta Directa':'✓ Registrar Salida'}`}
-                </button>
-              </div>
-            </div>
-          </div>
+      {/* Header */}
+      <div style={{display:'flex',alignItems:'center',gap:'12px',padding:'13px 18px',background:'var(--bg2)',border:'1px solid var(--border)',borderLeft:'4px solid var(--red)',marginBottom:'20px'}}>
+        <span style={{fontSize:'22px'}}>↓</span>
+        <div>
+          <div style={{fontFamily:'DM Mono,monospace',fontSize:'10px',fontWeight:700,color:'var(--red)',textTransform:'uppercase',letterSpacing:'.08em'}}>Registro de Salida — Sin Venta</div>
+          <div style={{fontSize:'11px',color:'#666',marginTop:'2px'}}>Cortesías, descartes, muestras, préstamos y ajustes de inventario</div>
         </div>
       </div>
 
-      {/* ── Modal de confirmación ── */}
-      {confirmar && (
-        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}
-          onClick={e=>{if(e.target===e.currentTarget)setConfirmar(false);}}>
-          <div style={{background:'var(--bg)',border:'1px solid var(--border-strong)',width:'100%',maxWidth:'500px',borderTop:'3px solid var(--red)'}}>
-            <div style={{padding:'16px 20px',borderBottom:'1px solid var(--border)'}}>
-              <div style={{fontFamily:'Playfair Display,serif',fontSize:'17px',fontWeight:700}}>{ventaDirecta?'⚡ Confirmar Venta Directa':'Confirmar Salida'}</div>
-              <div style={{fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#666',marginTop:'3px'}}>
-                {ventaDirecta?'Consumidor final':'Cliente: '+(cliNombre||'—')}
-              </div>
+      {msg&&(
+        <div style={{padding:'11px 16px',marginBottom:'16px',background:msg.t==='error'?'var(--red-soft)':'var(--green-soft)',borderLeft:`4px solid ${msg.t==='error'?'var(--red)':'var(--green)'}`,color:msg.t==='error'?'var(--red)':'var(--green)',fontFamily:'DM Mono,monospace',fontSize:'11px',fontWeight:700}}>
+          {msg.m}
+        </div>
+      )}
+
+      <div style={{maxWidth:'820px',display:'flex',flexDirection:'column',gap:'16px'}}>
+
+        {/* ── Motivo de salida ── */}
+        <div>
+          <label style={{...lbl,marginBottom:'10px'}}>Motivo de salida</label>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(110px,1fr))',gap:'8px'}}>
+            {MOTIVOS_SALIDA.map(m=>(
+              <button key={m.id} onClick={()=>setMotivo(m.id)}
+                style={{padding:'12px 8px',background:motivo===m.id?m.color:'var(--surface)',color:motivo===m.id?'#fff':'var(--ink)',
+                  border:`1px solid ${motivo===m.id?m.color:'var(--border)'}`,cursor:'pointer',textAlign:'center',transition:'all .15s',
+                  borderTop: motivo===m.id?`3px solid rgba(255,255,255,.4)`:`3px solid ${m.color}`}}>
+                <div style={{fontSize:'18px',marginBottom:'4px'}}>{m.icon}</div>
+                <div style={{fontFamily:'DM Mono,monospace',fontSize:'8.5px',fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase',lineHeight:1.2}}>{m.label}</div>
+              </button>
+            ))}
+          </div>
+          <div style={{marginTop:'8px',padding:'8px 12px',background:'var(--red-soft)',border:'1px solid rgba(217,30,30,.15)',borderLeft:`3px solid ${motivoCfg.color}`,fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#555'}}>
+            {motivoCfg.icon} <strong style={{color:motivoCfg.color}}>{motivoCfg.label}:</strong> {motivoCfg.desc}
+          </div>
+        </div>
+
+        {/* ── Datos del registro ── */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
+          <div>
+            <label style={lbl}>📅 Fecha</label>
+            <input type="date" value={fecha} onChange={e=>setFecha(e.target.value)} style={inp}/>
+          </div>
+          <div>
+            <label style={lbl}>
+              {motivo==='cortesia'?'🎁 Destinatario':
+               motivo==='prestamo'?'🤝 Prestado a':
+               motivo==='consignacion'?'📤 Enviado a':
+               motivo==='devolucion'?'🏭 Devuelto a':
+               motivo==='descarte'?'📋 Causa del descarte':
+               '📋 Referencia / Responsable'}
+            </label>
+            <input value={contacto} onChange={e=>setContacto(e.target.value)}
+              placeholder={
+                motivo==='cortesia'?'Nombre del cliente / persona...':
+                motivo==='prestamo'?'¿A quién se presta?':
+                motivo==='consignacion'?'Tienda o consignatario...':
+                motivo==='devolucion'?'Proveedor o fabricante...':
+                motivo==='descarte'?'Rotura, mancha, defecto...':
+                motivo==='perdida'?'Descripción de la pérdida...':
+                'Opcional...'
+              }
+              style={inp}/>
+          </div>
+        </div>
+
+        <div>
+          <label style={lbl}>📝 Notas adicionales</label>
+          <input value={notas} onChange={e=>setNotas(e.target.value)} placeholder="Observaciones, número de referencia, detalles..." style={inp}/>
+        </div>
+
+        {/* ── Scanner + catálogo ── */}
+        <div>
+          <label style={{...lbl,marginBottom:'8px'}}>Agregar productos</label>
+          <div style={{display:'flex'}}>
+            <div style={{display:'flex',alignItems:'center',gap:'10px',flex:1,background:'#111',border:'1px solid #333',borderRight:'none',padding:'10px 14px'}}>
+              <span style={{fontSize:'18px',flexShrink:0}}>🔫</span>
+              <input ref={skuRef} value={skuVal} onChange={handleSkuChange}
+                onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();agregarPorSku(skuVal);}}}
+                placeholder="Escanea el código de barras — se agrega automáticamente…"
+                autoComplete="off" spellCheck={false}
+                style={{background:'none',border:'none',outline:'none',fontFamily:'DM Mono,monospace',fontSize:'12px',color:'#fff',width:'100%',letterSpacing:'.04em'}}/>
             </div>
-            <div style={{padding:'16px 20px',maxHeight:'280px',overflowY:'auto'}}>
-              {cart.map(item=>{
-                const precio=precioItem(item,item.tipoVenta);
+            <button onClick={()=>setCatalogo(true)}
+              style={{padding:'10px 16px',background:'var(--red)',color:'#fff',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'.04em',flexShrink:0,whiteSpace:'nowrap'}}>
+              ⊞ Catálogo
+            </button>
+          </div>
+          {skuMsg&&(
+            <div style={{padding:'7px 12px',marginTop:'6px',fontFamily:'DM Mono,monospace',fontSize:'10px',fontWeight:700,background:skuMsg.t==='ok'?'var(--green-soft)':'var(--red-soft)',color:skuMsg.t==='ok'?'var(--green)':'var(--red)',borderLeft:`3px solid ${skuMsg.t==='ok'?'var(--green)':'var(--red)'}`}}>
+              {skuMsg.m}
+            </div>
+          )}
+        </div>
+
+        {/* ── Lista de productos ── */}
+        <div style={{background:'var(--surface)',border:'1px solid var(--border)',overflow:'hidden'}}>
+          <div style={{padding:'10px 14px',background:'var(--bg2)',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <span style={{fontFamily:'DM Mono,monospace',fontSize:'9px',letterSpacing:'.1em',textTransform:'uppercase',color:'#555'}}>Productos a despachar</span>
+            <div style={{display:'flex',gap:'12px',alignItems:'center'}}>
+              <span style={{fontFamily:'DM Mono,monospace',fontSize:'10px',color:totalUds>0?'var(--red)':'#aaa',fontWeight:700}}>{totalUds} uds</span>
+              {cart.length>0&&<button onClick={()=>setCart([])} style={{padding:'2px 8px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#aaa'}}>✕ LIMPIAR</button>}
+            </div>
+          </div>
+
+          {cart.length===0?(
+            <div style={{padding:'40px 24px',textAlign:'center',color:'#aaa'}}>
+              <div style={{fontSize:'32px',marginBottom:'8px'}}>📦</div>
+              <div style={{fontFamily:'DM Mono,monospace',fontSize:'11px'}}>Escanea o abre el catálogo para agregar productos</div>
+            </div>
+          ):(
+            <>
+              {[...cart].reverse().map(item=>{
+                const dot=colorHex(item.color);
+                const max=productos.find(p=>p.sku===item.sku)?.disponible||item.disponible||0;
+                const excede=item.qty>max;
                 return(
-                  <div key={item.sku} style={{display:'flex',alignItems:'center',gap:'12px',padding:'8px 0',borderBottom:'1px solid var(--border)'}}>
-                    <span style={{width:'10px',height:'10px',borderRadius:'50%',background:colorHex(item.color),border:'1px solid rgba(0,0,0,.12)',flexShrink:0}}/>
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:'13px',fontWeight:600}}>{item.modelo} — {item.color}</div>
-                      <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888'}}>{item.sku} · {item.tipoVenta}</div>
+                  <div key={item.sku} style={{display:'grid',gridTemplateColumns:'1fr auto auto auto',gap:'10px',padding:'10px 14px',borderBottom:`1px solid var(--border)`,alignItems:'center',background:excede?'var(--red-soft)':'transparent'}}>
+                    <div>
+                      <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
+                        <span style={{width:'8px',height:'8px',borderRadius:'50%',background:dot,border:'1px solid rgba(0,0,0,.12)',flexShrink:0}}/>
+                        <span style={{fontSize:'13px',fontWeight:600}}>{item.modelo} — {item.color}</span>
+                        {item.talla&&item.talla!=='UNICA'&&<span style={{fontFamily:'DM Mono,monospace',fontSize:'9px',background:'var(--bg3)',padding:'1px 5px'}}>T:{item.talla}</span>}
+                      </div>
+                      <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888',marginTop:'2px'}}>
+                        {item.sku} · Stock: <strong style={{color:excede?'var(--red)':'var(--blue)'}}>{fmtNum(max)} uds</strong>
+                        {' → '}<strong style={{color:excede?'var(--red)':'var(--green)'}}>{fmtNum(max-item.qty)} uds</strong>
+                        {excede&&<span style={{color:'var(--red)',marginLeft:'8px',fontWeight:700}}>⚠️ EXCEDE STOCK</span>}
+                      </div>
                     </div>
-                    <div style={{textAlign:'right',flexShrink:0}}>
-                      <div style={{fontFamily:'DM Mono,monospace',fontSize:'13px',fontWeight:700,color:'var(--red)'}}>-{item.qty} uds</div>
-                      <div style={{fontFamily:'DM Mono,monospace',fontSize:'11px',color:'#666'}}>€ {(precio*item.qty).toFixed(2)}</div>
+                    <div style={{display:'flex',alignItems:'center',border:`1px solid ${excede?'var(--red)':'var(--border)'}`,flexShrink:0}}>
+                      <button onClick={()=>changeQty(item.sku,-1)} style={{width:'28px',height:'28px',background:'var(--bg3)',border:'none',cursor:'pointer',fontSize:'15px'}}>−</button>
+                      <span style={{fontFamily:'DM Mono,monospace',fontSize:'13px',fontWeight:700,width:'36px',textAlign:'center',borderLeft:'1px solid var(--border)',borderRight:'1px solid var(--border)',lineHeight:'28px',color:excede?'var(--red)':'inherit'}}>{item.qty}</span>
+                      <button onClick={()=>changeQty(item.sku,1)} style={{width:'28px',height:'28px',background:'var(--bg3)',border:'none',cursor:'pointer',fontSize:'15px'}}>+</button>
                     </div>
+                    <div style={{fontFamily:'DM Mono,monospace',fontSize:'11px',fontWeight:700,color:excede?'var(--red)':'var(--red)',minWidth:'50px',textAlign:'right'}}>−{item.qty} uds</div>
+                    <button onClick={()=>removeItem(item.sku)} style={{width:'22px',height:'22px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontSize:'11px',color:'#888'}}>✕</button>
                   </div>
                 );
               })}
-            </div>
-            <div style={{padding:'14px 20px',background:'var(--bg2)',borderTop:'1px solid var(--border)'}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
+              {/* Total */}
+              <div style={{padding:'12px 14px',background:'var(--red-soft)',borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                 <div>
-                  <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#555',textTransform:'uppercase',letterSpacing:'.12em'}}>Total venta</div>
-                  <div style={{fontFamily:'Playfair Display,serif',fontSize:'26px',fontWeight:700}}>€ {totalVenta.toFixed(2)}</div>
+                  <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'var(--red)',textTransform:'uppercase',letterSpacing:'.1em'}}>Total a despachar</div>
+                  <div style={{fontFamily:'Playfair Display,serif',fontSize:'22px',fontWeight:700,color:'var(--red)',lineHeight:1}}>{fmtNum(totalUds)} uds</div>
                 </div>
-                <div style={{fontFamily:'DM Mono,monospace',fontSize:'11px',color:'#666',textAlign:'right'}}>
-                  <div>{totalUds} unidades</div>
-                  {totalDetal>0&&<div style={{color:'var(--blue)'}}>Detal: €{totalDetal.toFixed(2)}</div>}
-                  {totalMayor>0&&<div style={{color:'var(--warn)'}}>Mayor: €{totalMayor.toFixed(2)}</div>}
+                <div style={{textAlign:'right'}}>
+                  <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888'}}>{cart.length} SKU{cart.length!==1?'s':''}</div>
+                  <div style={{fontFamily:'DM Mono,monospace',fontSize:'10px',fontWeight:700,color:motivoCfg.color,marginTop:'3px'}}>{motivoCfg.icon} {motivoCfg.label}</div>
                 </div>
               </div>
-              <div style={{display:'flex',gap:'9px',justifyContent:'flex-end'}}>
-                <button onClick={()=>setConfirmar(false)} style={{padding:'9px 16px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:600,textTransform:'uppercase'}}>Cancelar</button>
-                <button onClick={()=>{setConfirmar(false);registrar();}} disabled={guardando}
-                  style={{padding:'9px 20px',background:ventaDirecta?'var(--green)':'var(--red)',color:'#fff',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'12px',fontWeight:700,textTransform:'uppercase',letterSpacing:'.05em'}}>
-                  {guardando?'⏳ Guardando...':(ventaDirecta?'⚡ Confirmar Venta':'✓ Confirmar Salida')}
-                </button>
-              </div>
-            </div>
-          </div>
+            </>
+          )}
         </div>
-      )}
+
+        {/* ── Botones ── */}
+        <div style={{display:'flex',gap:'10px',justifyContent:'flex-end'}}>
+          <button onClick={()=>setCart([])} style={{padding:'11px 18px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'12px',fontWeight:600}}>
+            Limpiar
+          </button>
+          <button onClick={registrar} disabled={guardando||!cart.length}
+            style={{padding:'11px 28px',background:cart.length?motivoCfg.color:'#ccc',color:'#fff',border:'none',cursor:cart.length?'pointer':'not-allowed',fontFamily:'Poppins,sans-serif',fontSize:'13px',fontWeight:700,textTransform:'uppercase',letterSpacing:'.06em',opacity:guardando?.6:1,transition:'background .2s'}}>
+            {guardando?'⏳ Registrando...`':`↓ REGISTRAR SALIDA · ${fmtNum(totalUds)} UDS`}
+          </button>
+        </div>
+
+      </div>
     </Shell>
   );
 }

@@ -180,10 +180,8 @@ export async function PUT(request) {
 }
 export async function DELETE(req) {
   try {
-    const supabase = await createClient();
     const { id } = await req.json();
     if (!id) return NextResponse.json({ok:false,error:'ID requerido'},{status:400});
-    // Eliminar pagos relacionados primero
     await supabase.from('pagos').delete().eq('comanda_id', id);
     const { error } = await supabase.from('comandas').delete().eq('id', id);
     if (error) return NextResponse.json({ok:false,error:error.message},{status:500});
