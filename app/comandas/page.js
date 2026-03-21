@@ -1355,6 +1355,29 @@ function ComandasInner() {
   function onDelete(){recargar();cargar();}
   function parseProd(cmd){let p=cmd.productos;if(typeof p==='string')try{p=JSON.parse(p);}catch{p=[];}return Array.isArray(p)?p:[];}
 
+  // ── Progreso de empacado (leído de localStorage por comanda) ──────
+  const [empProgMap, setEmpProgMap] = useState({});
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const map = {};
+    comandas.forEach(cmd => {
+      if (cmd.status !== 'empacado') return;
+      try {
+        const saved = localStorage.getItem('emp_' + cmd.id);
+        if (!saved) return;
+        const empMap = JSON.parse(saved);
+        const prods = parseProd(cmd);
+        const total = prods.reduce((a, p) => a + parseInt(p.cant||p.cantidad||1), 0);
+        const empacado = prods.reduce((a, p) => {
+          const sku = (p.sku||'').toUpperCase();
+          return a + Math.min(empMap[sku]||0, parseInt(p.cant||p.cantidad||1));
+        }, 0);
+        if (total > 0) map[cmd.id] = { total, empacado, completo: empacado >= total };
+      } catch {}
+    });
+    setEmpProgMap(map);
+  }, [comandas]);
+
   return (
     <Shell title="Comandas">
       {modal==='nueva'&&<ModalNueva clientes={clientes} productos={productos} onClose={()=>setModal(null)} onSave={onSave}/>}
@@ -1371,7 +1394,7 @@ function ComandasInner() {
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'14px',flexWrap:'wrap',gap:'10px'}}>
         <div>
           <div style={{fontFamily:'Playfair Display,serif',fontSize:'16px',fontWeight:700}}>Comandas</div>
-          <div style={{fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#555',marginTop:'2px'}}>Stock se descuenta al marcar LISTO · Pagos con BS/USD/EUR/USDT</div>
+          <div style={{fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#555',marginTop:'2px'}}>Stock se descuenta al empacar · Pagos con BS/USD/EUR/USDT</div>
         </div>
         <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
           {/* Toggle vista */}
@@ -1504,6 +1527,23 @@ function ComandasInner() {
                 <div style={{width:`${pct}%`,height:'100%',background:pct>=100?'var(--green)':pct>50?'var(--warn)':'var(--red)',borderRadius:'2px'}}/>
               </div>
             )}
+            {/* ── Barra de empacado (solo status=empacado) ── */}
+            {cmd.status==='empacado'&&empProgMap[cmd.id]&&(
+              <div style={{marginTop:'8px',padding:'8px 10px',background:'#eff6ff',border:'1px solid #bfdbfe44',display:'flex',alignItems:'center',gap:'10px'}}>
+                <div style={{flex:1}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'4px'}}>
+                    <span style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#3b82f6',letterSpacing:'.08em',textTransform:'uppercase'}}>📦 Empacado</span>
+                    <span style={{fontFamily:'DM Mono,monospace',fontSize:'9px',fontWeight:700,color:empProgMap[cmd.id].completo?'var(--green)':'#3b82f6'}}>
+                      {empProgMap[cmd.id].empacado}/{empProgMap[cmd.id].total} uds
+                      {empProgMap[cmd.id].completo?' ✓':''}
+                    </span>
+                  </div>
+                  <div style={{height:'4px',background:'#dbeafe',borderRadius:'2px',overflow:'hidden'}}>
+                    <div style={{width:`${Math.round(empProgMap[cmd.id].empacado/empProgMap[cmd.id].total*100)}%`,height:'100%',background:empProgMap[cmd.id].completo?'var(--green)':'#3b82f6',transition:'width .3s',borderRadius:'2px'}}/>
+                  </div>
+                </div>
+              </div>
+            )}
             {(cmd.status==='empacado'||cmd.status==='enviado')&&(
               <div style={{marginTop:'8px',display:'flex',justifyContent:'flex-end'}}>
                 <button onClick={e=>{e.stopPropagation();setTicketModal({cmd});}}
@@ -1584,6 +1624,20 @@ function ComandasInner() {
                         {cmd.precio>0&&(
                           <div style={{height:'3px',background:'var(--border)',borderRadius:'2px',overflow:'hidden',marginBottom:'6px'}}>
                             <div style={{width:`${pct}%`,height:'100%',background:pct>=100?'var(--green)':pct>50?'var(--warn)':'var(--red)',borderRadius:'2px',transition:'width .4s'}}/>
+                          </div>
+                        )}
+                        {/* Barra de empacado en kanban */}
+                        {status==='empacado'&&empProgMap[cmd.id]&&(
+                          <div style={{padding:'5px 7px',background:'#eff6ff',border:'1px solid #bfdbfe55',marginBottom:'5px'}}>
+                            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'3px'}}>
+                              <span style={{fontFamily:'DM Mono,monospace',fontSize:'7px',color:'#3b82f6',letterSpacing:'.06em'}}>📦 EMPACADO</span>
+                              <span style={{fontFamily:'DM Mono,monospace',fontSize:'8px',fontWeight:700,color:empProgMap[cmd.id].completo?'var(--green)':'#3b82f6'}}>
+                                {empProgMap[cmd.id].empacado}/{empProgMap[cmd.id].total}{empProgMap[cmd.id].completo?' ✓':''}
+                              </span>
+                            </div>
+                            <div style={{height:'3px',background:'#dbeafe',borderRadius:'2px',overflow:'hidden'}}>
+                              <div style={{width:`${Math.round(empProgMap[cmd.id].empacado/empProgMap[cmd.id].total*100)}%`,height:'100%',background:empProgMap[cmd.id].completo?'var(--green)':'#3b82f6',borderRadius:'2px'}}/>
+                            </div>
                           </div>
                         )}
                         {/* Ticket button */}

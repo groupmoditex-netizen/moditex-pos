@@ -1,7 +1,7 @@
 'use client';
 import { useState, useMemo } from 'react';
 import Shell from '@/components/Shell';
-import BarcodeScanner from '@/components/BarcodeScanner';
+import ScannerInput from '@/components/ScannerInput';
 import { useAppData } from '@/lib/AppContext';
 import { colorHex } from '@/utils/colores';
 
@@ -157,7 +157,7 @@ export default function EnvioRapidoPage() {
         {/* ── COL 1: Productos ── */}
         <div>
           {/* Scanner */}
-          <BarcodeScanner productos={productos} onAdd={addToCart}/>
+          <ScannerInput productos={productos} onAdd={addToCart}/>
 
           {/* Búsqueda manual */}
           <div style={{ marginBottom:'12px', position:'relative' }}>
