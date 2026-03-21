@@ -3,7 +3,7 @@ import { colorHex } from '@/utils/colores';
 import { useState, useRef } from 'react';
 import Shell from '@/components/Shell';
 import CatalogoExplorer from '@/components/CatalogoExplorer';
-import BarcodeScanner from '@/components/BarcodeScanner';
+import ScannerInput from '@/components/ScannerInput';
 import { useAppData } from '@/lib/AppContext';
 
 /* ─── Motivos de entrada con icono, color y concepto auto ─────────── */
@@ -146,9 +146,10 @@ export default function EntradaPage() {
           <label style={{...lbl,marginBottom:'8px'}}>Agregar productos</label>
           <div style={{display:'flex',gap:'0',alignItems:'stretch'}}>
             <div style={{flex:1}}>
-              <BarcodeScanner
+              <ScannerInput
                 productos={productos}
                 skipStockCheck={true}
+                accentColor="var(--green)"
                 onAdd={(prod, qty = 1) => {
                   setCart(prev => {
                     const ex = prev.find(x => x.sku === prod.sku);

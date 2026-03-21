@@ -8,16 +8,16 @@ import { useAppData } from '@/lib/AppContext';
 import { useAuth } from '@/lib/AuthContext';
 import { fetchApi } from '@/utils/fetchApi';
 import ModalTicketEnvio from '@/components/ModalTicketEnvio';
+import ScannerInput from '@/components/ScannerInput';
 
 /* ─── Constantes ─────────────────────────────────────────────────── */
 const S = {
   pendiente: {bg:'#fff8e1',color:'#f59e0b',border:'#f59e0b',label:'Pendiente',  icon:'🕐'},
-  produccion:{bg:'#eff6ff',color:'#3b82f6',border:'#3b82f6',label:'Producción', icon:'⚙️'},
-  listo:     {bg:'#f0fdf4',color:'#22c55e',border:'#22c55e',label:'Listo',       icon:'✅'},
-  entregado: {bg:'#f9fafb',color:'#6b7280',border:'#9ca3af',label:'Entregado',  icon:'📦'},
+  empacado:  {bg:'#eff6ff',color:'#3b82f6',border:'#3b82f6',label:'Empacado',   icon:'📦'},
+  enviado:   {bg:'#f0fdf4',color:'#22c55e',border:'#22c55e',label:'Enviado',    icon:'🚀'},
   cancelado: {bg:'#fff1f2',color:'#ef4444',border:'#ef4444',label:'Cancelado',  icon:'❌'},
 };
-const FLUJO = ['pendiente','produccion','listo','entregado'];
+const FLUJO = ['pendiente','empacado','enviado'];
 
 const METODOS = [
   {id:'pago_movil',  label:'Pago Móvil',   icon:'📱', divisa:'BS'},
@@ -819,6 +819,43 @@ function ModalGestion({ cmd, productos=[], isAdmin=false, onClose, onSave, onDel
   const [err,      setErr]     = useState('');
   const [deleting, setDeleting]= useState(false);
 
+  // ── Estado de empacado ────────────────────────────────────────────
+  // Guarda cuántas unidades de cada SKU ya fueron empacadas físicamente
+  const [empacadoMap, setEmpacadoMap] = useState(() => {
+    // Inicializar desde localStorage si existe para esta comanda
+    try {
+      const saved = localStorage.getItem('emp_' + cmd.id);
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  });
+
+  function marcarEmpacado(sku, delta) {
+    setEmpacadoMap(prev => {
+      const pedido = parseProd(cmd).find(p => (p.sku||'').toUpperCase() === sku.toUpperCase());
+      const max = parseInt(pedido?.cant || pedido?.cantidad || 1);
+      const cur = prev[sku] || 0;
+      const next = Math.max(0, Math.min(cur + delta, max));
+      const updated = { ...prev, [sku]: next };
+      try { localStorage.setItem('emp_' + cmd.id, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+  }
+
+  function scanEmpacado(prod) {
+    const sku = prod.sku?.toUpperCase() || '';
+    const pedido = parseProd(cmd).find(p => (p.sku||'').toUpperCase() === sku);
+    if (!pedido) return;
+    marcarEmpacado(sku, 1);
+  }
+
+  const prodsParaEmpacar = parseProd(cmd);
+  const totalPedido = prodsParaEmpacar.reduce((a, p) => a + parseInt(p.cant||p.cantidad||1), 0);
+  const totalEmpacado = prodsParaEmpacar.reduce((a, p) => {
+    const sku = (p.sku||'').toUpperCase();
+    return a + Math.min(empacadoMap[sku]||0, parseInt(p.cant||p.cantidad||1));
+  }, 0);
+  const empacadoCompleto = totalEmpacado >= totalPedido && totalPedido > 0;
+
   async function eliminarComanda() {
     if (!window.confirm(`⚠️ ¿Eliminar la comanda de "${cmd.cliente}" (${cmd.id})?\n\nEsta acción no se puede deshacer. Se eliminarán también todos los pagos asociados.`)) return;
     setDeleting(true);
@@ -933,7 +970,7 @@ function ModalGestion({ cmd, productos=[], isAdmin=false, onClose, onSave, onDel
             <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
               <div style={{padding:'10px 12px',background:'#fff8e1',border:'1px solid #f59e0b44',borderLeft:'3px solid #f59e0b',fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#92400e'}}>
                 ✏️ Editando prendas del pedido. Los cambios se guardan al presionar <strong>Guardar cambios</strong>.
-                {cmd.status==='listo'&&<span style={{display:'block',marginTop:'4px',color:'var(--red)',fontWeight:700}}>⚠️ Esta comanda ya está en LISTO. El stock se recalculará al avanzar de nuevo.</span>}
+                {cmd.status==='empacado'&&<span style={{display:'block',marginTop:'4px',color:'var(--red)',fontWeight:700}}>⚠️ Esta comanda ya está en LISTO. El stock se recalculará al avanzar de nuevo.</span>}
               </div>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                 <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#555',letterSpacing:'.14em',textTransform:'uppercase'}}>Prendas ({editItems.length})</div>
@@ -1000,30 +1037,105 @@ function ModalGestion({ cmd, productos=[], isAdmin=false, onClose, onSave, onDel
                 </div>
               )}
 
+              {/* ── Lista de prendas — con progreso de empacado si status=empacado ── */}
               {prods.length>0&&(
-                <div style={{padding:'11px 13px',background:'var(--bg2)',border:'1px solid var(--border)'}}>
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
-                    <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.12em',textTransform:'uppercase',color:'#555'}}>Prendas del pedido</div>
-                    {cmd.status!=='entregado'&&cmd.status!=='cancelado'&&(
+                <div style={{background:'var(--bg2)',border:'1px solid var(--border)'}}>
+                  <div style={{padding:'10px 13px',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                    <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.12em',textTransform:'uppercase',color:'#555'}}>
+                      Prendas del pedido
+                      {cmd.status==='empacado'&&(
+                        <span style={{marginLeft:'8px',color: empacadoCompleto?'var(--green)':'#3b82f6',fontWeight:700}}>
+                          · {totalEmpacado}/{totalPedido} uds
+                        </span>
+                      )}
+                    </div>
+                    {cmd.status!=='enviado'&&cmd.status!=='cancelado'&&(
                       <button onClick={abrirEdicion} style={{padding:'3px 10px',background:'none',border:'1px solid #f59e0b',color:'#f59e0b',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'9px',fontWeight:700}}>
                         ✏️ Editar
                       </button>
                     )}
                   </div>
-                  <div style={{display:'flex',gap:'5px',flexWrap:'wrap'}}>
-                    {prods.map((p,i)=>(
-                      <span key={i} style={{background:'var(--surface)',border:'1px solid var(--border)',padding:'3px 9px',fontFamily:'DM Mono,monospace',fontSize:'9px',display:'flex',alignItems:'center',gap:'4px'}}>
-                        <strong>{p.cant}×</strong> {p.modelo||p.sku||'—'}
-                        {p.tipoVenta&&<span style={{background:p.tipoVenta==='MAYOR'?'var(--warn-soft)':'var(--blue-soft)',color:p.tipoVenta==='MAYOR'?'var(--warn)':'var(--blue)',padding:'0 3px',fontSize:'8px'}}>{p.tipoVenta[0]}</span>}
-                        {p.precio>0&&<span style={{color:'var(--red)',fontSize:'9px'}}>€{p.precio}</span>}
-                      </span>
-                    ))}
-                  </div>
-                  {cmd.status==='listo'&&<div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'var(--green)',marginTop:'7px',fontWeight:700}}>✅ Stock descontado al marcar LISTO</div>}
-                  {cmd.status!=='listo'&&cmd.status!=='entregado'&&cmd.status!=='cancelado'&&<div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888',marginTop:'7px'}}>⚠️ El stock se descuenta automáticamente al marcar como LISTO</div>}
+
+                  {/* Barra de progreso empacado */}
+                  {cmd.status==='empacado'&&totalPedido>0&&(
+                    <div style={{padding:'0 13px'}}>
+                      <div style={{height:'4px',background:'var(--border)',margin:'8px 0 0'}}>
+                        <div style={{width:`${Math.round(totalEmpacado/totalPedido*100)}%`,height:'100%',background:empacadoCompleto?'var(--green)':'#3b82f6',transition:'width .3s'}}/>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Tabla de prendas */}
+                  {cmd.status==='empacado' ? (
+                    /* Vista detallada con scanner de empacado */
+                    <div style={{padding:'10px 13px',display:'flex',flexDirection:'column',gap:'8px'}}>
+                      {/* Scanner para escanear lo que ya se empacó */}
+                      <ScannerInput
+                        productos={prods.map(p=>({sku:p.sku||'',modelo:p.modelo||p.sku||'',color:p.color||'',disponible:999,...p}))}
+                        skipStockCheck={true}
+                        accentColor="#3b82f6"
+                        onAdd={(prod) => scanEmpacado(prod)}
+                      />
+                      <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#666',letterSpacing:'.08em',marginBottom:'2px'}}>
+                        Escanea cada prenda al empacarla — o usa los botones +/−
+                      </div>
+                      {prods.map((p,i)=>{
+                        const sku=(p.sku||'').toUpperCase();
+                        const total=parseInt(p.cant||p.cantidad||1);
+                        const empacadas=Math.min(empacadoMap[sku]||0, total);
+                        const falta=total-empacadas;
+                        const done=falta===0;
+                        return(
+                          <div key={i} style={{display:'grid',gridTemplateColumns:'1fr auto',gap:'10px',padding:'9px 10px',background:done?'var(--green-soft)':'var(--surface)',border:`1px solid ${done?'rgba(26,122,60,.25)':'var(--border)'}`,alignItems:'center',transition:'background .2s'}}>
+                            <div>
+                              <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
+                                <span style={{fontFamily:'DM Mono,monospace',fontSize:'9px',background:done?'var(--green)':'#3b82f6',color:'#fff',padding:'1px 6px',fontWeight:700,minWidth:'24px',textAlign:'center'}}>
+                                  {done?'✓':empacadas+'/'+total}
+                                </span>
+                                <span style={{fontSize:'12px',fontWeight:600}}>{p.modelo||p.sku||'—'}</span>
+                                {p.tipoVenta&&<span style={{background:p.tipoVenta==='MAYOR'?'var(--warn-soft)':'var(--blue-soft)',color:p.tipoVenta==='MAYOR'?'var(--warn)':'var(--blue)',padding:'0 4px',fontFamily:'DM Mono,monospace',fontSize:'8px'}}>{p.tipoVenta[0]}</span>}
+                              </div>
+                              {p.sku&&<div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#888',marginTop:'2px'}}>{p.sku}{p.color?' · '+p.color:''}</div>}
+                              {!done&&<div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'var(--red)',marginTop:'1px',fontWeight:700}}>Faltan {falta} ud{falta!==1?'s':''}</div>}
+                            </div>
+                            <div style={{display:'flex',alignItems:'center',border:'1px solid var(--border)',flexShrink:0}}>
+                              <button onClick={()=>marcarEmpacado(sku,-1)} style={{width:'26px',height:'26px',background:'var(--bg3)',border:'none',cursor:'pointer',fontSize:'14px',color:'var(--red)'}}>−</button>
+                              <span style={{fontFamily:'DM Mono,monospace',fontSize:'13px',fontWeight:700,width:'32px',textAlign:'center',borderLeft:'1px solid var(--border)',borderRight:'1px solid var(--border)',lineHeight:'26px',color:done?'var(--green)':'var(--ink)'}}>{empacadas}</span>
+                              <button onClick={()=>marcarEmpacado(sku,1)} disabled={done} style={{width:'26px',height:'26px',background:'var(--bg3)',border:'none',cursor:done?'default':'pointer',fontSize:'14px',color:done?'#aaa':'var(--green)',opacity:done?.4:1}}>+</button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {empacadoCompleto&&(
+                        <div style={{padding:'9px 12px',background:'var(--green-soft)',border:'1px solid rgba(26,122,60,.3)',fontFamily:'DM Mono,monospace',fontSize:'10px',color:'var(--green)',fontWeight:700,textAlign:'center'}}>
+                          ✅ Todo empacado — listo para enviar
+                        </div>
+                      )}
+                      {!empacadoCompleto&&totalPedido>0&&(
+                        <div style={{padding:'9px 12px',background:'#eff6ff',border:'1px solid #93c5fd44',fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#3b82f6',fontWeight:700,textAlign:'center'}}>
+                          📦 Faltan {totalPedido-totalEmpacado} uds por empacar
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* Vista compacta para pendiente/enviado */
+                    <div style={{padding:'10px 13px'}}>
+                      <div style={{display:'flex',gap:'5px',flexWrap:'wrap'}}>
+                        {prods.map((p,i)=>(
+                          <span key={i} style={{background:'var(--surface)',border:'1px solid var(--border)',padding:'3px 9px',fontFamily:'DM Mono,monospace',fontSize:'9px',display:'flex',alignItems:'center',gap:'4px'}}>
+                            <strong>{p.cant}×</strong> {p.modelo||p.sku||'—'}
+                            {p.tipoVenta&&<span style={{background:p.tipoVenta==='MAYOR'?'var(--warn-soft)':'var(--blue-soft)',color:p.tipoVenta==='MAYOR'?'var(--warn)':'var(--blue)',padding:'0 3px',fontSize:'8px'}}>{p.tipoVenta[0]}</span>}
+                            {p.precio>0&&<span style={{color:'var(--red)',fontSize:'9px'}}>€{p.precio}</span>}
+                          </span>
+                        ))}
+                      </div>
+                      {cmd.status==='pendiente'&&<div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888',marginTop:'7px'}}>⚠️ El stock se descuenta al marcar Empacado</div>}
+                    </div>
+                  )}
                 </div>
               )}
 
+              {/* ── Acciones ── */}
               <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
                 <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#555',letterSpacing:'.14em',textTransform:'uppercase',marginBottom:'4px'}}>Acciones del pedido</div>
                 <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
@@ -1031,7 +1143,7 @@ function ModalGestion({ cmd, productos=[], isAdmin=false, onClose, onSave, onDel
                     <button onClick={()=>cambiarStatus(sigStatus)} disabled={saving}
                       style={{flex:2,padding:'11px 16px',background:S[sigStatus].border,color:'#fff',border:`2px solid ${S[sigStatus].border}`,cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'13px',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',gap:'8px',opacity:saving?.6:1}}>
                       {S[sigStatus].icon} Avanzar a {S[sigStatus].label}
-                      {sigStatus==='listo'&&<span style={{fontSize:'10px',fontWeight:400,opacity:.8}}>(descuenta stock)</span>}
+                      {sigStatus==='enviado'&&<span style={{fontSize:'10px',fontWeight:400,opacity:.8}}>(descuenta stock)</span>}
                     </button>
                   )}
                   {cmd.status!=='cancelado'&&(
@@ -1305,7 +1417,7 @@ function ComandasInner() {
           <input value={buscar} onChange={e=>setBuscar(e.target.value)} placeholder="Buscar cliente, ID, modelo..." style={{background:'none',border:'none',outline:'none',fontFamily:'Poppins,sans-serif',fontSize:'12px',width:'100%'}}/>
         </div>
         <div style={{display:'flex',gap:'5px',flexWrap:'wrap'}}>
-          {[['todos','Todas'],['pendiente','Pendiente'],['produccion','Prod.'],['listo','Listo'],['entregado','Entregado']].map(([s,l])=>(
+          {[['todos','Todas'],['pendiente','Pendiente'],['empacado','Empacado'],['enviado','Enviado']].map(([s,l])=>(
             <button key={s} onClick={()=>setFiltro(s)} style={{padding:'5px 12px',borderRadius:'20px',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:filtro===s?700:500,background:filtro===s?'var(--ink)':'#eee',color:filtro===s?'#fff':'#333'}}>
               {l} ({s==='todos'?comandas.length:conteos[s]||0})
             </button>
@@ -1392,7 +1504,7 @@ function ComandasInner() {
                 <div style={{width:`${pct}%`,height:'100%',background:pct>=100?'var(--green)':pct>50?'var(--warn)':'var(--red)',borderRadius:'2px'}}/>
               </div>
             )}
-            {(cmd.status==='listo'||cmd.status==='entregado')&&(
+            {(cmd.status==='empacado'||cmd.status==='enviado')&&(
               <div style={{marginTop:'8px',display:'flex',justifyContent:'flex-end'}}>
                 <button onClick={e=>{e.stopPropagation();setTicketModal({cmd});}}
                   style={{padding:'4px 11px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'10px',fontWeight:600,color:'#555'}}>
@@ -1407,7 +1519,7 @@ function ComandasInner() {
       {/* ── VISTA TARJETAS (Kanban) ──────────────────────────────── */}
       {!loading&&vistaCards&&filtradas.length>0&&(()=>{
         // Agrupar por status en el orden del flujo
-        const cols = ['pendiente','produccion','listo','entregado','cancelado'];
+        const cols = ['pendiente','empacado','enviado','cancelado'];
         const grupos = {};
         cols.forEach(s=>{ grupos[s]=[]; });
         filtradas.forEach(cmd=>{ (grupos[cmd.status]||grupos['pendiente']).push(cmd); });
@@ -1431,7 +1543,7 @@ function ComandasInner() {
                     const pct=cmd.precio>0?Math.min(100,((cmd.monto_pagado||0)/cmd.precio)*100):0;
                     const prods=parseProd(cmd);
                     const hoy=new Date().toISOString().slice(0,10);
-                    const vencida=cmd.fecha_entrega&&cmd.fecha_entrega<hoy&&status!=='entregado'&&status!=='cancelado';
+                    const vencida=cmd.fecha_entrega&&cmd.fecha_entrega<hoy&&status!=='enviado'&&status!=='cancelado';
                     return(
                       <div key={cmd.id} onClick={()=>setModal(cmd)}
                         style={{background:'var(--surface)',border:`1px solid ${vencida?'var(--red)':'var(--border)'}`,borderTop:`2px solid ${cfg.border}`,padding:'11px 12px',marginBottom:'7px',cursor:'pointer',transition:'all .13s',boxShadow:'0 1px 4px rgba(0,0,0,.06)'}}
@@ -1475,7 +1587,7 @@ function ComandasInner() {
                           </div>
                         )}
                         {/* Ticket button */}
-                        {(status==='listo'||status==='entregado')&&(
+                        {(status==='empacado'||status==='enviado')&&(
                           <button onClick={e=>{e.stopPropagation();setTicketModal({cmd});}}
                             style={{width:'100%',padding:'4px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'10px',fontWeight:600,color:'#666',marginTop:'2px'}}>
                             🖨️ Guía

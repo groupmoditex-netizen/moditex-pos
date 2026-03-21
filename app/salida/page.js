@@ -3,7 +3,7 @@ import { colorHex } from '@/utils/colores';
 import { useState, useRef } from 'react';
 import Shell from '@/components/Shell';
 import CatalogoExplorer from '@/components/CatalogoExplorer';
-import BarcodeScanner from '@/components/BarcodeScanner';
+import ScannerInput from '@/components/ScannerInput';
 import { useAppData } from '@/lib/AppContext';
 
 /* ─── Motivos de salida sin venta ─────────────────────────────────── */
@@ -167,13 +167,14 @@ export default function SalidaPage() {
           <label style={{...lbl,marginBottom:'8px'}}>Agregar productos</label>
           <div style={{display:'flex',gap:'0',alignItems:'stretch'}}>
             <div style={{flex:1}}>
-              <BarcodeScanner
+              <ScannerInput
                 productos={productos}
+                accentColor="var(--red)"
                 onAdd={(prod, qty = 1) => {
                   setCart(prev => {
                     const ex = prev.find(x => x.sku === prod.sku);
-                    if (ex) return prev.map(x => x.sku === prod.sku ? {...x, qty: x.qty + qty} : x);
-                    return [...prev, {...prod, qty}];
+                    if (ex) return prev.map(x => x.sku === prod.sku ? {...x, qty: Math.min(x.qty + qty, productos.find(p=>p.sku===prod.sku)?.disponible||999)} : x);
+                    return [...prev, {...prod, qty: Math.min(qty, prod.disponible||1)}];
                   });
                 }}
               />

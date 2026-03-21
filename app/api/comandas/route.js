@@ -86,11 +86,11 @@ export async function PUT(request) {
     const { id, status, monto_pagado, notas, fecha_entrega, productos, precio } = body;
     if (!id) return NextResponse.json({ ok: false, error: 'ID requerido' }, { status: 400 });
 
-    // ── Si cambia a LISTO → descontar stock ──────────────────────────────────
-    if (status === 'listo') {
+    // ── Si cambia a ENVIADO → descontar stock ──────────────────────────────────
+    if (status === 'enviado') {
       const { data: cmdActual } = await supabase.from('comandas').select('status,productos,cliente').eq('id', id).single();
 
-      if (cmdActual && cmdActual.status !== 'listo' && cmdActual.status !== 'entregado') {
+      if (cmdActual && cmdActual.status !== 'enviado') {
         let prods = cmdActual.productos;
         if (typeof prods === 'string') try { prods = JSON.parse(prods); } catch { prods = []; }
 
@@ -100,7 +100,7 @@ export async function PUT(request) {
           const { data: movsExist } = await supabase
             .from('movimientos').select('id').eq('referencia', id).limit(1);
           if (movsExist && movsExist.length > 0) {
-            await supabase.from('comandas').update({ status: 'listo' }).eq('id', id);
+            await supabase.from('comandas').update({ status: 'enviado' }).eq('id', id);
             return NextResponse.json({ ok: true, id, alertasStock: [], warning: 'Movimientos ya registrados' });
           }
 
@@ -146,7 +146,7 @@ export async function PUT(request) {
           if (sinStock.length > 0) {
             return NextResponse.json({
               ok: false, errorTipo: 'SIN_STOCK',
-              error: `No se puede marcar como LISTO: stock insuficiente en ${sinStock.length} producto(s)`,
+              error: `No se puede marcar como ENVIADO: stock insuficiente en ${sinStock.length} producto(s)`,
               sinStock,
             }, { status: 400 });
           }

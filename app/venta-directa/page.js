@@ -3,7 +3,7 @@ import { colorHex } from '@/utils/colores';
 import { useState, useCallback } from 'react';
 import Shell from '@/components/Shell';
 import CatalogoExplorer from '@/components/CatalogoExplorer';
-import BarcodeScanner from '@/components/BarcodeScanner';
+import ScannerInput from '@/components/ScannerInput';
 import { useAppData } from '@/lib/AppContext';
 
 const METODOS = [
@@ -199,7 +199,7 @@ export default function VentaDirectaPage() {
           {/* Scanner */}
           <div style={{ display:'flex', gap:'0', alignItems:'stretch', marginBottom:'0' }}>
             <div style={{ flex:1 }}>
-              <BarcodeScanner productos={productos} onAdd={onScannerAdd}/>
+              <ScannerInput productos={productos} onAdd={onScannerAdd}/>
             </div>
             <button onClick={() => setCat(true)}
               style={{ padding:'0 16px', background:'#f59e0b', color:'#000', border:'none',
