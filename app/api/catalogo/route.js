@@ -7,68 +7,76 @@ const HEADERS = {
   'Access-Control-Allow-Origin': '*',
 };
 
-// GET /api/catalogo — público, sin auth
-// Devuelve productos configurados para el catálogo con stock simplificado
 export async function GET() {
   try {
-    const [{ data: prods }, { data: inv }, { data: movs }, { data: cfg }] = await Promise.all([
-      supabase.from('productos').select('*').order('categoria').order('modelo'),
+    // Productos + stock de inventario + config del catálogo
+    const [
+      { data: prods,  error: eProds  },
+      { data: inv,    error: eInv    },
+      { data: cfg,    error: eCfg   },
+    ] = await Promise.all([
+      supabase.from('productos').select('sku,categoria,modelo,talla,color,precio_detal,precio_mayor,stock_inicial,tela').order('categoria').order('modelo'),
       supabase.from('inventario').select('sku,stock'),
-      supabase.from('movimientos').select('sku,tipo,cantidad'),
       supabase.from('catalogo_config').select('*'),
     ]);
 
-    // Calcular stock real por SKU
+    if (eProds) {
+      console.error('[catalogo] error prods:', eProds.message);
+      return NextResponse.json({ ok: false, error: eProds.message }, { status: 500, headers: HEADERS });
+    }
+
+    // Stock map: inventario.stock es el stock actualizado
     const stockMap = {};
     (inv||[]).forEach(r => { stockMap[r.sku] = r.stock; });
-    (movs||[]).forEach(m => {
-      if (m.tipo === 'ENTRADA') stockMap[m.sku] = (stockMap[m.sku]||0) + m.cantidad;
-      else if (m.tipo === 'SALIDA') stockMap[m.sku] = (stockMap[m.sku]||0) - m.cantidad;
-    });
 
-    // Config del catálogo por modelo
+    // Config map
     const cfgMap = {};
     (cfg||[]).forEach(c => { cfgMap[c.modelo_key] = c; });
 
-    // Agrupar productos por modelo
+    // Agrupar por modelo
     const modelos = {};
     (prods||[]).forEach(p => {
       const key = `${p.categoria}__${p.modelo}`;
       if (!modelos[key]) {
+        const c = cfgMap[key] || {};
         modelos[key] = {
           key, categoria: p.categoria, modelo: p.modelo,
           talla: p.talla, tela: p.tela||'',
-          precioDetal: p.precio_detal, precioMayor: p.precio_mayor,
+          precioDetal:  p.precio_detal,
+          precioMayor:  p.precio_mayor,
+          en_catalogo:  c.en_catalogo  || false,
+          foto_url:     c.foto_url     || '',
+          descripcion:  c.descripcion  || '',
+          fotos_extra:  c.fotos_extra  || '',
+          orden:        c.orden        ?? 999,
           variantes: [],
-          // Config del catálogo
-          en_catalogo: cfgMap[key]?.en_catalogo ?? false,
-          foto_url: cfgMap[key]?.foto_url || '',
-          descripcion: cfgMap[key]?.descripcion || '',
-          fotos_extra: cfgMap[key]?.fotos_extra || '',
-          orden: cfgMap[key]?.orden || 999,
         };
       }
-      const disp = stockMap[p.sku] !== undefined ? stockMap[p.sku] : (p.stock_inicial||0);
+      const disp = stockMap[p.sku] !== undefined
+        ? stockMap[p.sku]
+        : (p.stock_inicial || 0);
+      const stock = Math.max(0, disp);
+
       modelos[key].variantes.push({
-        sku: p.sku, color: p.color, talla: p.talla,
-        disponible: Math.max(0, disp),
-        // Nivel de stock para mostrar al cliente (sin números exactos)
-        nivel: disp <= 0 ? 'agotado' : disp <= 3 ? 'pocas' : 'disponible',
+        sku:       p.sku,
+        color:     p.color,
+        talla:     p.talla,
+        disponible: stock,
+        nivel:     stock <= 0 ? 'agotado' : stock <= 3 ? 'pocas' : 'disponible',
       });
     });
 
-    // Solo retornar los que están en catálogo, ordenados
     const resultado = Object.values(modelos)
       .filter(m => m.en_catalogo)
-      .sort((a, b) => a.orden - b.orden || a.categoria.localeCompare(b.categoria));
+      .sort((a, b) => (a.orden - b.orden) || a.categoria.localeCompare(b.categoria) || a.modelo.localeCompare(b.modelo));
 
     return NextResponse.json({ ok: true, modelos: resultado }, { headers: HEADERS });
   } catch(err) {
+    console.error('[catalogo] catch:', err.message);
     return NextResponse.json({ ok: false, error: err.message }, { status: 500, headers: HEADERS });
   }
 }
 
-// PUT /api/catalogo — actualizar config de un modelo (requiere auth via header check)
 export async function PUT(request) {
   try {
     const body = await request.json();
@@ -77,10 +85,10 @@ export async function PUT(request) {
 
     const campos = { modelo_key };
     if (en_catalogo  !== undefined) campos.en_catalogo  = en_catalogo;
-    if (foto_url     !== undefined) campos.foto_url      = foto_url;
-    if (descripcion  !== undefined) campos.descripcion   = descripcion;
-    if (fotos_extra  !== undefined) campos.fotos_extra   = fotos_extra;
-    if (orden        !== undefined) campos.orden         = parseInt(orden)||0;
+    if (foto_url     !== undefined) campos.foto_url     = foto_url;
+    if (descripcion  !== undefined) campos.descripcion  = descripcion;
+    if (fotos_extra  !== undefined) campos.fotos_extra  = fotos_extra;
+    if (orden        !== undefined) campos.orden        = parseInt(orden)||0;
 
     const { error } = await supabase
       .from('catalogo_config')
