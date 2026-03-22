@@ -188,10 +188,15 @@ export default function CatalogoAdminPage() {
           <div style={{ fontFamily:'DM Mono,monospace', fontSize:'9px', color:'#888', letterSpacing:'.12em', marginBottom:'4px', textTransform:'uppercase' }}>
             Gestión de catálogo público
           </div>
-          <div style={{ display:'flex', gap:'14px', alignItems:'center' }}>
-            <span style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'#7c3aed', fontWeight:700 }}>
-              {enCatalogoCount} / {modelos.length} prendas visibles
+          <div style={{ display:'flex', gap:'12px', alignItems:'center', flexWrap:'wrap' }}>
+            <span style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'#7c3aed', fontWeight:700, background:'#f5f3ff', padding:'3px 10px', border:'1px solid #ddd6fe' }}>
+              ● {enCatalogoCount} visibles en catálogo
             </span>
+            {ocultasCount > 0 && (
+              <span style={{ fontFamily:'DM Mono,monospace', fontSize:'10px', color:'#dc2626', fontWeight:700, background:'#fef2f2', padding:'3px 10px', border:'1px solid #fecaca' }}>
+                ✕ {ocultasCount} ocultas
+              </span>
+            )}
           </div>
         </div>
         <div style={{ display:'flex', gap:'8px' }}>
@@ -280,9 +285,12 @@ export default function CatalogoAdminPage() {
                 <div>
                   <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
                     <span style={{ fontSize:'13px', fontWeight:600 }}>{modelo.modelo}</span>
-                    {activo && <span style={{ fontFamily:'DM Mono,monospace', fontSize:'7.5px', background:'#ede9fe', color:'#7c3aed', padding:'1px 6px', fontWeight:700 }}>VISIBLE</span>}
-                    {!tienesFoto && activo && <span style={{ fontFamily:'DM Mono,monospace', fontSize:'7.5px', background:'#fff8e1', color:'#f59e0b', padding:'1px 6px', fontWeight:700 }}>SIN FOTO</span>}
-                    {!tieneDesc && activo && <span style={{ fontFamily:'DM Mono,monospace', fontSize:'7.5px', background:'#fff8e1', color:'#f59e0b', padding:'1px 6px', fontWeight:700 }}>SIN DESC.</span>}
+                    {activo
+                      ? <span style={{ fontFamily:'DM Mono,monospace', fontSize:'7.5px', background:'#ede9fe', color:'#7c3aed', padding:'2px 7px', fontWeight:700, border:'1px solid #ddd6fe' }}>● VISIBLE EN CATÁLOGO</span>
+                      : <span style={{ fontFamily:'DM Mono,monospace', fontSize:'7.5px', background:'#fef2f2', color:'#dc2626', padding:'2px 7px', fontWeight:700, border:'1px solid #fecaca' }}>✕ OCULTA DEL CATÁLOGO</span>
+                    }
+                    {!tienesFoto && activo && <span style={{ fontFamily:'DM Mono,monospace', fontSize:'7.5px', background:'#fff8e1', color:'#f59e0b', padding:'1px 6px', fontWeight:700 }}>⚠ SIN FOTO</span>}
+                    {!tieneDesc && activo && <span style={{ fontFamily:'DM Mono,monospace', fontSize:'7.5px', background:'#fff8e1', color:'#f59e0b', padding:'1px 6px', fontWeight:700 }}>⚠ SIN DESC.</span>}
                   </div>
                   <div style={{ fontFamily:'DM Mono,monospace', fontSize:'8.5px', color:'#888', marginTop:'2px' }}>
                     {modelo.categoria} {modelo.tela ? `· ${modelo.tela}` : ''}

@@ -6,9 +6,9 @@ const WA_NUMBER = "584120363131";
 const WA_NUMBER2= "584127534435";
 
 const NIVEL = {
-  disponible: { label:'Disponible',     dot:'#22c55e', text:'#16a34a', bg:'rgba(34,197,94,.1)'  },
-  pocas:      { label:'Pocas unidades', dot:'#f59e0b', text:'#d97706', bg:'rgba(245,158,11,.1)' },
-  agotado:    { label:'Bajo pedido',    dot:'#94a3b8', text:'#64748b', bg:'rgba(148,163,184,.1)'},
+  disponible: { label:'Disponible',     dot:'#16c65a', text:'#16c65a', bg:'rgba(22,198,90,.12)'  },
+  pocas:      { label:'Pocas unidades', dot:'#f59e0b', text:'#d97706', bg:'rgba(245,158,11,.12)' },
+  agotado:    { label:'Bajo pedido',    dot:'#94a3b8', text:'#94a3b8', bg:'rgba(148,163,184,.1)' },
 };
 const CAT_ICONS = {'BODY':'👙','BODIES':'👙','CHAQUETA':'🧥','CONJUNTO':'👗','ENTERIZO':'🩱','FALDA':'👘','PANTS':'👖','SHORT':'🩳','TOPS':'👕','TOP':'👕','TRAJE DE BANO':'🩱','TRIKINIS':'🩱','VESTIDO':'💃','DEFAULT':'🏷️'};
 function catIcon(c){const k=(c||'').toUpperCase();for(const[key,v] of Object.entries(CAT_ICONS)){if(k.includes(key))return v;}return CAT_ICONS.DEFAULT;}
@@ -206,17 +206,21 @@ export default function CatalogoPage() {
         .mb-vh{font-family:'DM Mono',monospace;font-size:8px;color:#bbb;letter-spacing:.2em;text-transform:uppercase;margin-bottom:7px;}
 
         /* VARIANTE ROW */
-        .vr{display:flex;flex-direction:column;gap:0;padding:9px 12px;border:1px solid #f0f0ec;cursor:default;transition:border-color .12s;margin-bottom:5px;}
+        .vr{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #f0f0ec;cursor:default;transition:border-color .12s;margin-bottom:5px;min-height:52px;}
         .vr:hover:not(.vr-ag){border-color:#c9a84c;}
         .vr.vr-ag{opacity:.38;}
         .vr.vr-sel{border-color:#c9a84c;background:#fffbf0;}
-        .vr-top{display:flex;align-items:center;gap:10px;width:100%;}
         .vr-clr{width:22px;height:22px;border-radius:50%;border:2px solid rgba(0,0,0,.07);flex-shrink:0;}
         .vr-info{flex:1;min-width:0;}
         .vr-name{font-family:'Poppins',sans-serif;font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-        .vr-niv{font-family:'DM Mono',monospace;font-size:7.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;display:flex;align-items:center;gap:4px;margin-top:2px;}
-        .vr-action{flex-shrink:0;}
-        .vr-qty{display:flex;align-items:center;gap:8px;padding-top:8px;padding-left:32px;border-top:1px solid #f5f5f3;margin-top:7px;}
+        .vr-niv{font-family:'DM Mono',monospace;font-size:8px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;display:flex;align-items:center;gap:5px;margin-top:2px;}
+        .vr-right{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+        .vr-add{padding:7px 13px;background:#0a0a0a;color:#fff;border:none;cursor:pointer;font-family:'Poppins',sans-serif;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;transition:background .15s;white-space:nowrap;}
+        .vr-add:hover{background:#c9a84c;color:#000;}
+        .qc{display:flex;align-items:center;border:1px solid #e5e5e0;}
+        .qb{width:28px;height:28px;border:none;background:#f8f8f6;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:background .1s;color:#333;}
+        .qb:hover{background:#e5e5e0;}
+        .qn{width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:12px;font-weight:700;border-left:1px solid #e5e5e0;border-right:1px solid #e5e5e0;}
 
         /* Qty control within variant */
         .qc{display:flex;align-items:center;border:1px solid #e5e5e0;flex-shrink:0;}
@@ -438,45 +442,39 @@ export default function CatalogoPage() {
                   const qty = cartQty(v.sku);
                   return (
                     <div key={v.sku} className={`vr${v.nivel==='agotado'?' vr-ag':''}${inCart?' vr-sel':''}`}>
-                      {/* Fila principal */}
-                      <div className="vr-top">
-                        <div className="vr-clr" style={{background:colorFromName(v.color)}}/>
-                        <div className="vr-info">
-                          <div className="vr-name">
-                            {v.color}{v.talla&&v.talla!=='UNICA'&&<span style={{fontFamily:"'DM Mono',monospace",fontSize:'9px',color:'#aaa',marginLeft:'5px'}}>T:{v.talla}</span>}
-                          </div>
-                          <div className="vr-niv" style={{color:nc.text}}>
-                            <span style={{width:'5px',height:'5px',borderRadius:'50%',background:nc.dot,display:'inline-block'}}/>
-                            {nc.label}
-                            {(v.nivel==='pocas'||v.nivel==='disponible')&&v.disponible>0&&v.disponible<=20&&(
-                              <span style={{marginLeft:'4px',opacity:.7}}>· {v.disponible} disp.</span>
-                            )}
-                          </div>
+                      <div className="vr-clr" style={{background:colorFromName(v.color)}}/>
+                      <div className="vr-info">
+                        <div className="vr-name">
+                          {v.color}{v.talla&&v.talla!=='UNICA'&&<span style={{fontFamily:"'DM Mono',monospace",fontSize:'9px',color:'#aaa',marginLeft:'5px'}}>T:{v.talla}</span>}
                         </div>
-                        <div className="vr-action">
-                          {v.nivel!=='agotado' && !inCart && (
-                            <button className="vr-add" onClick={e=>{e.stopPropagation();addToCart(modal,v);}}>+ Pedir</button>
-                          )}
-                          {inCart && (
-                            <span style={{fontFamily:"'DM Mono',monospace",fontSize:'8px',color:'#16a34a',fontWeight:700,background:'rgba(22,163,74,.08)',padding:'3px 7px',border:'1px solid rgba(22,163,74,.2)'}}>✓ {qty}</span>
+                        <div className="vr-niv" style={{color:nc.text}}>
+                          <span style={{width:'7px',height:'7px',borderRadius:'50%',background:nc.dot,display:'inline-block',flexShrink:0}}/>
+                          <span style={{fontWeight:800}}>{nc.label}</span>
+                          {(v.nivel==='pocas'||v.nivel==='disponible')&&v.disponible>0&&v.disponible<=20&&(
+                            <span style={{opacity:.65,fontWeight:400}}>· {v.disponible} disp.</span>
                           )}
                         </div>
                       </div>
-                      {/* Fila qty — solo si en carrito */}
-                      {inCart && (
-                        <div className="vr-qty">
-                          <div className="qc">
-                            <button className="qb" onClick={e=>{e.stopPropagation();if(qty===1)removeFromCart(v.sku);else changeQty(v.sku,-1);}}>−</button>
-                            <span className="qn">{qty}</span>
-                            <button className="qb" onClick={e=>{e.stopPropagation();changeQty(v.sku,1);}}>+</button>
-                          </div>
-                          <span style={{fontFamily:"'DM Mono',monospace",fontSize:'9px',color:'#555'}}>en pedido</span>
-                          <button onClick={e=>{e.stopPropagation();removeFromCart(v.sku);}}
-                            style={{marginLeft:'auto',padding:'3px 8px',background:'none',border:'1px solid #f0f0ec',cursor:'pointer',color:'#ccc',fontSize:'10px',transition:'color .1s'}}
-                            onMouseEnter={e=>e.currentTarget.style.color='#ef4444'}
-                            onMouseLeave={e=>e.currentTarget.style.color='#ccc'}>quitar</button>
-                        </div>
-                      )}
+                      {/* Derecha: siempre mismo espacio */}
+                      <div className="vr-right">
+                        {v.nivel!=='agotado' && (
+                          inCart ? (
+                            <>
+                              <div className="qc">
+                                <button className="qb" onClick={e=>{e.stopPropagation();if(qty===1)removeFromCart(v.sku);else changeQty(v.sku,-1);}}>−</button>
+                                <span className="qn">{qty}</span>
+                                <button className="qb" onClick={e=>{e.stopPropagation();changeQty(v.sku,1);}}>+</button>
+                              </div>
+                              <button onClick={e=>{e.stopPropagation();removeFromCart(v.sku);}}
+                                style={{width:'24px',height:'24px',background:'none',border:'1px solid #f0f0ec',cursor:'pointer',color:'#ccc',fontSize:'12px',display:'flex',alignItems:'center',justifyContent:'center',transition:'all .1s',flexShrink:0}}
+                                onMouseEnter={e=>{e.currentTarget.style.color='#ef4444';e.currentTarget.style.borderColor='#ef4444';}}
+                                onMouseLeave={e=>{e.currentTarget.style.color='#ccc';e.currentTarget.style.borderColor='#f0f0ec';}}>✕</button>
+                            </>
+                          ) : (
+                            <button className="vr-add" onClick={e=>{e.stopPropagation();addToCart(modal,v);}}>+ Pedir</button>
+                          )
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -487,21 +485,23 @@ export default function CatalogoPage() {
               </div>
             </div>
 
-            {/* BARRA INFERIOR COMPACTA */}
-            {totalItems>0 && (
-              <div style={{position:'sticky',bottom:0,background:'rgba(255,255,255,.97)',backdropFilter:'blur(8px)',borderTop:'1px solid #ebebeb',padding:'9px 20px',display:'flex',alignItems:'center',gap:'10px'}}>
-                <div style={{display:'flex',alignItems:'center',gap:'6px',flex:1,minWidth:0}}>
-                  <span style={{width:'8px',height:'8px',borderRadius:'50%',background:'#22c55e',display:'inline-block',flexShrink:0}}/>
-                  <span style={{fontFamily:"'DM Mono',monospace",fontSize:'9px',color:'#555',whiteSpace:'nowrap'}}>{totalItems} prenda{totalItems!==1?'s':''} seleccionada{totalItems!==1?'s':''}</span>
-                </div>
-                <button style={{padding:'9px 16px',background:'#c9a84c',color:'#000',border:'none',cursor:'pointer',fontFamily:"'Poppins',sans-serif",fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'.07em',whiteSpace:'nowrap',flexShrink:0,transition:'background .15s'}} onClick={()=>{cerrarModal();setCartOpen(true);}}
-                  onMouseEnter={e=>e.currentTarget.style.background='#e0bc5e'}
-                  onMouseLeave={e=>e.currentTarget.style.background='#c9a84c'}>
-                  Ver pedido →
-                </button>
+</div>
+
+          {/* BARRA PEDIDO — fija al fondo del modal */}
+          {totalItems>0 && (
+            <div style={{flexShrink:0,background:'#fff',borderTop:'2px solid #c9a84c',padding:'10px 20px',display:'flex',alignItems:'center',gap:'10px'}}>
+              <div style={{display:'flex',alignItems:'center',gap:'7px',flex:1}}>
+                <span style={{width:'8px',height:'8px',borderRadius:'50%',background:'#16c65a',display:'inline-block',flexShrink:0}}/>
+                <span style={{fontFamily:"'DM Mono',monospace",fontSize:'9px',color:'#555',fontWeight:700}}>{totalItems} prenda{totalItems!==1?'s':''} en pedido</span>
               </div>
-            )}
-          </div>
+              <button style={{padding:'10px 20px',background:'#c9a84c',color:'#000',border:'none',cursor:'pointer',fontFamily:"'Poppins',sans-serif",fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'.08em',flexShrink:0,transition:'background .15s'}}
+                onClick={()=>{cerrarModal();setCartOpen(true);}}
+                onMouseEnter={e=>e.currentTarget.style.background='#e0bc5e'}
+                onMouseLeave={e=>e.currentTarget.style.background='#c9a84c'}>
+                Ver pedido →
+              </button>
+            </div>
+          )}
         </div>
       )}
 
