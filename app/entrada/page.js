@@ -145,11 +145,10 @@ export default function EntradaPage() {
         <div>
           <label style={{...lbl,marginBottom:'8px'}}>Agregar productos</label>
           <div style={{display:'flex',gap:'0',alignItems:'stretch'}}>
-            <div style={{flex:1}}>
-              <ScannerInput
+            <ScannerInput
                 productos={productos}
                 skipStockCheck={true}
-                accentColor="var(--green)"
+                accentColor="#22c55e"
                 onAdd={(prod, qty = 1) => {
                   setCart(prev => {
                     const ex = prev.find(x => x.sku === prod.sku);
@@ -157,15 +156,10 @@ export default function EntradaPage() {
                     return [...prev, {...prod, qty}];
                   });
                 }}
+                extraActions={[
+                  { label:'⊞ Catálogo', onClick:()=>setCatalogo(true), bg:'#22c55e', color:'#fff' },
+                ]}
               />
-            </div>
-            <button onClick={()=>setCatalogo(true)}
-              style={{padding:'0 16px',background:'var(--green)',color:'#fff',border:'none',cursor:'pointer',
-                fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:700,textTransform:'uppercase',
-                letterSpacing:'.04em',flexShrink:0,whiteSpace:'nowrap',alignSelf:'stretch',
-                marginBottom:'10px'}}>
-              ⊞ Catálogo
-            </button>
           </div>
         </div>
 

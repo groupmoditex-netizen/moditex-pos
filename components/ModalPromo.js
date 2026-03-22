@@ -40,12 +40,21 @@ export default function ModalPromo({ productos = [], onAdd, onClose, isAdmin = f
 
   useEffect(() => { cargarPromos(); }, []);
 
+  const [loadError, setLoadError] = useState('');
+
   async function cargarPromos() {
     setLoading(true);
+    setLoadError('');
     try {
       const res = await fetch('/api/promos').then(r => r.json());
-      if (res.ok) setPromos(res.promos.filter(p => p.activo));
-    } catch {}
+      if (res.ok) {
+        setPromos(res.promos.filter(p => p.activo));
+      } else {
+        setLoadError(res.error || 'Error al cargar promos');
+      }
+    } catch(e) {
+      setLoadError('No se pudo conectar. Verifica tu conexión.');
+    }
     setLoading(false);
   }
 
@@ -197,6 +206,21 @@ export default function ModalPromo({ productos = [], onAdd, onClose, isAdmin = f
             {loading ? (
               <div style={{ textAlign:'center', padding:'40px', fontFamily:'DM Mono,monospace', fontSize:'11px', color:'#888' }}>
                 ⏳ Cargando promos...
+              </div>
+            ) : loadError ? (
+              <div style={{ padding:'24px', background:'var(--red-soft)', border:'1px solid rgba(217,30,30,.2)',
+                fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--red)', lineHeight:1.7 }}>
+                <div style={{ fontWeight:700, marginBottom:'8px' }}>⚠ No se pudieron cargar las promos</div>
+                <div style={{ color:'#888', marginBottom:'12px' }}>{loadError}</div>
+                {loadError.toLowerCase().includes('relation') || loadError.toLowerCase().includes('table') ? (
+                  <div style={{ background:'#fff8e1', border:'1px solid #f59e0b44', padding:'10px 12px', color:'#92400e', fontSize:'9px' }}>
+                    💡 <strong>Falta crear la tabla en Supabase.</strong><br/>
+                    Ejecuta el archivo <strong>PROMOS.sql</strong> en Supabase → SQL Editor y recarga.
+                  </div>
+                ) : null}
+                <button onClick={cargarPromos} style={{ marginTop:'12px', padding:'7px 16px',
+                  background:'none', border:'1px solid var(--border)', cursor:'pointer',
+                  fontFamily:'Poppins,sans-serif', fontSize:'11px' }}>↺ Reintentar</button>
               </div>
             ) : promos.length === 0 ? (
               <div style={{ textAlign:'center', padding:'40px' }}>

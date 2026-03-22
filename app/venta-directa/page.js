@@ -209,25 +209,15 @@ export default function VentaDirectaPage() {
         <div className={`vd-panel-carrito${tab==='cobro'?' hidden':''}`}>
 
           {/* Scanner */}
-          <div style={{ display:'flex', gap:'0', alignItems:'stretch', marginBottom:'0' }}>
-            <div style={{ flex:1 }}>
-              <ScannerInput productos={productos} onAdd={onScannerAdd}/>
-            </div>
-            <button onClick={() => setCat(true)}
-              style={{ padding:'0 16px', background:'#f59e0b', color:'#000', border:'none',
-                cursor:'pointer', fontFamily:'Poppins,sans-serif', fontSize:'11px', fontWeight:700,
-                textTransform:'uppercase', letterSpacing:'.04em', flexShrink:0,
-                whiteSpace:'nowrap', alignSelf:'stretch', marginBottom:'10px' }}>
-              ⊞ Catálogo
-            </button>
-            <button onClick={() => setPromoModal(true)}
-              style={{ padding:'0 14px', background:'#7c3aed', color:'#fff', border:'none',
-                cursor:'pointer', fontFamily:'Poppins,sans-serif', fontSize:'11px', fontWeight:700,
-                textTransform:'uppercase', letterSpacing:'.04em', flexShrink:0,
-                whiteSpace:'nowrap', alignSelf:'stretch', marginBottom:'10px',
-                borderRadius:'0 4px 4px 0' }}>
-              🎁 Promo
-            </button>
+          <div style={{ marginBottom:'0' }}>
+            <ScannerInput
+              productos={productos}
+              onAdd={onScannerAdd}
+              extraActions={[
+                { label:'⊞ Catálogo', onClick:()=>setCat(true), bg:'#f59e0b', color:'#000' },
+                { label:'🎁 Promo', onClick:()=>setPromoModal(true), bg:'#7c3aed', color:'#fff' },
+              ]}
+            />
           </div>
 
           {/* Lista carrito */}

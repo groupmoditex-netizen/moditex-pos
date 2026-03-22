@@ -9,6 +9,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { fetchApi } from '@/utils/fetchApi';
 import ModalTicketEnvio from '@/components/ModalTicketEnvio';
 import ScannerInput from '@/components/ScannerInput';
+import ModalPromo from '@/components/ModalPromo';
 
 /* ─── Constantes ─────────────────────────────────────────────────── */
 const S = {
@@ -447,6 +448,17 @@ function ModalNueva({ clientes, productos, onClose, onSave }) {
   return (
     <>
     {catalogo&&<CatalogoExplorer productos={productos} modo="entrada" tipoVenta="MAYOR" onAdd={addFromCatalog} onClose={()=>setCatalogo(false)}/>}
+      {promoModal&&<ModalPromo productos={productos} isAdmin={true}
+        onAdd={(promItems)=>{
+          promItems.forEach(item=>{
+            setItems(prev=>{
+              const ex=prev.find(x=>x.sku===item.sku&&x.promoTag===item.promoTag);
+              if(ex) return prev.map(x=>x.sku===item.sku&&x.promoTag===item.promoTag?{...x,qty:x.qty+1}:x);
+              return [...prev,{...item,tipoVenta:'PROMO'}];
+            });
+          });
+        }}
+        onClose={()=>setPromoModal(false)}/>}
 
     {/* ── Modal cámara ─────────────────────────────────────────── */}
     {camOpen && (
@@ -585,36 +597,24 @@ function ModalNueva({ clientes, productos, onClose, onSave }) {
           </div>
 
           <div style={{padding:'16px 18px',overflowY:'auto',flex:1,display:'flex',flexDirection:'column',gap:'10px'}}>
-            {/* Scanner + botón catálogo en la misma fila */}
-            <div style={{display:'flex',gap:'0'}}>
-              <div style={{display:'flex',alignItems:'center',gap:'10px',flex:1,background:'#111',border:'1px solid #333',borderRight:'none',padding:'10px 14px'}}>
-                <span style={{fontSize:'18px',flexShrink:0}}>🔫</span>
-                <input
-                  ref={skuRef}
-                  value={skuVal}
-                  onChange={handleSkuChange}
-                  onKeyDown={e=>{ if(e.key==='Enter'){e.preventDefault();agregarPorSku(skuVal);}}}
-                  placeholder="Escanea el código — se agrega automáticamente…"
-                  autoComplete="off" spellCheck={false}
-                  style={{background:'none',border:'none',outline:'none',fontFamily:'DM Mono,monospace',fontSize:'12px',color:'#fff',width:'100%',letterSpacing:'.04em'}}
-                />
-              </div>
-              <button onClick={abrirCamara} disabled={camLoad||guardando} title="Escanear con cámara"
-                style={{padding:'10px 12px',background:camLoad?'#555':'#333',color:'#fff',border:'1px solid #333',cursor:'pointer',fontSize:'13px',flexShrink:0,borderRight:'none'}}>
-                {camLoad?'⏳':'📷'}
-              </button>
-              <button onClick={()=>setCatalogo(true)}
-                style={{padding:'10px 14px',background:'#f59e0b',color:'#000',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'.04em',flexShrink:0,whiteSpace:'nowrap'}}>
-                ⊞ Catálogo
-              </button>
-            </div>
+            {/* Scanner con catálogo y promo integrados */}
+            <ScannerInput
+              productos={productos}
+              skipStockCheck={true}
+              onAdd={(prod, qty=1)=>{
+                setItems(prev=>{
+                  const ex=prev.find(x=>x.sku===prod.sku);
+                  if(ex) return prev.map(x=>x.sku===prod.sku?{...x,qty:x.qty+qty}:x);
+                  return [...prev,{...prod,qty,tipoVenta:'MAYOR'}];
+                });
+              }}
+              extraActions={[
+                { label:'⊞ Catálogo', onClick:()=>setCatalogo(true), bg:'#f59e0b', color:'#000' },
+                { label:'🎁 Promo', onClick:()=>setPromoModal(true), bg:'#7c3aed', color:'#fff' },
+              ]}
+            />
 
-            {camErr && <div style={{padding:'6px 12px',fontFamily:'DM Mono,monospace',fontSize:'10px',background:'var(--red-soft)',color:'var(--red)',borderLeft:'3px solid var(--red)'}}>{camErr}</div>}
-            {skuMsg && (
-              <div style={{padding:'6px 12px',fontFamily:'DM Mono,monospace',fontSize:'10px',fontWeight:700,background:skuMsg.t==='ok'?'var(--green-soft)':'var(--red-soft)',color:skuMsg.t==='ok'?'var(--green)':'var(--red)',borderLeft:`3px solid ${skuMsg.t==='ok'?'var(--green)':'var(--red)'}`}}>
-                {skuMsg.m}
-              </div>
-            )}
+
 
             {/* Lista de items */}
             {items.length===0 ? (
@@ -633,7 +633,7 @@ function ModalNueva({ clientes, productos, onClose, onSave }) {
                           <span style={{fontSize:'13px',fontWeight:600}}>{item.modelo} — {item.color}</span>
                         </div>
                         <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888',marginTop:'3px'}}>
-                          {item.sku} · <strong style={{color:item.tipoVenta==='MAYOR'?'var(--warn)':'var(--blue)'}}>€{precio.toFixed(2)} × {item.qty} = €{(precio*item.qty).toFixed(2)}</strong>
+                          {item.sku} · <strong style={{color:item.tipoVenta==='PROMO'?'#7c3aed':item.tipoVenta==='MAYOR'?'var(--warn)':'var(--blue)'}}>€{precio.toFixed(2)} × {item.qty} = €{(precio*item.qty).toFixed(2)}</strong>{item.promoNombre&&<span style={{marginLeft:'6px',background:'#ede9fe',color:'#7c3aed',fontFamily:'DM Mono,monospace',fontSize:'8px',padding:'1px 5px',fontWeight:700}}>🎁 {item.promoNombre}</span>}
                         </div>
                       </div>
                       <div style={{display:'flex',border:'1px solid var(--border)',overflow:'hidden',flexShrink:0}}>

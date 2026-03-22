@@ -2,6 +2,7 @@
 import { useState, useMemo } from 'react';
 import Shell from '@/components/Shell';
 import ScannerInput from '@/components/ScannerInput';
+import ModalPromo from '@/components/ModalPromo';
 import { useAppData } from '@/lib/AppContext';
 import { colorHex } from '@/utils/colores';
 
@@ -28,6 +29,7 @@ export default function EnvioRapidoPage() {
   const [notas,     setNotas]     = useState('');
   const [guardando, setGuardando] = useState(false);
   const [msg,       setMsg]       = useState(null);
+  const [promoModal, setPromoModal] = useState(false);
   const [buscar,    setBuscar]    = useState('');
 
   // ── Búsqueda rápida de productos ──
@@ -38,6 +40,16 @@ export default function EnvioRapidoPage() {
       `${p.sku} ${p.modelo} ${p.color} ${p.categoria}`.toLowerCase().includes(q)
     ).slice(0, 30);
   }, [productos, buscar]);
+
+  function addFromPromo(items) {
+    items.forEach(item => {
+      setCart(prev => {
+        const ex = prev.find(x => x.sku === item.sku && x.promoTag === item.promoTag);
+        if (ex) return prev.map(x => x.sku===item.sku&&x.promoTag===item.promoTag ? {...x,qty:x.qty+1} : x);
+        return [...prev, {...item, precio: item.precio || item.precioDetal || 0}];
+      });
+    });
+  }
 
   function addToCart(prod, qty = 1) {
     setCart(prev => {
@@ -115,6 +127,7 @@ export default function EnvioRapidoPage() {
 
   return (
     <Shell title="Envío Rápido">
+      {promoModal&&<ModalPromo productos={productos} isAdmin={true} onAdd={addFromPromo} onClose={()=>setPromoModal(false)}/>}
       <style>{`
         .er-inp { width:100%; padding:9px 11px; border:1px solid var(--border);
           font-family:'Poppins',sans-serif; font-size:13px; background:var(--bg2);
@@ -157,7 +170,13 @@ export default function EnvioRapidoPage() {
         {/* ── COL 1: Productos ── */}
         <div>
           {/* Scanner */}
-          <ScannerInput productos={productos} onAdd={addToCart}/>
+          <ScannerInput
+            productos={productos}
+            onAdd={addToCart}
+            extraActions={[
+              { label:'🎁 Promo / Combo', onClick:()=>setPromoModal(true), bg:'#7c3aed', color:'#fff' },
+            ]}
+          />
 
           {/* Búsqueda manual */}
           <div style={{ marginBottom:'12px', position:'relative' }}>
