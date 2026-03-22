@@ -17,6 +17,7 @@ export default function ModalPromo({ productos = [], onAdd, onClose, isAdmin = f
   const [vista,     setVista]     = useState('lista');
   const [promoSel,  setPromoSel]  = useState(null);
   const [selected,  setSelected]  = useState([]);
+  const [comboTv,   setComboTv]   = useState('MAYOR');
 
   const [buscar,    setBuscar]    = useState('');
 
