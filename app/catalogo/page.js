@@ -516,9 +516,10 @@ export default function CatalogoPage() {
                 </button>
               </div>
             )}
-            </div>{/* close info+bar wrapper */}
-          </div>{/* close .mb */}
-        </div>{/* close .mo */}
+            </div>
+          </div>
+        </div>
+      </div>
       )}
 
       {/* CARRITO */}
@@ -595,6 +596,7 @@ export default function CatalogoPage() {
     </div>
   );
 }
+
 
 function colorFromName(name) {
   const n=(name||'').toLowerCase().trim();
