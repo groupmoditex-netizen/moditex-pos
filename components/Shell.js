@@ -48,6 +48,8 @@ const MENU_GRUPOS = {
         { href:'/plan-tela',  label:'Plan de Tela',   desc:'Consumo de materiales' },
         { href:'/usuarios',   label:'Usuarios',       desc:'Gestión de accesos' },
         { href:'/logs',       label:'Logs del Sistema', desc:'Auditoría de acciones' },
+        { href:'/catalogo-admin', label:'Catálogo Web', desc:'Gestionar tienda online' },
+        { href:'/catalogo',       label:'Ver Catálogo', desc:'Vista del cliente (nueva pestaña)' },
       ],
     },
   ],
@@ -455,7 +457,7 @@ export default function Shell({ children, title }) {
       {/* ── DRAWER MOBILE ── */}
       <div className={`sh-drawer${drawerOpen ? ' open' : ''}`} ref={dropdownRef}>
         <div className="sh-drawer-header">
-          <img src="https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/moditex-logo.jpg" alt="Moditex Group" style={{ height:'36px', width:'auto', objectFit:'contain' }} />
+          <img src="https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/ISOTIPO%20PNG.png" alt="Moditex Group" style={{ height:'40px', width:'40px', objectFit:'contain' }} />
           <button className="sh-drawer-close" onClick={() => setDrawerOpen(false)}>✕</button>
         </div>
         {grupos.map(g => (
@@ -501,22 +503,7 @@ export default function Shell({ children, title }) {
 
           {/* Logo */}
           <Link href="/dashboard" className="sh-logo">
-            {/* Isotipo cuadrado — mostramos solo la M */}
-            <div style={{
-              width:'34px', height:'34px', overflow:'hidden',
-              borderRadius:'3px', flexShrink:0,
-              border:'1px solid rgba(201,168,76,.3)',
-            }}>
-              <img
-                src="https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/moditex-logo.jpg"
-                alt="M"
-                style={{
-                  width:'100%', height:'100%',
-                  objectFit:'cover',
-                  objectPosition:'50% 30%',
-                }}
-              />
-            </div>
+            <img src="https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/ISOTIPO%20PNG.png" alt="Moditex" style={{ height:'38px', width:'38px', objectFit:'contain', flexShrink:0 }}/>
             <div style={{ marginLeft:'10px' }}>
               <div style={{ fontFamily:"'Playfair Display',serif", fontSize:'16px', fontWeight:900, color:'#fff', letterSpacing:'.05em', lineHeight:1 }}>MODITEX</div>
               <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'7px', color:'#c9a84c', letterSpacing:'.35em', textTransform:'uppercase', marginTop:'2px' }}>GROUP</div>
@@ -524,8 +511,8 @@ export default function Shell({ children, title }) {
           </Link>
 
           {/* Mobile logo */}
-          <img src="https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/moditex-logo.jpg" alt="Moditex Group" className="sh-mobile-logo-img"
-            style={{ height:'32px', width:'auto', objectFit:'contain' }} />
+          <img src="https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/ISOTIPO%20PNG.png" alt="Moditex Group" className="sh-mobile-logo-img"
+            style={{ height:'36px', width:'36px', objectFit:'contain' }} />
 
           {/* Nav groups — desktop */}
           <div className="sh-nav-groups">

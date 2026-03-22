@@ -4,7 +4,8 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
 import { useAppData } from '@/lib/AppContext';
 
-const LOGO_URL = "https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/moditex-logo.jpg";
+const LOGO_URL  = "https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/moditex-logo.jpg";
+const ISOTIPO_URL = "https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/ISOTIPO%20PNG.png";
 const HERO_URL = "https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/moditex-hero.png";
 
 export default function LoginPage() {
@@ -140,9 +141,13 @@ export default function LoginPage() {
       }}>
         {/* Logo */}
         <div style={{ textAlign:'center', marginBottom:'40px' }}>
-          <img src={LOGO_URL} alt="Moditex Group"
-            style={{ height:'90px', width:'auto', objectFit:'contain', marginBottom:'4px' }}
-          />
+          <div style={{ display:'flex', alignItems:'center', gap:'14px', marginBottom:'4px' }}>
+            <img src={ISOTIPO_URL} alt="M" style={{ height:'56px', width:'56px', objectFit:'contain' }}/>
+            <div style={{ textAlign:'left' }}>
+              <div style={{ fontFamily:"'Playfair Display',serif", fontSize:'22px', fontWeight:900, color:'#fff', letterSpacing:'.05em', lineHeight:1 }}>MODITEX</div>
+              <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'7.5px', color:'#c9a84c', letterSpacing:'.35em', textTransform:'uppercase', marginTop:'4px' }}>GROUP</div>
+            </div>
+          </div>
           <div style={{
             fontFamily:"'DM Mono',monospace", fontSize:'8px',
             color:'rgba(255,255,255,.25)', letterSpacing:'.18em',
