@@ -119,6 +119,7 @@ export default function CatalogoAdminPage() {
   }
 
   const enCatalogoCount = modelos.filter(m => cfgMap[m.key]?.en_catalogo).length;
+  const ocultasCount    = modelos.filter(m => cfgMap[m.key] && !cfgMap[m.key]?.en_catalogo).length;
 
   return (
     <Shell title="Catálogo Web">
