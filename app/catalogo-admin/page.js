@@ -19,7 +19,16 @@ export default function CatalogoAdminPage() {
   const [editData, setEditData] = useState({});
   const [msg,      setMsg]      = useState(null);
 
-  useEffect(() => { cargarConfig(); }, []);
+  const [dbOk, setDbOk] = useState(null); // null=checking, true=ok, false=error
+
+  useEffect(() => {
+    cargarConfig();
+    // Verify catalogo_config table exists
+    fetch('/api/catalogo-config')
+      .then(r => r.json())
+      .then(res => { setDbOk(res.ok !== false); })
+      .catch(() => setDbOk(false));
+  }, []);
 
   async function cargarConfig() {
     setLoading(true);
@@ -70,11 +79,19 @@ export default function CatalogoAdminPage() {
 
   async function toggleCatalogo(key, current) {
     setSaving(key);
-    await fetch('/api/catalogo', {
-      method:'PUT', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ modelo_key:key, en_catalogo: !current }),
-    });
-    setCfgMap(prev => ({ ...prev, [key]: { ...(prev[key]||{}), modelo_key:key, en_catalogo:!current } }));
+    try {
+      const res = await fetch('/api/catalogo', {
+        method:'PUT', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ modelo_key:key, en_catalogo: !current }),
+      }).then(r=>r.json());
+      if (res.ok) {
+        setCfgMap(prev => ({ ...prev, [key]: { ...(prev[key]||{}), modelo_key:key, en_catalogo:!current } }));
+      } else {
+        setMsg({ t:'err', m:'Error al guardar: ' + (res.error||'desconocido') + '. ¿Ejecutaste CATALOGO.sql en Supabase?' });
+      }
+    } catch(e) {
+      setMsg({ t:'err', m:'Error de conexión: ' + e.message });
+    }
     setSaving(null);
   }
 
@@ -190,6 +207,20 @@ export default function CatalogoAdminPage() {
           </a>
         </div>
       </div>
+
+      {/* Database status */}
+      {dbOk === false && (
+        <div style={{ padding:'12px 16px', marginBottom:'16px', background:'#fff1f2', border:'1px solid rgba(217,30,30,.3)', borderLeft:'4px solid var(--red)', fontFamily:'DM Mono,monospace', fontSize:'10px', color:'var(--red)', lineHeight:1.8 }}>
+          ⚠️ <strong>La tabla catalogo_config no existe en Supabase.</strong><br/>
+          Debes ejecutar <strong>CATALOGO.sql</strong> en <strong>Supabase → SQL Editor → Run</strong> antes de usar esta pantalla.<br/>
+          Sin eso los cambios que hagas aquí NO se guardan aunque se vean en pantalla.
+        </div>
+      )}
+      {dbOk === true && (
+        <div style={{ padding:'8px 16px', marginBottom:'12px', background:'var(--green-soft)', borderLeft:'3px solid var(--green)', fontFamily:'DM Mono,monospace', fontSize:'9px', color:'var(--green)', fontWeight:700 }}>
+          ✓ Base de datos conectada correctamente
+        </div>
+      )}
 
       {msg && (
         <div style={{ padding:'10px 14px', marginBottom:'16px', background:msg.t==='ok'?'var(--green-soft)':'var(--red-soft)', borderLeft:`3px solid ${msg.t==='ok'?'var(--green)':'var(--red)'}`, color:msg.t==='ok'?'var(--green)':'var(--red)', fontFamily:'DM Mono,monospace', fontSize:'10px', fontWeight:700 }}>

@@ -465,10 +465,27 @@ export default function CatalogoPage() {
           <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'12px', color:'#ef4444' }}>⚠ {error}</div>
           <button onClick={cargar} style={{ marginTop:'12px', padding:'8px 16px', background:'#0a0a0a', color:'#fff', border:'none', cursor:'pointer', fontFamily:"'Poppins',sans-serif", fontSize:'11px' }}>Reintentar</button>
         </div>
+      ) : modelos.length === 0 ? (
+        <div className="cat-empty">
+          <div style={{ fontSize:'40px', marginBottom:'12px' }}>🏷️</div>
+          <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'12px', color:'#aaa', marginBottom:'8px' }}>
+            El catálogo está vacío por el momento
+          </div>
+          <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'9px', color:'#ccc' }}>
+            Pronto tendremos productos disponibles
+          </div>
+        </div>
       ) : filtrados.length === 0 ? (
         <div className="cat-empty">
           <div style={{ fontSize:'40px', marginBottom:'12px' }}>🔍</div>
-          <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'12px', color:'#aaa' }}>Sin resultados para tu búsqueda</div>
+          <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'12px', color:'#aaa', marginBottom:'16px' }}>
+            Sin resultados para "{buscar || filtrocat}"
+          </div>
+          <button onClick={() => { setBuscar(''); setFiltrocat(''); }}
+            style={{ padding:'9px 20px', background:'#0a0a0a', color:'#fff', border:'none', cursor:'pointer',
+              fontFamily:"'Poppins',sans-serif", fontSize:'11px', fontWeight:600 }}>
+            Ver todas las prendas
+          </button>
         </div>
       ) : (
         <>
