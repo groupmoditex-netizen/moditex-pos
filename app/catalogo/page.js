@@ -88,7 +88,24 @@ export default function CatalogoPage() {
       <div className={`cat-cut-bot${!opening?' open':''}`} style={{pointerEvents:opening?'all':'none'}}/>
       {opening && <>
         <div className="cat-cut-line"/>
-        <div className="cat-scissors">✂️</div>
+        <div className="cat-scissors"><svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" style={{width:'80px',height:'80px',filter:'drop-shadow(0 0 16px rgba(201,168,76,.8))'}}>
+          <g transform="rotate(-30,60,60)">
+            <ellipse cx="32" cy="28" rx="12" ry="14" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"/>
+            <ellipse cx="32" cy="28" rx="6" ry="7" fill="none" stroke="rgba(255,255,255,.3)" strokeWidth="1.5"/>
+            <path d="M22 20 Q14 12 12 10" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"/>
+            <path d="M42 34 L60 60" stroke="#fff" strokeWidth="3" strokeLinecap="round"/>
+            <path d="M60 60 L88 100" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"/>
+          </g>
+          <g transform="rotate(30,60,60)">
+            <ellipse cx="88" cy="28" rx="12" ry="14" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"/>
+            <ellipse cx="88" cy="28" rx="6" ry="7" fill="none" stroke="rgba(255,255,255,.3)" strokeWidth="1.5"/>
+            <path d="M98 20 Q106 12 108 10" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"/>
+            <path d="M78 34 L60 60" stroke="#fff" strokeWidth="3" strokeLinecap="round"/>
+            <path d="M60 60 L32 100" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"/>
+          </g>
+          <circle cx="60" cy="60" r="4" fill="#c9a84c"/>
+          <circle cx="60" cy="60" r="1.5" fill="#0a0a0a"/>
+        </svg></div>
       </>}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Poppins:wght@300;400;500;600&family=DM+Mono&display=swap');
@@ -98,8 +115,8 @@ export default function CatalogoPage() {
         .cat-cut-bot{bottom:0;transform:translateY(0);}
         .cat-cut-top.open{transform:translateY(-100%);}
         .cat-cut-bot.open{transform:translateY(100%);}
-        .cat-scissors{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-90deg);z-index:901;font-size:56px;filter:drop-shadow(0 0 18px rgba(201,168,76,.9));transition:opacity .3s .5s;animation:catScissors .8s cubic-bezier(.68,-0.55,.27,1.55) forwards;}
-        @keyframes catScissors{0%{transform:translate(-50%,-50%) rotate(-90deg) scale(0);opacity:0;}30%{transform:translate(-50%,-50%) rotate(-90deg) scale(1.3);opacity:1;}60%{transform:translate(-50%,-50%) rotate(-90deg) scale(1);opacity:1;}100%{transform:translate(-50%,-130vh) rotate(-90deg) scale(0.7);opacity:0;}}
+        .cat-scissors{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:901;transition:opacity .3s .5s;animation:catScissors .9s cubic-bezier(.68,-0.55,.27,1.55) forwards;}
+        @keyframes catScissors{0%{transform:translate(-50%,-50%) scale(0);opacity:0;}25%{transform:translate(-50%,-50%) scale(1.2);opacity:1;}55%{transform:translate(-50%,-50%) scale(1) rotate(0deg);opacity:1;}100%{transform:translate(-50%,-130vh) scale(0.6);opacity:0;}}
         .cat-cut-line{position:fixed;left:0;right:0;top:50%;height:2px;background:linear-gradient(to right,transparent,#c9a84c,#fff,#c9a84c,transparent);z-index:902;animation:catLine .3s ease .1s forwards;opacity:0;}
         @keyframes catLine{0%{opacity:0;transform:scaleX(0);}50%{opacity:1;transform:scaleX(1);}100%{opacity:0;transform:scaleX(1);}}
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -189,13 +206,17 @@ export default function CatalogoPage() {
         .mb-vh{font-family:'DM Mono',monospace;font-size:8px;color:#bbb;letter-spacing:.2em;text-transform:uppercase;margin-bottom:7px;}
 
         /* VARIANTE ROW */
-        .vr{display:flex;align-items:center;gap:11px;padding:9px 11px;border:1px solid #f0f0ec;cursor:pointer;transition:border-color .12s;margin-bottom:5px;}
+        .vr{display:flex;flex-direction:column;gap:0;padding:9px 12px;border:1px solid #f0f0ec;cursor:default;transition:border-color .12s;margin-bottom:5px;}
         .vr:hover:not(.vr-ag){border-color:#c9a84c;}
-        .vr.vr-ag{opacity:.38;cursor:default;}
+        .vr.vr-ag{opacity:.38;}
         .vr.vr-sel{border-color:#c9a84c;background:#fffbf0;}
+        .vr-top{display:flex;align-items:center;gap:10px;width:100%;}
         .vr-clr{width:22px;height:22px;border-radius:50%;border:2px solid rgba(0,0,0,.07);flex-shrink:0;}
-        .vr-name{font-family:'Poppins',sans-serif;font-size:12px;font-weight:500;flex:1;}
-        .vr-niv{font-family:'DM Mono',monospace;font-size:7.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;display:flex;align-items:center;gap:4px;}
+        .vr-info{flex:1;min-width:0;}
+        .vr-name{font-family:'Poppins',sans-serif;font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .vr-niv{font-family:'DM Mono',monospace;font-size:7.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;display:flex;align-items:center;gap:4px;margin-top:2px;}
+        .vr-action{flex-shrink:0;}
+        .vr-qty{display:flex;align-items:center;gap:8px;padding-top:8px;padding-left:32px;border-top:1px solid #f5f5f3;margin-top:7px;}
 
         /* Qty control within variant */
         .qc{display:flex;align-items:center;border:1px solid #e5e5e0;flex-shrink:0;}
@@ -379,14 +400,14 @@ export default function CatalogoPage() {
                   : <div style={{width:'100%',height:'100%',minHeight:'220px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'52px',color:'#ccc',background:'#f2f2ef'}}>{catIcon(modal.categoria)}</div>
                 }
                 {/* Price overlay */}
-                <div style={{position:'absolute',bottom:0,left:0,right:0,background:'linear-gradient(to top,rgba(0,0,0,.72) 0%,rgba(0,0,0,.2) 70%,transparent 100%)',padding:'28px 16px 12px',display:'flex',gap:'14px',alignItems:'flex-end'}}>
-                  <div style={{flex:1}}>
-                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:'7px',color:'rgba(255,255,255,.5)',letterSpacing:'.2em',textTransform:'uppercase',marginBottom:'3px',textShadow:'0 1px 3px rgba(0,0,0,.8)'}}>Mayor</div>
-                    <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'22px',fontWeight:700,color:'#c9a84c',textShadow:'0 2px 8px rgba(0,0,0,.9)',lineHeight:1}}>€{(modal.precioMayor||0).toFixed(2)}</div>
+                <div style={{position:'absolute',bottom:0,left:0,right:0,background:'linear-gradient(to top,rgba(0,0,0,.82) 0%,rgba(0,0,0,.35) 65%,transparent 100%)',padding:'36px 18px 14px',display:'flex',gap:'0',alignItems:'flex-end'}}>
+                  <div style={{flex:1,borderRight:'1px solid rgba(255,255,255,.1)',paddingRight:'14px',marginRight:'14px'}}>
+                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:'7px',color:'rgba(255,255,255,.45)',letterSpacing:'.25em',textTransform:'uppercase',marginBottom:'4px',textShadow:'0 1px 4px rgba(0,0,0,1)'}}>AL MAYOR</div>
+                    <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'30px',fontWeight:700,color:'#c9a84c',textShadow:'0 2px 12px rgba(0,0,0,1)',lineHeight:1,letterSpacing:'-.01em'}}>€{(modal.precioMayor||0).toFixed(2)}</div>
                   </div>
                   <div style={{flex:1}}>
-                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:'7px',color:'rgba(255,255,255,.5)',letterSpacing:'.2em',textTransform:'uppercase',marginBottom:'3px',textShadow:'0 1px 3px rgba(0,0,0,.8)'}}>Detal</div>
-                    <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'22px',fontWeight:700,color:'#fff',textShadow:'0 2px 8px rgba(0,0,0,.9)',lineHeight:1}}>€{(modal.precioDetal||0).toFixed(2)}</div>
+                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:'7px',color:'rgba(255,255,255,.45)',letterSpacing:'.25em',textTransform:'uppercase',marginBottom:'4px',textShadow:'0 1px 4px rgba(0,0,0,1)'}}>AL DETAL</div>
+                    <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'30px',fontWeight:700,color:'#fff',textShadow:'0 2px 12px rgba(0,0,0,1)',lineHeight:1,letterSpacing:'-.01em'}}>€{(modal.precioDetal||0).toFixed(2)}</div>
                   </div>
                 </div>
               </div>
@@ -416,38 +437,42 @@ export default function CatalogoPage() {
                   const inCart = isInCart(v.sku);
                   const qty = cartQty(v.sku);
                   return (
-                    <div key={v.sku} className={`vr${v.nivel==='agotado'?' vr-ag':''}${inCart?' vr-sel':''}`}
-                      style={{flexDirection:'column',gap:'6px',padding:'10px 12px'}}>
-                      {/* Fila top: color + nombre + estado */}
-                      <div style={{display:'flex',alignItems:'center',gap:'10px',width:'100%'}}>
-                        <div className="vr-clr" style={{background:colorFromName(v.color),flexShrink:0}}/>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div className="vr-name" style={{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
+                    <div key={v.sku} className={`vr${v.nivel==='agotado'?' vr-ag':''}${inCart?' vr-sel':''}`}>
+                      {/* Fila principal */}
+                      <div className="vr-top">
+                        <div className="vr-clr" style={{background:colorFromName(v.color)}}/>
+                        <div className="vr-info">
+                          <div className="vr-name">
                             {v.color}{v.talla&&v.talla!=='UNICA'&&<span style={{fontFamily:"'DM Mono',monospace",fontSize:'9px',color:'#aaa',marginLeft:'5px'}}>T:{v.talla}</span>}
                           </div>
-                          <div className="vr-niv" style={{color:nc.text,marginTop:'2px'}}>
+                          <div className="vr-niv" style={{color:nc.text}}>
                             <span style={{width:'5px',height:'5px',borderRadius:'50%',background:nc.dot,display:'inline-block'}}/>
                             {nc.label}
-                            {v.nivel==='pocas' && <span style={{marginLeft:'4px',fontWeight:700}}>· {v.disponible} uds</span>}
-                            {v.nivel==='disponible' && v.disponible<20 && <span style={{marginLeft:'4px',color:'rgba(22,163,74,.6)'}}>· {v.disponible} disp.</span>}
+                            {(v.nivel==='pocas'||v.nivel==='disponible')&&v.disponible>0&&v.disponible<=20&&(
+                              <span style={{marginLeft:'4px',opacity:.7}}>· {v.disponible} disp.</span>
+                            )}
                           </div>
                         </div>
-                        {/* Acción */}
-                        {v.nivel!=='agotado' && !inCart && (
-                          <button className="vr-add" style={{flexShrink:0}} onClick={e=>{e.stopPropagation();addToCart(modal,v);}}>+ Pedir</button>
-                        )}
+                        <div className="vr-action">
+                          {v.nivel!=='agotado' && !inCart && (
+                            <button className="vr-add" onClick={e=>{e.stopPropagation();addToCart(modal,v);}}>+ Pedir</button>
+                          )}
+                          {inCart && (
+                            <span style={{fontFamily:"'DM Mono',monospace",fontSize:'8px',color:'#16a34a',fontWeight:700,background:'rgba(22,163,74,.08)',padding:'3px 7px',border:'1px solid rgba(22,163,74,.2)'}}>✓ {qty}</span>
+                          )}
+                        </div>
                       </div>
-                      {/* Fila qty (solo si está en carrito) */}
+                      {/* Fila qty — solo si en carrito */}
                       {inCart && (
-                        <div style={{display:'flex',alignItems:'center',gap:'8px',paddingLeft:'32px'}}>
+                        <div className="vr-qty">
                           <div className="qc">
                             <button className="qb" onClick={e=>{e.stopPropagation();if(qty===1)removeFromCart(v.sku);else changeQty(v.sku,-1);}}>−</button>
                             <span className="qn">{qty}</span>
                             <button className="qb" onClick={e=>{e.stopPropagation();changeQty(v.sku,1);}}>+</button>
                           </div>
-                          <span style={{fontFamily:"'DM Mono',monospace",fontSize:'9px',color:'#16a34a',fontWeight:700}}>en tu pedido</span>
+                          <span style={{fontFamily:"'DM Mono',monospace",fontSize:'9px',color:'#555'}}>en pedido</span>
                           <button onClick={e=>{e.stopPropagation();removeFromCart(v.sku);}}
-                            style={{marginLeft:'auto',padding:'3px 7px',background:'none',border:'1px solid #f0f0ec',cursor:'pointer',color:'#ccc',fontSize:'11px',transition:'color .1s'}}
+                            style={{marginLeft:'auto',padding:'3px 8px',background:'none',border:'1px solid #f0f0ec',cursor:'pointer',color:'#ccc',fontSize:'10px',transition:'color .1s'}}
                             onMouseEnter={e=>e.currentTarget.style.color='#ef4444'}
                             onMouseLeave={e=>e.currentTarget.style.color='#ccc'}>quitar</button>
                         </div>

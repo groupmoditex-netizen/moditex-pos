@@ -81,20 +81,19 @@ export default function LoginPage() {
         /* Scissors icon in the center, cuts then follows */
         .scissors-icon {
           position:fixed; top:50%; left:50%;
-          transform:translate(-50%,-50%) rotate(-90deg) scale(0.5);
-          z-index:1000; font-size:60px;
+          transform:translate(-50%,-50%) scale(0.5);
+          z-index:1000;
           animation:none;
-          filter:drop-shadow(0 0 20px rgba(201,168,76,.8));
         }
         .scissors-overlay.active .scissors-icon {
-          animation:scissorsCut .6s cubic-bezier(.68,-0.55,.27,1.55) forwards;
+          animation:scissorsCut .8s cubic-bezier(.68,-0.55,.27,1.55) forwards;
         }
         @keyframes scissorsCut {
-          0%   { transform:translate(-50%,-50%) rotate(-90deg) scale(0.5); opacity:0; }
-          15%  { transform:translate(-50%,-50%) rotate(-90deg) scale(1.2); opacity:1; }
-          40%  { transform:translate(-50%,-50%) rotate(-90deg) scale(1);   opacity:1; }
-          70%  { transform:translate(-50%,-50%) rotate(-90deg) scale(1.1); opacity:1; }
-          100% { transform:translate(-50%,-120vh) rotate(-90deg) scale(0.8); opacity:0; }
+          0%   { transform:translate(-50%,-50%) scale(0); opacity:0; }
+          20%  { transform:translate(-50%,-50%) scale(1.25); opacity:1; }
+          50%  { transform:translate(-50%,-50%) scale(1); opacity:1; }
+          80%  { transform:translate(-50%,-50%) scale(1.1); opacity:1; }
+          100% { transform:translate(-50%,-120vh) scale(0.7); opacity:0; }
         }
 
         /* The cut line flash */
@@ -121,7 +120,24 @@ export default function LoginPage() {
         <div className="cut-top"/>
         <div className="cut-bot"/>
         <div className="cut-line"/>
-        <div className="scissors-icon">✂️</div>
+        <div className="scissors-icon"><svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" style={{width:'70px',height:'70px',filter:'drop-shadow(0 0 16px rgba(201,168,76,.9))'}}>
+          <g transform="rotate(-30,60,60)">
+            <ellipse cx="32" cy="28" rx="12" ry="14" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"/>
+            <ellipse cx="32" cy="28" rx="6" ry="7" fill="none" stroke="rgba(255,255,255,.3)" strokeWidth="1.5"/>
+            <path d="M22 20 Q14 12 12 10" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"/>
+            <path d="M42 34 L60 60" stroke="#fff" strokeWidth="3" strokeLinecap="round"/>
+            <path d="M60 60 L88 100" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"/>
+          </g>
+          <g transform="rotate(30,60,60)">
+            <ellipse cx="88" cy="28" rx="12" ry="14" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"/>
+            <ellipse cx="88" cy="28" rx="6" ry="7" fill="none" stroke="rgba(255,255,255,.3)" strokeWidth="1.5"/>
+            <path d="M98 20 Q106 12 108 10" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"/>
+            <path d="M78 34 L60 60" stroke="#fff" strokeWidth="3" strokeLinecap="round"/>
+            <path d="M60 60 L32 100" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"/>
+          </g>
+          <circle cx="60" cy="60" r="4" fill="#c9a84c"/>
+          <circle cx="60" cy="60" r="1.5" fill="#0a0a0a"/>
+        </svg></div>
       </div>
 
       {/* ── FOTO IZQUIERDA ── */}
