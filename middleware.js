@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-const RUTAS_PUBLICAS = ['/api/auth', '/api/me'];
+const RUTAS_PUBLICAS = ['/api/auth', '/api/me', '/api/catalogo'];
 
 export function middleware(request) {
   const { pathname } = request.nextUrl;
