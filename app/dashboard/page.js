@@ -30,17 +30,62 @@ export default function DashboardPage() {
 
   return (
     <Shell title="Dashboard">
-      {/* Hero */}
-      <div style={{background:'var(--ink)',padding:'20px 22px',marginBottom:'18px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:'14px',flexWrap:'wrap'}}>
-        <div style={{minWidth:0}}>
-          <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'var(--red)',letterSpacing:'.2em',textTransform:'uppercase',marginBottom:'5px'}}>Fábrica de Ropa Mayorista</div>
-          <div style={{fontFamily:'Playfair Display,serif',fontSize:'18px',fontWeight:700,color:'#fff',lineHeight:1.25,marginBottom:'5px'}}>Moditex Group:<br/>Fabricamos tu propia marca</div>
-          <div style={{fontSize:'11px',color:'rgba(255,255,255,.6)'}}>Venta mayorista · Enterizos · Jackets · Conjuntos</div>
+      {/* ── Hero Banner con foto real ── */}
+      <div style={{
+        position:'relative', marginBottom:'20px',
+        minHeight:'220px', overflow:'hidden',
+        background:'#0a0a0a',
+      }}>
+        {/* Foto de fondo */}
+        <img
+          src="https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/moditex-hero.png"
+          alt="Moditex Group"
+          style={{
+            position:'absolute', inset:0, width:'100%', height:'100%',
+            objectFit:'cover', objectPosition:'center top',
+            opacity:0.45,
+          }}
+        />
+        {/* Overlay gradiente */}
+        <div style={{
+          position:'absolute', inset:0,
+          background:'linear-gradient(to right, rgba(10,10,10,.92) 0%, rgba(10,10,10,.6) 50%, rgba(10,10,10,.3) 100%)',
+        }}/>
+        {/* Contenido */}
+        <div style={{
+          position:'relative', zIndex:2,
+          padding:'30px 28px',
+          display:'flex', alignItems:'center', justifyContent:'space-between',
+          gap:'20px', flexWrap:'wrap',
+        }}>
+          <div>
+            <img src="https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/moditex-logo.jpg" alt="Moditex Group"
+              style={{ height:'64px', width:'auto', objectFit:'contain', marginBottom:'12px', display:'block' }} />
+            <div style={{
+              fontFamily:"'DM Mono',monospace", fontSize:'9px',
+              color:'#c9a84c', letterSpacing:'.22em',
+              textTransform:'uppercase', marginBottom:'8px',
+            }}>
+              Fábrica de Ropa Mayorista · Barquisimeto
+            </div>
+            <div style={{
+              fontFamily:"'Playfair Display',serif", fontSize:'13px',
+              color:'rgba(255,255,255,.7)', lineHeight:1.6,
+            }}>
+              Venta mayorista · Enterizos · Jackets · Conjuntos · Marca Propia
+            </div>
+          </div>
+          <a href="https://wa.me/584120363131?text=Hola%20Moditex" target="_blank" rel="noreferrer"
+            style={{
+              padding:'11px 20px', background:'#25d366', color:'#000',
+              fontWeight:700, textDecoration:'none', fontSize:'12px',
+              fontFamily:"'Poppins',sans-serif", textTransform:'uppercase',
+              flexShrink:0, display:'flex', alignItems:'center', gap:'7px',
+              letterSpacing:'.06em',
+            }}>
+            📱 WhatsApp
+          </a>
         </div>
-        <a href="https://wa.me/584120363131?text=Hola%20Moditex" target="_blank" rel="noreferrer"
-          style={{padding:'10px 16px',background:'#25d366',color:'#000',fontWeight:700,textDecoration:'none',fontSize:'12px',fontFamily:'Poppins,sans-serif',textTransform:'uppercase',flexShrink:0,display:'flex',alignItems:'center',gap:'6px'}}>
-          📱 WhatsApp
-        </a>
       </div>
 
       {/* KPIs — 2 col en mobile, 4 en desktop */}

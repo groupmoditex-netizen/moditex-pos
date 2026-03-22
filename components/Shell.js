@@ -185,6 +185,7 @@ export default function Shell({ children, title }) {
         }
 
         /* Logo */
+        .sh-mobile-logo-img { display: none; }
         .sh-logo {
           display: flex; align-items: center; gap: 0;
           text-decoration: none; flex-shrink: 0;
@@ -426,7 +427,8 @@ export default function Shell({ children, title }) {
           .sh-navbar { padding: 0 14px; }
           .sh-nav-groups { display: none; }
           .sh-hamburger { display: flex; }
-          .sh-mobile-logo { display: block; margin-left: 10px; }
+          .sh-mobile-logo { display: none; }
+          .sh-mobile-logo-img { display: block; margin-left: 10px; }
           .sh-date { display: none; }
           .sh-user-chip .sh-user-rol { display: none; }
           .sh-user-chip { padding: 5px 8px; }
@@ -453,10 +455,7 @@ export default function Shell({ children, title }) {
       {/* ── DRAWER MOBILE ── */}
       <div className={`sh-drawer${drawerOpen ? ' open' : ''}`} ref={dropdownRef}>
         <div className="sh-drawer-header">
-          <div>
-            <div style={{ fontFamily:"'Playfair Display',serif", fontSize:'16px', fontWeight:900, color:'#fff', letterSpacing:'.06em' }}>Moditex</div>
-            <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'7px', color:'#c9a84c', letterSpacing:'.3em', textTransform:'uppercase' }}>GROUP</div>
-          </div>
+          <img src="https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/moditex-logo.jpg" alt="Moditex Group" style={{ height:'36px', width:'auto', objectFit:'contain' }} />
           <button className="sh-drawer-close" onClick={() => setDrawerOpen(false)}>✕</button>
         </div>
         {grupos.map(g => (
@@ -502,16 +501,16 @@ export default function Shell({ children, title }) {
 
           {/* Logo */}
           <Link href="/dashboard" className="sh-logo">
-            <div className="sh-logo-text">
-              <span className="sh-logo-moditex">Moditex</span>
-              <span className="sh-logo-group">Group</span>
-            </div>
+            <img
+              src="https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/moditex-logo.jpg"
+              alt="Moditex Group"
+              style={{ height:'40px', width:'auto', objectFit:'contain', filter:'brightness(1)' }}
+            />
           </Link>
 
-          {/* Mobile logo text */}
-          <div className="sh-mobile-logo">
-            Moditex <span>GROUP</span>
-          </div>
+          {/* Mobile logo */}
+          <img src="https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/moditex-logo.jpg" alt="Moditex Group" className="sh-mobile-logo-img"
+            style={{ height:'32px', width:'auto', objectFit:'contain' }} />
 
           {/* Nav groups — desktop */}
           <div className="sh-nav-groups">
