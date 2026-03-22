@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react';
 import Shell from '@/components/Shell';
 import CatalogoExplorer from '@/components/CatalogoExplorer';
 import ScannerInput from '@/components/ScannerInput';
+import ModalPromo from '@/components/ModalPromo';
 import { useAppData } from '@/lib/AppContext';
 
 const METODOS = [
@@ -35,8 +36,9 @@ export default function VentaDirectaPage() {
   const [guardando,setGuard]   = useState(false);
   const [msg,      setMsg]     = useState(null);
   const [tab,      setTab]     = useState('carrito'); // 'carrito' | 'cobro' (mobile tabs)
+  const [promoModal, setPromoModal] = useState(false);
 
-  function precioItem(item) { return item.tipoVenta==='MAYOR' ? (item.precioMayor||0) : (item.precioDetal||0); }
+  function precioItem(item) { if(item.tipoVenta==='PROMO') return item.precio||0; return item.tipoVenta==='MAYOR' ? (item.precioMayor||0) : (item.precioDetal||0); }
 
   const onScannerAdd = useCallback((prod, qty = 1) => {
     setCart(prev => {
@@ -45,6 +47,16 @@ export default function VentaDirectaPage() {
       return [...prev, {...prod, qty, tipoVenta:'DETAL'}];
     });
   }, []);
+
+  function addFromPromo(items) {
+    items.forEach(item => {
+      setCart(prev => {
+        const ex = prev.find(x => x.sku === item.sku && x.promoTag === item.promoTag);
+        if (ex) return prev.map(x => x.sku === item.sku && x.promoTag === item.promoTag ? {...x, qty: x.qty+1} : x);
+        return [...prev, {...item, tipoVenta:'PROMO'}];
+      });
+    });
+  }
 
   function addFromCatalog(p, qty, tv) {
     setCart(prev => {
@@ -205,9 +217,16 @@ export default function VentaDirectaPage() {
               style={{ padding:'0 16px', background:'#f59e0b', color:'#000', border:'none',
                 cursor:'pointer', fontFamily:'Poppins,sans-serif', fontSize:'11px', fontWeight:700,
                 textTransform:'uppercase', letterSpacing:'.04em', flexShrink:0,
+                whiteSpace:'nowrap', alignSelf:'stretch', marginBottom:'10px' }}>
+              ⊞ Catálogo
+            </button>
+            <button onClick={() => setPromoModal(true)}
+              style={{ padding:'0 14px', background:'#7c3aed', color:'#fff', border:'none',
+                cursor:'pointer', fontFamily:'Poppins,sans-serif', fontSize:'11px', fontWeight:700,
+                textTransform:'uppercase', letterSpacing:'.04em', flexShrink:0,
                 whiteSpace:'nowrap', alignSelf:'stretch', marginBottom:'10px',
                 borderRadius:'0 4px 4px 0' }}>
-              ⊞ Catálogo
+              🎁 Promo
             </button>
           </div>
 
