@@ -17,7 +17,7 @@ export default function ModalPromo({ productos = [], onAdd, onClose, isAdmin = f
   const [vista,     setVista]     = useState('lista');
   const [promoSel,  setPromoSel]  = useState(null);
   const [selected,  setSelected]  = useState([]);
-  const [tvMap,     setTvMap]     = useState({});
+
   const [buscar,    setBuscar]    = useState('');
 
   const [formNombre, setFormNombre] = useState('');
@@ -52,28 +52,26 @@ export default function ModalPromo({ productos = [], onAdd, onClose, isAdmin = f
     return base.filter(p => `${p.sku} ${p.modelo} ${p.color} ${p.categoria}`.toLowerCase().includes(q)).slice(0, 60);
   }, [productos, buscar]);
 
-  function abrirPicker(promo) { setPromoSel(promo); setSelected([]); setTvMap({}); setBuscar(''); setVista('picker'); }
+  function abrirPicker(promo) { setPromoSel(promo); setSelected([]); setComboTv('MAYOR'); setBuscar(''); setVista('picker'); }
 
   function togglePieza(prod) {
     setSelected(prev => {
       const existe = prev.find(x => x.sku === prod.sku);
       if (existe) return prev.filter(x => x.sku !== prod.sku);
       if (prev.length >= promoSel.num_piezas) return prev;
-      setTvMap(m => ({ ...m, [prod.sku]: m[prod.sku] || 'MAYOR' }));
       return [...prev, prod];
     });
   }
 
-  function setTv(sku, tv) { setTvMap(m => ({ ...m, [sku]: tv })); }
-
   function confirmar() {
     if (!promoSel || selected.length !== promoSel.num_piezas) return;
-    const items = selected.map(prod => {
-      const tv = tvMap[prod.sku] || 'MAYOR';
-      const precioTotal = tv === 'MAYOR' ? (promoSel.precio_mayor || 0) : (promoSel.precio_detal || 0);
-      const precioUnitario = precioTotal / promoSel.num_piezas;
-      return { ...prod, qty: 1, tipoVenta: tv, promoTag: promoSel.id, promoNombre: promoSel.nombre, precioPromo: precioUnitario, precio: precioUnitario };
-    });
+    const precioTotal = comboTv === 'MAYOR' ? (promoSel.precio_mayor || 0) : (promoSel.precio_detal || 0);
+    const precioUnitario = precioTotal / promoSel.num_piezas;
+    const items = selected.map(prod => ({
+      ...prod, qty: 1, tipoVenta: comboTv,
+      promoTag: promoSel.id, promoNombre: promoSel.nombre,
+      precioPromo: precioUnitario, precio: precioUnitario,
+    }));
     onAdd(items);
     onClose();
   }
@@ -185,24 +183,15 @@ export default function ModalPromo({ productos = [], onAdd, onClose, isAdmin = f
             {selected.length>0&&(
               <div style={{padding:'10px 18px',background:'#f5f3ff',borderBottom:'1px solid #7c3aed33',display:'flex',gap:'6px',flexWrap:'wrap',flexShrink:0,alignItems:'center'}}>
                 {selected.map(prod=>{
-                  const tv=tvMap[prod.sku]||'MAYOR';
-                  const precioUnit=((tv==='MAYOR'?(promoSel.precio_mayor||0):(promoSel.precio_detal||0))/promoSel.num_piezas);
+                  const precioUnit=((comboTv==='MAYOR'?(promoSel.precio_mayor||0):(promoSel.precio_detal||0))/promoSel.num_piezas);
                   return(
-                    <div key={prod.sku} style={{display:'flex',alignItems:'center',gap:'0',border:'1px solid #7c3aed',overflow:'hidden',background:'#fff',flexShrink:0}}>
-                      <div style={{display:'flex',alignItems:'center',gap:'5px',padding:'5px 8px 5px 10px',fontSize:'11px',fontWeight:600,color:'#3b0764'}}>
+                    <div key={prod.sku} style={{display:'flex',alignItems:'center',gap:'0',border:`1px solid ${comboTv==='MAYOR'?'#f59e0b':'#3b82f6'}`,overflow:'hidden',background:'#fff',flexShrink:0}}>
+                      <div style={{display:'flex',alignItems:'center',gap:'5px',padding:'5px 10px',fontSize:'11px',fontWeight:600,color:'#000'}}>
                         <span style={{width:'7px',height:'7px',borderRadius:'50%',background:colorHex(prod.color),border:'1px solid rgba(0,0,0,.15)',flexShrink:0}}/>
                         {prod.modelo}
-                        <span style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#7c3aed',fontWeight:700}}>€{precioUnit.toFixed(2)}</span>
+                        <span style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:comboTv==='MAYOR'?'#f59e0b':'#3b82f6',fontWeight:700}}>€{precioUnit.toFixed(2)}</span>
                       </div>
-                      {['MAYOR','DETAL'].map(t=>(
-                        <button key={t} onClick={()=>setTv(prod.sku,t)}
-                          style={{padding:'5px 8px',border:'none',borderLeft:'1px solid #7c3aed33',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'8px',fontWeight:700,
-                            background:tv===t?(t==='MAYOR'?'#f59e0b':'#3b82f6'):'transparent',
-                            color:tv===t?'#fff':'#aaa',transition:'background .1s'}}>
-                          {t==='MAYOR'?'M':'D'}
-                        </button>
-                      ))}
-                      <button onClick={()=>togglePieza(prod)} style={{padding:'5px 7px',border:'none',borderLeft:'1px solid #7c3aed33',cursor:'pointer',background:'transparent',color:'#bbb',fontSize:'13px',lineHeight:1}}>✕</button>
+                      <button onClick={()=>togglePieza(prod)} style={{padding:'5px 8px',border:'none',borderLeft:`1px solid ${comboTv==='MAYOR'?'#f59e0b44':'#3b82f644'}`,cursor:'pointer',background:'transparent',color:'#bbb',fontSize:'13px',lineHeight:1}}>✕</button>
                     </div>
                   );
                 })}
@@ -213,6 +202,22 @@ export default function ModalPromo({ productos = [], onAdd, onClose, isAdmin = f
                 ))}
               </div>
             )}
+
+            {/* Toggle M/D único para todo el combo */}
+            <div style={{padding:'10px 18px',background:'var(--bg2)',borderBottom:'1px solid var(--border)',flexShrink:0,display:'flex',alignItems:'center',gap:'10px'}}>
+              <span style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#666',letterSpacing:'.1em',textTransform:'uppercase',flexShrink:0}}>Precio del combo:</span>
+              <div style={{display:'flex',border:'1px solid var(--border)',overflow:'hidden',borderRadius:'4px'}}>
+                {[['MAYOR','#f59e0b'],['DETAL','#3b82f6']].map(([tv,color])=>(
+                  <button key={tv} onClick={()=>setComboTv(tv)}
+                    style={{padding:'7px 20px',border:'none',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'10px',fontWeight:700,
+                      background:comboTv===tv?color:'var(--bg3)',
+                      color:comboTv===tv?'#fff':'#888',transition:'all .15s',letterSpacing:'.08em'}}>
+                    {tv} · €{(tv==='MAYOR'?(promoSel.precio_mayor||0):(promoSel.precio_detal||0)).toFixed(2)}
+                  </button>
+                ))}
+              </div>
+              <span style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888'}}>€{((comboTv==='MAYOR'?(promoSel.precio_mayor||0):(promoSel.precio_detal||0))/promoSel.num_piezas).toFixed(2)}/prenda</span>
+            </div>
 
             <div style={{padding:'10px 18px',borderBottom:'1px solid var(--border)',flexShrink:0}}>
               <div style={{display:'flex',alignItems:'center',gap:'8px',background:'var(--bg2)',border:'1px solid var(--border)',padding:'8px 12px'}}>
@@ -226,9 +231,8 @@ export default function ModalPromo({ productos = [], onAdd, onClose, isAdmin = f
               {prodsFiltrados.map(prod=>{
                 const isSelected=selected.some(x=>x.sku===prod.sku);
                 const lleno=selected.length>=promoSel.num_piezas&&!isSelected;
-                const tv=tvMap[prod.sku]||'MAYOR';
                 const dot=colorHex(prod.color);
-                const precioUnit=((tv==='MAYOR'?(promoSel.precio_mayor||0):(promoSel.precio_detal||0))/promoSel.num_piezas);
+                const precioUnit=((comboTv==='MAYOR'?(promoSel.precio_mayor||0):(promoSel.precio_detal||0))/promoSel.num_piezas);
                 return(
                   <div key={prod.sku} onClick={()=>!lleno&&togglePieza(prod)}
                     style={{display:'grid',gridTemplateColumns:'auto 1fr auto',gap:'12px',padding:'10px 18px',borderBottom:'1px solid var(--border)',
@@ -249,16 +253,14 @@ export default function ModalPromo({ productos = [], onAdd, onClose, isAdmin = f
                         {' · '}Ind. M:€{(prod.precioMayor||0).toFixed(2)} D:€{(prod.precioDetal||0).toFixed(2)}
                       </div>
                     </div>
-                    <div style={{textAlign:'right',flexShrink:0,minWidth:'90px'}}>
+                    <div style={{textAlign:'right',flexShrink:0,minWidth:'80px'}}>
                       {isSelected?(
-                        <div>
-                          <div style={{fontFamily:'DM Mono,monospace',fontSize:'11px',fontWeight:700,color:'#7c3aed'}}>€{precioUnit.toFixed(2)}</div>
-                          <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',fontWeight:700,color:tv==='MAYOR'?'#f59e0b':'#3b82f6'}}>{tv}</div>
+                        <div style={{fontFamily:'DM Mono,monospace',fontSize:'12px',fontWeight:700,color:comboTv==='MAYOR'?'#f59e0b':'#3b82f6'}}>
+                          €{precioUnit.toFixed(2)}
                         </div>
                       ):(
-                        <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#ccc',lineHeight:1.8}}>
-                          M:€{((promoSel.precio_mayor||0)/promoSel.num_piezas).toFixed(2)}<br/>
-                          D:€{((promoSel.precio_detal||0)/promoSel.num_piezas).toFixed(2)}
+                        <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#ccc'}}>
+                          €{precioUnit.toFixed(2)}
                         </div>
                       )}
                     </div>
@@ -271,7 +273,7 @@ export default function ModalPromo({ productos = [], onAdd, onClose, isAdmin = f
               <div style={{flex:1,fontFamily:'DM Mono,monospace',fontSize:'10px'}}>
                 {falta>0
                   ?<span style={{color:'#888'}}>Selecciona {falta} prenda{falta!==1?'s':''} más</span>
-                  :<span style={{color:'var(--green)',fontWeight:700}}>✅ Combo listo — M:€{(promoSel.precio_mayor||0).toFixed(2)} · D:€{(promoSel.precio_detal||0).toFixed(2)}</span>
+                  :<span style={{color:'var(--green)',fontWeight:700}}>✅ Combo listo — {comboTv} €{(comboTv==='MAYOR'?(promoSel.precio_mayor||0):(promoSel.precio_detal||0)).toFixed(2)}</span>
                 }
               </div>
               <button onClick={confirmar} disabled={falta>0}

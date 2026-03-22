@@ -257,58 +257,137 @@ export default function VentaDirectaPage() {
               </div>
             ) : (
               <>
-                {[...cart].reverse().map(item => {
-                  const precio = precioItem(item);
-                  const dot    = colorHex(item.color);
-                  return (
-                    <div key={item.sku} className="item-row">
-                      <div style={{ minWidth:0 }}>
-                        <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
-                          <span style={{ width:'8px', height:'8px', borderRadius:'50%', background:dot,
-                            border:'1px solid rgba(0,0,0,.12)', flexShrink:0 }}/>
-                          <span style={{ fontSize:'13px', fontWeight:600,
-                            overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                            {item.modelo} — {item.color}
-                          </span>
+                {(() => {
+                  // Agrupar items: combos juntos, normales sueltos
+                  const reversed = [...cart].reverse();
+                  const rendered = [];
+                  const promoGroups = {}; // promoTag -> items[]
+
+                  reversed.forEach(item => {
+                    if (item.promoTag) {
+                      if (!promoGroups[item.promoTag]) promoGroups[item.promoTag] = [];
+                      promoGroups[item.promoTag].push(item);
+                    }
+                  });
+
+                  // Track which promoTags already rendered
+                  const renderedPromos = new Set();
+
+                  reversed.forEach((item, idx) => {
+                    if (item.promoTag) {
+                      if (renderedPromos.has(item.promoTag)) return;
+                      renderedPromos.add(item.promoTag);
+                      const group = promoGroups[item.promoTag];
+                      const promoTotal = group.reduce((a, it) => a + precioItem(it) * it.qty, 0);
+                      const promoColor = item.tipoVenta === 'MAYOR' ? '#f59e0b' : '#3b82f6';
+                      rendered.push(
+                        <div key={`promo-${item.promoTag}`}
+                          style={{ border:`1px solid ${promoColor}44`, borderLeft:`3px solid ${promoColor}`,
+                            marginBottom:'2px', background: item.tipoVenta==='MAYOR'?'#fffbeb':'#eff6ff',
+                            overflow:'hidden' }}>
+                          {/* Cabecera del combo */}
+                          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
+                            padding:'5px 10px', background: item.tipoVenta==='MAYOR'?'#fef3c7':'#dbeafe',
+                            borderBottom:`1px solid ${promoColor}33` }}>
+                            <span style={{ fontFamily:'DM Mono,monospace', fontSize:'8px', fontWeight:700,
+                              color: promoColor, letterSpacing:'.1em', textTransform:'uppercase' }}>
+                              🎁 {item.promoNombre} · {item.tipoVenta}
+                            </span>
+                            <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+                              <span style={{ fontFamily:'DM Mono,monospace', fontSize:'10px',
+                                fontWeight:700, color: promoColor }}>
+                                €{promoTotal.toFixed(2)}
+                              </span>
+                              <button
+                                onClick={() => setCart(prev => prev.filter(x => x.promoTag !== item.promoTag))}
+                                style={{ background:'none', border:'none', cursor:'pointer',
+                                  fontFamily:'DM Mono,monospace', fontSize:'9px', color:'#aaa',
+                                  padding:'1px 5px' }}>
+                                ✕ quitar
+                              </button>
+                            </div>
+                          </div>
+                          {/* Items del combo */}
+                          {group.map(it => {
+                            const precio = precioItem(it);
+                            const dot = colorHex(it.color);
+                            return (
+                              <div key={it.sku} style={{ display:'flex', alignItems:'center',
+                                gap:'8px', padding:'7px 10px',
+                                borderBottom:`1px solid ${promoColor}22` }}>
+                                <span style={{ width:'7px', height:'7px', borderRadius:'50%',
+                                  background:dot, border:'1px solid rgba(0,0,0,.12)', flexShrink:0 }}/>
+                                <div style={{ flex:1, minWidth:0 }}>
+                                  <div style={{ fontSize:'12px', fontWeight:600,
+                                    overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                                    {it.modelo} — {it.color}
+                                  </div>
+                                  <div style={{ fontFamily:'DM Mono,monospace', fontSize:'8px', color:'#888' }}>
+                                    {it.sku}
+                                  </div>
+                                </div>
+                                <span style={{ fontFamily:'DM Mono,monospace', fontSize:'11px',
+                                  fontWeight:700, color: promoColor, flexShrink:0 }}>
+                                  €{precio.toFixed(2)}
+                                </span>
+                              </div>
+                            );
+                          })}
                         </div>
-                        <div style={{ fontFamily:'DM Mono,monospace', fontSize:'9px', color:'#888', marginTop:'2px' }}>
-                          {item.sku} · <strong style={{ color: item.tipoVenta==='MAYOR'?'var(--warn)':'var(--blue)' }}>
-                            €{precio.toFixed(2)} ×{item.qty} = €{(precio*item.qty).toFixed(2)}
-                          </strong>
+                      );
+                    } else {
+                      // Item normal
+                      const precio = precioItem(item);
+                      const dot = colorHex(item.color);
+                      rendered.push(
+                        <div key={item.sku} className="item-row">
+                          <div style={{ minWidth:0 }}>
+                            <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
+                              <span style={{ width:'8px', height:'8px', borderRadius:'50%', background:dot,
+                                border:'1px solid rgba(0,0,0,.12)', flexShrink:0 }}/>
+                              <span style={{ fontSize:'13px', fontWeight:600,
+                                overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                                {item.modelo} — {item.color}
+                              </span>
+                            </div>
+                            <div style={{ fontFamily:'DM Mono,monospace', fontSize:'9px', color:'#888', marginTop:'2px' }}>
+                              {item.sku} · <strong style={{ color: item.tipoVenta==='MAYOR'?'var(--warn)':'var(--blue)' }}>
+                                €{precio.toFixed(2)} ×{item.qty} = €{(precio*item.qty).toFixed(2)}
+                              </strong>
+                            </div>
+                          </div>
+                          <div className="item-detal-mayor" style={{ display:'flex', border:'1px solid var(--border)', borderRadius:'3px', overflow:'hidden', flexShrink:0 }}>
+                            {['DETAL','MAYOR'].map(tv => (
+                              <button key={tv} className="tv-btn" onClick={() => setItemTV(item.sku, tv)}
+                                style={{ background: item.tipoVenta===tv?(tv==='DETAL'?'var(--blue)':'var(--warn)'):'var(--bg3)',
+                                  color: item.tipoVenta===tv?'#fff':'#777' }}>
+                                {tv[0]}
+                              </button>
+                            ))}
+                          </div>
+                          <div style={{ display:'flex', alignItems:'center', border:'1px solid var(--border)',
+                            borderRadius:'3px', overflow:'hidden', flexShrink:0 }}>
+                            <button onClick={() => changeQty(item.sku, -1)}
+                              style={{ width:'28px', height:'28px', background:'var(--bg3)', border:'none', cursor:'pointer', fontSize:'15px' }}>−</button>
+                            <span style={{ fontFamily:'DM Mono,monospace', fontSize:'13px', fontWeight:700,
+                              width:'30px', textAlign:'center', borderLeft:'1px solid var(--border)',
+                              borderRight:'1px solid var(--border)', lineHeight:'28px' }}>{item.qty}</span>
+                            <button onClick={() => changeQty(item.sku, 1)}
+                              style={{ width:'28px', height:'28px', background:'var(--bg3)', border:'none', cursor:'pointer', fontSize:'15px' }}>+</button>
+                          </div>
+                          <div className="item-total" style={{ fontFamily:'DM Mono,monospace', fontSize:'12px',
+                            fontWeight:700, minWidth:'56px', textAlign:'right', flexShrink:0 }}>
+                            €{(precio*item.qty).toFixed(2)}
+                          </div>
+                          <button onClick={() => removeItem(item.sku)}
+                            style={{ width:'22px', height:'22px', background:'none', border:'1px solid var(--border)',
+                              cursor:'pointer', fontSize:'11px', color:'#888', flexShrink:0, borderRadius:'3px' }}>✕</button>
                         </div>
-                      </div>
-                      {/* D/M buttons */}
-                      <div className="item-detal-mayor" style={{ display:'flex', border:'1px solid var(--border)', borderRadius:'3px', overflow:'hidden', flexShrink:0 }}>
-                        {['DETAL','MAYOR'].map(tv => (
-                          <button key={tv} className="tv-btn" onClick={() => setItemTV(item.sku, tv)}
-                            style={{ background: item.tipoVenta===tv ? (tv==='DETAL'?'var(--blue)':'var(--warn)') : 'var(--bg3)',
-                              color: item.tipoVenta===tv ? '#fff' : '#777' }}>
-                            {tv[0]}
-                          </button>
-                        ))}
-                      </div>
-                      {/* Qty control */}
-                      <div style={{ display:'flex', alignItems:'center', border:'1px solid var(--border)',
-                        borderRadius:'3px', overflow:'hidden', flexShrink:0 }}>
-                        <button onClick={() => changeQty(item.sku, -1)}
-                          style={{ width:'28px', height:'28px', background:'var(--bg3)', border:'none', cursor:'pointer', fontSize:'15px' }}>−</button>
-                        <span style={{ fontFamily:'DM Mono,monospace', fontSize:'13px', fontWeight:700,
-                          width:'30px', textAlign:'center', borderLeft:'1px solid var(--border)',
-                          borderRight:'1px solid var(--border)', lineHeight:'28px' }}>{item.qty}</span>
-                        <button onClick={() => changeQty(item.sku, 1)}
-                          style={{ width:'28px', height:'28px', background:'var(--bg3)', border:'none', cursor:'pointer', fontSize:'15px' }}>+</button>
-                      </div>
-                      {/* Total */}
-                      <div className="item-total" style={{ fontFamily:'DM Mono,monospace', fontSize:'12px',
-                        fontWeight:700, minWidth:'56px', textAlign:'right', flexShrink:0 }}>
-                        €{(precio*item.qty).toFixed(2)}
-                      </div>
-                      <button onClick={() => removeItem(item.sku)}
-                        style={{ width:'22px', height:'22px', background:'none', border:'1px solid var(--border)',
-                          cursor:'pointer', fontSize:'11px', color:'#888', flexShrink:0, borderRadius:'3px' }}>✕</button>
-                    </div>
-                  );
-                })}
+                      );
+                    }
+                  });
+                  return rendered;
+                })()}
                 {/* Total */}
                 <div style={{ padding:'12px 14px', background:'var(--bg3)',
                   borderTop:'1px solid var(--border)', display:'flex',
