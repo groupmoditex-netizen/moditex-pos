@@ -28,8 +28,22 @@ export default function CatalogoPage() {
 
   useEffect(() => {
     cargar();
-    // Entry animation: scissors cut open
+    // Entry animation
     setTimeout(() => setOpening(false), 900);
+
+    // ── Tiempo real: recargar cuando la tab vuelve a ser visible ──
+    function onVisible() {
+      if (document.visibilityState === 'visible') cargar();
+    }
+    document.addEventListener('visibilitychange', onVisible);
+
+    // ── Polling cada 60 segundos ──────────────────────────────────
+    const interval = setInterval(cargar, 60_000);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      clearInterval(interval);
+    };
   }, []);
 
   async function cargar() {

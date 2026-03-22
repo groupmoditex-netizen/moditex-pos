@@ -80,6 +80,8 @@ export default function CatalogoAdminPage() {
       }).then(r=>r.json());
       if (res.ok) {
         setCfgMap(prev => ({ ...prev, [key]: { ...(prev[key]||{}), modelo_key:key, en_catalogo:!current } }));
+        // Re-sync from DB after 500ms to confirm
+        setTimeout(() => cargarConfig(), 600);
       } else {
         setMsg({ t:'err', m:'Error al guardar: ' + (res.error||'desconocido') + '. ¿Ejecutaste CATALOGO.sql en Supabase?' });
       }
@@ -201,10 +203,16 @@ export default function CatalogoAdminPage() {
           </div>
         </div>
         <div style={{ display:'flex', gap:'8px' }}>
-          <a href="/catalogo" target="_blank" rel="noreferrer"
-            style={{ padding:'9px 16px', background:'#0a0a0a', color:'#c9a84c', border:'none', cursor:'pointer', fontFamily:'Poppins,sans-serif', fontSize:'11px', fontWeight:700, textDecoration:'none', display:'flex', alignItems:'center', gap:'6px' }}>
-            🌐 Ver catálogo →
-          </a>
+          <div style={{ display:'flex', gap:'8px' }}>
+            <button onClick={cargarConfig}
+              style={{ padding:'9px 14px', background:'none', border:'1px solid var(--border)', cursor:'pointer', fontFamily:'DM Mono,monospace', fontSize:'9px', color:'#666', letterSpacing:'.08em' }}>
+              ↺ Actualizar
+            </button>
+            <a href="/catalogo" target="_blank" rel="noreferrer"
+              style={{ padding:'9px 16px', background:'#0a0a0a', color:'#c9a84c', border:'none', cursor:'pointer', fontFamily:'Poppins,sans-serif', fontSize:'11px', fontWeight:700, textDecoration:'none', display:'flex', alignItems:'center', gap:'6px' }}>
+              🌐 Ver catálogo →
+            </a>
+          </div>
         </div>
       </div>
 
