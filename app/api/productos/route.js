@@ -7,24 +7,20 @@ import { NextResponse } from 'next/server';
 // GET /api/productos
 export async function GET() {
   try {
-    const [{ data: prods }, { data: inv }, { data: movs }] = await Promise.all([
+    const [{ data: prods }, { data: inv }] = await Promise.all([
       supabase.from('productos').select('*').order('categoria').order('modelo'),
       supabase.from('inventario').select('sku,stock'),
-      supabase.from('movimientos').select('sku,tipo,cantidad'),
     ]);
-    const stockMap={}, entMap={}, salMap={};
+    // inventario.stock ES el stock actualizado — ya incluye entradas/salidas
+    const stockMap={};
     (inv||[]).forEach(r=>{ stockMap[r.sku]=r.stock; });
-    (movs||[]).forEach(m=>{
-      if(m.tipo==='ENTRADA') entMap[m.sku]=(entMap[m.sku]||0)+m.cantidad;
-      else if(m.tipo==='SALIDA') salMap[m.sku]=(salMap[m.sku]||0)+m.cantidad;
-    });
 
     const resultado = (prods||[]).map(p=>({
       sku:p.sku, categoria:p.categoria, modelo:p.modelo, talla:p.talla, color:p.color,
       precioDetal:p.precio_detal, precioMayor:p.precio_mayor, precioCosto:p.precio_costo||0,
       stockInicial:p.stock_inicial, tela:p.tela||'',
       disponible: stockMap[p.sku] !== undefined ? stockMap[p.sku] : p.stock_inicial,
-      entradas:entMap[p.sku]||0, salidas:salMap[p.sku]||0,
+      entradas:0, salidas:0,
     }));
 
     // ✅ Cache-Control explícito — evita que el navegador y CDN cacheen esta respuesta

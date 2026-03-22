@@ -16,6 +16,7 @@ export async function GET(request) {
 
     if (desde) q = q.gte('fecha', desde + 'T00:00:00.000Z');
     if (hasta) q = q.lte('fecha', hasta + 'T23:59:59.999Z');
+    q = q.order('fecha', { ascending: false }).limit(5000); // Safety cap
 
     const { data: movs, error } = await q;
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });

@@ -9,7 +9,7 @@ export async function GET() {
     const [r1, r2, r3, r4] = await Promise.all([
       supabase.from('productos').select('sku,categoria,modelo,talla,color,precio_detal,precio_mayor,precio_costo,stock_inicial').order('categoria').order('modelo'),
       supabase.from('movimientos').select('sku,tipo,cantidad,id,fecha,concepto,contacto,tipo_venta,precio_venta,cliente_id,created_at').order('created_at',{ascending:false}).limit(500),
-      supabase.from('clientes').select('id,nombre,cedula,telefono,email,ciudad,fecha_registro').order('nombre'),
+      supabase.from('clientes').select('id,nombre,cedula,telefono,email,ciudad,fecha_registro').order('nombre').limit(2000),
       supabase.from('comandas').select('id,cliente,cliente_id,productos,precio,monto_pagado,status,notas,fecha_entrega,fecha_creacion,created_at').order('created_at',{ascending:false}).limit(100),
     ]);
 
