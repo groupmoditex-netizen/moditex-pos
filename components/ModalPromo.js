@@ -6,6 +6,7 @@
  */
 import { useState, useMemo, useEffect } from 'react';
 import { colorHex } from '@/utils/colores';
+import CatalogoExplorer from '@/components/CatalogoExplorer';
 
 const lbl = { fontFamily:'DM Mono,monospace', fontSize:'8px', letterSpacing:'.14em', textTransform:'uppercase', color:'#666', display:'block', marginBottom:'5px' };
 const inp = { width:'100%', padding:'9px 11px', background:'var(--bg2)', border:'1px solid var(--border)', fontFamily:'Poppins,sans-serif', fontSize:'13px', outline:'none', boxSizing:'border-box' };
@@ -18,6 +19,8 @@ export default function ModalPromo({ productos = [], onAdd, onClose, isAdmin = f
   const [promoSel,  setPromoSel]  = useState(null);
   const [selected,  setSelected]  = useState([]);
   const [comboTv,   setComboTv]   = useState('MAYOR');
+  const [showCat,   setShowCat]   = useState(false);
+  const comboBuffer = { current: [] };
 
   const [buscar,    setBuscar]    = useState('');
 
@@ -53,7 +56,7 @@ export default function ModalPromo({ productos = [], onAdd, onClose, isAdmin = f
     return base.filter(p => `${p.sku} ${p.modelo} ${p.color} ${p.categoria}`.toLowerCase().includes(q)).slice(0, 60);
   }, [productos, buscar]);
 
-  function abrirPicker(promo) { setPromoSel(promo); setSelected([]); setComboTv('MAYOR'); setBuscar(''); setVista('picker'); }
+  function abrirPicker(promo) { setPromoSel(promo); setSelected([]); setComboTv('MAYOR'); setBuscar(''); setShowCat(false); setVista('picker'); }
 
   function togglePieza(prod) {
     setSelected(prev => {
@@ -66,9 +69,29 @@ export default function ModalPromo({ productos = [], onAdd, onClose, isAdmin = f
 
   function confirmar() {
     if (!promoSel || selected.length !== promoSel.num_piezas) return;
+    _doConfirmar(selected);
+  }
+
+  function confirmarDesdeCatalogo() {
+    // Called after CatalogoExplorer confirms — comboBuffer.current has the items
+    const buf = comboBuffer.current || [];
+    if (!promoSel || buf.length === 0) { setShowCat(false); return; }
+    // Flatten: each onAdd(prod, qty, tv) call becomes qty individual items
+    const expanded = [];
+    buf.forEach(({ prod, qty }) => {
+      for (let i = 0; i < qty; i++) expanded.push(prod);
+    });
+    const piezas = expanded.slice(0, promoSel.num_piezas);
+    setSelected(piezas);
+    comboBuffer.current = [];
+    setShowCat(false);
+    _doConfirmar(piezas);
+  }
+
+  function _doConfirmar(piezas) {
     const precioTotal = comboTv === 'MAYOR' ? (promoSel.precio_mayor || 0) : (promoSel.precio_detal || 0);
     const precioUnitario = precioTotal / promoSel.num_piezas;
-    const items = selected.map(prod => ({
+    const items = piezas.map(prod => ({
       ...prod, qty: 1, tipoVenta: comboTv,
       promoTag: promoSel.id, promoNombre: promoSel.nombre,
       precioPromo: precioUnitario, precio: precioUnitario,
@@ -178,111 +201,67 @@ export default function ModalPromo({ productos = [], onAdd, onClose, isAdmin = f
           </div>
         )}
 
-        {/* ── PICKER DE PIEZAS ── */}
-        {vista==='picker'&&promoSel&&(
-          <>
-            {selected.length>0&&(
-              <div style={{padding:'10px 18px',background:'#f5f3ff',borderBottom:'1px solid #7c3aed33',display:'flex',gap:'6px',flexWrap:'wrap',flexShrink:0,alignItems:'center'}}>
-                {selected.map(prod=>{
-                  const precioUnit=((comboTv==='MAYOR'?(promoSel.precio_mayor||0):(promoSel.precio_detal||0))/promoSel.num_piezas);
-                  return(
-                    <div key={prod.sku} style={{display:'flex',alignItems:'center',gap:'0',border:`1px solid ${comboTv==='MAYOR'?'#f59e0b':'#3b82f6'}`,overflow:'hidden',background:'#fff',flexShrink:0}}>
-                      <div style={{display:'flex',alignItems:'center',gap:'5px',padding:'5px 10px',fontSize:'11px',fontWeight:600,color:'#000'}}>
-                        <span style={{width:'7px',height:'7px',borderRadius:'50%',background:colorHex(prod.color),border:'1px solid rgba(0,0,0,.15)',flexShrink:0}}/>
-                        {prod.modelo}
-                        <span style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:comboTv==='MAYOR'?'#f59e0b':'#3b82f6',fontWeight:700}}>€{precioUnit.toFixed(2)}</span>
-                      </div>
-                      <button onClick={()=>togglePieza(prod)} style={{padding:'5px 8px',border:'none',borderLeft:`1px solid ${comboTv==='MAYOR'?'#f59e0b44':'#3b82f644'}`,cursor:'pointer',background:'transparent',color:'#bbb',fontSize:'13px',lineHeight:1}}>✕</button>
-                    </div>
-                  );
-                })}
-                {Array.from({length:falta}).map((_,i)=>(
-                  <div key={`v${i}`} style={{padding:'5px 14px',border:'2px dashed #7c3aed55',color:'#7c3aed',fontFamily:'DM Mono,monospace',fontSize:'9px',opacity:.5,flexShrink:0}}>
-                    + prenda {selected.length+i+1}
+        {/* ── PICKER: M/D toggle + botón abrir catálogo ── */}
+        {vista==='picker'&&promoSel&&!showCat&&(
+          <div style={{display:'flex',flexDirection:'column',flex:1,overflowY:'auto'}}>
+            {/* Toggle M/D + info */}
+            <div style={{padding:'14px 18px',borderBottom:'1px solid var(--border)',background:'var(--bg2)',flexShrink:0}}>
+              <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.12em',textTransform:'uppercase',color:'#888',marginBottom:'10px'}}>
+                Precio del combo — {promoSel.num_piezas} piezas
+              </div>
+              <div style={{display:'flex',gap:'10px',alignItems:'center',flexWrap:'wrap'}}>
+                <div style={{display:'flex',border:'1px solid var(--border)',overflow:'hidden',borderRadius:'4px'}}>
+                  {[['MAYOR','#f59e0b'],['DETAL','#3b82f6']].map(([tv,color])=>(
+                    <button key={tv} onClick={()=>setComboTv(tv)}
+                      style={{padding:'10px 24px',border:'none',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'11px',fontWeight:700,
+                        background:comboTv===tv?color:'var(--bg3)',
+                        color:comboTv===tv?'#fff':'#888',transition:'all .15s',letterSpacing:'.08em'}}>
+                      {tv}<br/>
+                      <span style={{fontSize:'14px'}}>€{(tv==='MAYOR'?(promoSel.precio_mayor||0):(promoSel.precio_detal||0)).toFixed(2)}</span>
+                    </button>
+                  ))}
+                </div>
+                <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888',lineHeight:1.7}}>
+                  <div>€{((comboTv==='MAYOR'?(promoSel.precio_mayor||0):(promoSel.precio_detal||0))/promoSel.num_piezas).toFixed(2)} / prenda</div>
+                  <div style={{color:comboTv==='MAYOR'?'#f59e0b':'#3b82f6',fontWeight:700}}>
+                    Total combo: €{(comboTv==='MAYOR'?(promoSel.precio_mayor||0):(promoSel.precio_detal||0)).toFixed(2)}
                   </div>
-                ))}
-              </div>
-            )}
-
-            {/* Toggle M/D único para todo el combo */}
-            <div style={{padding:'10px 18px',background:'var(--bg2)',borderBottom:'1px solid var(--border)',flexShrink:0,display:'flex',alignItems:'center',gap:'10px'}}>
-              <span style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#666',letterSpacing:'.1em',textTransform:'uppercase',flexShrink:0}}>Precio del combo:</span>
-              <div style={{display:'flex',border:'1px solid var(--border)',overflow:'hidden',borderRadius:'4px'}}>
-                {[['MAYOR','#f59e0b'],['DETAL','#3b82f6']].map(([tv,color])=>(
-                  <button key={tv} onClick={()=>setComboTv(tv)}
-                    style={{padding:'7px 20px',border:'none',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'10px',fontWeight:700,
-                      background:comboTv===tv?color:'var(--bg3)',
-                      color:comboTv===tv?'#fff':'#888',transition:'all .15s',letterSpacing:'.08em'}}>
-                    {tv} · €{(tv==='MAYOR'?(promoSel.precio_mayor||0):(promoSel.precio_detal||0)).toFixed(2)}
-                  </button>
-                ))}
-              </div>
-              <span style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888'}}>€{((comboTv==='MAYOR'?(promoSel.precio_mayor||0):(promoSel.precio_detal||0))/promoSel.num_piezas).toFixed(2)}/prenda</span>
-            </div>
-
-            <div style={{padding:'10px 18px',borderBottom:'1px solid var(--border)',flexShrink:0}}>
-              <div style={{display:'flex',alignItems:'center',gap:'8px',background:'var(--bg2)',border:'1px solid var(--border)',padding:'8px 12px'}}>
-                <span style={{color:'#888'}}>🔍</span>
-                <input value={buscar} onChange={e=>setBuscar(e.target.value)} placeholder="Buscar por modelo, SKU, color…" autoFocus
-                  style={{background:'none',border:'none',outline:'none',fontFamily:'Poppins,sans-serif',fontSize:'12px',width:'100%'}}/>
+                </div>
               </div>
             </div>
-
-            <div style={{overflowY:'auto',flex:1}}>
-              {prodsFiltrados.map(prod=>{
-                const isSelected=selected.some(x=>x.sku===prod.sku);
-                const lleno=selected.length>=promoSel.num_piezas&&!isSelected;
-                const dot=colorHex(prod.color);
-                const precioUnit=((comboTv==='MAYOR'?(promoSel.precio_mayor||0):(promoSel.precio_detal||0))/promoSel.num_piezas);
-                return(
-                  <div key={prod.sku} onClick={()=>!lleno&&togglePieza(prod)}
-                    style={{display:'grid',gridTemplateColumns:'auto 1fr auto',gap:'12px',padding:'10px 18px',borderBottom:'1px solid var(--border)',
-                      background:isSelected?'#f5f3ff':'transparent',cursor:lleno?'not-allowed':'pointer',opacity:lleno?.35:1,transition:'background .1s'}}
-                    onMouseEnter={e=>{if(!lleno&&!isSelected)e.currentTarget.style.background='var(--bg2)';}}
-                    onMouseLeave={e=>{if(!isSelected)e.currentTarget.style.background='transparent';}}>
-                    <div style={{width:'20px',height:'20px',border:`2px solid ${isSelected?'#7c3aed':'var(--border)'}`,background:isSelected?'#7c3aed':'var(--bg2)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:'2px'}}>
-                      {isSelected&&<span style={{color:'#fff',fontSize:'12px',fontWeight:700}}>✓</span>}
-                    </div>
-                    <div>
-                      <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
-                        <span style={{width:'9px',height:'9px',borderRadius:'50%',background:dot,border:'1px solid rgba(0,0,0,.1)',flexShrink:0}}/>
-                        <span style={{fontSize:'13px',fontWeight:600}}>{prod.modelo} — {prod.color}</span>
-                        {prod.talla&&prod.talla!=='UNICA'&&<span style={{fontFamily:'DM Mono,monospace',fontSize:'8px',background:'var(--bg3)',padding:'1px 5px'}}>T:{prod.talla}</span>}
-                      </div>
-                      <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888',marginTop:'2px'}}>
-                        {prod.sku} · Stock: <strong style={{color:'var(--blue)'}}>{prod.disponible}</strong>
-                        {' · '}Ind. M:€{(prod.precioMayor||0).toFixed(2)} D:€{(prod.precioDetal||0).toFixed(2)}
-                      </div>
-                    </div>
-                    <div style={{textAlign:'right',flexShrink:0,minWidth:'80px'}}>
-                      {isSelected?(
-                        <div style={{fontFamily:'DM Mono,monospace',fontSize:'12px',fontWeight:700,color:comboTv==='MAYOR'?'#f59e0b':'#3b82f6'}}>
-                          €{precioUnit.toFixed(2)}
-                        </div>
-                      ):(
-                        <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#ccc'}}>
-                          €{precioUnit.toFixed(2)}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div style={{padding:'12px 18px',borderTop:'1px solid var(--border)',background:'var(--bg2)',display:'flex',gap:'10px',alignItems:'center',flexShrink:0}}>
-              <div style={{flex:1,fontFamily:'DM Mono,monospace',fontSize:'10px'}}>
-                {falta>0
-                  ?<span style={{color:'#888'}}>Selecciona {falta} prenda{falta!==1?'s':''} más</span>
-                  :<span style={{color:'var(--green)',fontWeight:700}}>✅ Combo listo — {comboTv} €{(comboTv==='MAYOR'?(promoSel.precio_mayor||0):(promoSel.precio_detal||0)).toFixed(2)}</span>
-                }
+            {/* Botón abrir catálogo */}
+            <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'16px',padding:'32px 24px'}}>
+              <div style={{fontSize:'48px'}}>🗂️</div>
+              <div style={{fontFamily:'Poppins,sans-serif',fontSize:'15px',fontWeight:700,textAlign:'center'}}>
+                Selecciona {promoSel.num_piezas} prendas del catálogo
               </div>
-              <button onClick={confirmar} disabled={falta>0}
-                style={{padding:'11px 24px',background:falta===0?'#7c3aed':'#ccc',color:'#fff',border:'none',cursor:falta===0?'pointer':'not-allowed',fontFamily:'Poppins,sans-serif',fontSize:'12px',fontWeight:700,textTransform:'uppercase',letterSpacing:'.05em',transition:'background .15s'}}>
-                🎁 Agregar Combo
+              <div style={{fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#888',textAlign:'center'}}>
+                Usa el catálogo completo para buscar por categoría, modelo y color.
+                El precio de cada pieza será €{((comboTv==='MAYOR'?(promoSel.precio_mayor||0):(promoSel.precio_detal||0))/promoSel.num_piezas).toFixed(2)} ({comboTv}).
+              </div>
+              <button onClick={()=>setShowCat(true)}
+                style={{padding:'12px 32px',background:'#7c3aed',color:'#fff',border:'none',cursor:'pointer',
+                  fontFamily:'Poppins,sans-serif',fontSize:'13px',fontWeight:700,textTransform:'uppercase',
+                  letterSpacing:'.06em',borderRadius:'4px'}}>
+                🗂️ Abrir Catálogo
               </button>
             </div>
-          </>
+          </div>
+        )}
+
+        {/* ── CATÁLOGO EXPLORER como picker del combo ── */}
+        {vista==='picker'&&promoSel&&showCat&&(
+          <CatalogoExplorer
+            productos={productos}
+            modo="salida"
+            tipoVenta={comboTv}
+            onAdd={(prod, qty, tv) => {
+              // Acumular en el buffer — respetando el límite de piezas
+              comboBuffer.current = comboBuffer.current || [];
+              comboBuffer.current.push({ prod, qty, tv });
+            }}
+            onClose={confirmarDesdeCatalogo}
+          />
         )}
 
         {/* ── ADMIN ── */}

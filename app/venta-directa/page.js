@@ -37,6 +37,7 @@ export default function VentaDirectaPage() {
   const [msg,      setMsg]     = useState(null);
   const [tab,      setTab]     = useState('carrito'); // 'carrito' | 'cobro' (mobile tabs)
   const [promoModal, setPromoModal] = useState(false);
+  const [comboQtyMap, setComboQtyMap] = useState({}); // { promoTag: qty }
 
   function precioItem(item) { if(item.promoTag) return item.precioPromo||item.precio||0; return item.tipoVenta==='MAYOR' ? (item.precioMayor||0) : (item.precioDetal||0); }
 
@@ -47,6 +48,20 @@ export default function VentaDirectaPage() {
       return [...prev, {...prod, qty, tipoVenta:'DETAL'}];
     });
   }, []);
+
+  function getComboQty(promoTag) { return comboQtyMap[promoTag] || 1; }
+
+  function changeComboQty(promoTag, delta) {
+    setComboQtyMap(prev => {
+      const cur = prev[promoTag] || 1;
+      const next = Math.max(1, cur + delta);
+      return { ...prev, [promoTag]: next };
+    });
+    // Also update qty on all cart items with this promoTag
+    setCart(prev => prev.map(x =>
+      x.promoTag === promoTag ? { ...x, qty: Math.max(1, (x.qty || 1) + delta) } : x
+    ));
+  }
 
   function addFromPromo(items) {
     items.forEach(item => {
@@ -69,8 +84,8 @@ export default function VentaDirectaPage() {
   function changeQty(sku, d)  { setCart(prev => prev.map(x => x.sku===sku ? {...x, qty: Math.max(1, x.qty+d)} : x)); }
   function removeItem(sku)    { setCart(prev => prev.filter(x => x.sku !== sku)); }
 
-  const totalEUR = cart.reduce((a, it) => a + precioItem(it) * it.qty, 0);
-  const totalUds = cart.reduce((a, it) => a + it.qty, 0);
+  const totalEUR = cart.reduce((a, it) => { const qty = it.promoTag ? (comboQtyMap[it.promoTag] || 1) : it.qty; return a + precioItem(it) * qty; }, 0);
+  const totalUds = cart.reduce((a, it) => { const qty = it.promoTag ? (comboQtyMap[it.promoTag] || 1) : it.qty; return a + qty; }, 0);
 
   const md  = parseFloat(monto) || 0;
   const ts  = parseFloat(tasa)  || 0;
@@ -86,11 +101,12 @@ export default function VentaDirectaPage() {
     setGuard(true);
     try {
       const fecha = new Date().toISOString();
-      const lote = cart.map(item => ({
-        sku: item.sku, tipo:'SALIDA', cantidad: item.qty, fecha,
-        concepto:'Venta Directa', contacto: cliente||'CONSUMIDOR FINAL',
-        tipo_venta: item.tipoVenta, precio_venta: precioItem(item),
-      }));
+      const lote = cart.map(item => {
+        const qty = item.promoTag ? (comboQtyMap[item.promoTag]||1) : item.qty;
+        return { sku:item.sku, tipo:'SALIDA', cantidad:qty, fecha,
+          concepto:'Venta Directa', contacto:cliente||'CONSUMIDOR FINAL',
+          tipo_venta:item.tipoVenta, precio_venta:precioItem(item) };
+      });
       const res = await fetch('/api/movimientos', {
         method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(lote)
       }).then(r => r.json());
@@ -116,7 +132,7 @@ export default function VentaDirectaPage() {
 
       const vueltoStr = vuelto > 0.01 ? ` · Vuelto € ${fmtNum(vuelto)}` : '';
       setMsg({ t:'success', m:`✅ Venta · ${totalUds} uds · € ${fmtNum(totalEUR)}${vueltoStr}` });
-      setCart([]); setCliente(''); setMonto(''); setTasa(''); setRef(''); setMetodo('');
+      setCart([]); setComboQtyMap({}); setCliente(''); setMonto(''); setTasa(''); setRef(''); setMetodo('');
       setTab('carrito'); recargar();
     } catch { setMsg({ t:'error', m:'Error de conexión' }); }
     setGuard(false);
@@ -287,23 +303,41 @@ export default function VentaDirectaPage() {
                             overflow:'hidden' }}>
                           {/* Cabecera del combo */}
                           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
-                            padding:'5px 10px', background: item.tipoVenta==='MAYOR'?'#fef3c7':'#dbeafe',
+                            padding:'7px 10px', background: item.tipoVenta==='MAYOR'?'#fef3c7':'#dbeafe',
                             borderBottom:`1px solid ${promoColor}33` }}>
                             <span style={{ fontFamily:'DM Mono,monospace', fontSize:'8px', fontWeight:700,
-                              color: promoColor, letterSpacing:'.1em', textTransform:'uppercase' }}>
+                              color: promoColor, letterSpacing:'.08em', textTransform:'uppercase' }}>
                               🎁 {item.promoNombre} · {item.tipoVenta}
                             </span>
                             <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
-                              <span style={{ fontFamily:'DM Mono,monospace', fontSize:'10px',
+                              {/* Cantidad de combos */}
+                              <div style={{ display:'flex', alignItems:'center', border:`1px solid ${promoColor}66`,
+                                overflow:'hidden', borderRadius:'3px' }}>
+                                <button onClick={() => changeComboQty(item.promoTag, -1)}
+                                  style={{ width:'24px', height:'24px', background:'transparent', border:'none',
+                                    cursor:'pointer', fontSize:'14px', color: promoColor, lineHeight:1,
+                                    display:'flex', alignItems:'center', justifyContent:'center' }}>−</button>
+                                <span style={{ fontFamily:'DM Mono,monospace', fontSize:'11px', fontWeight:700,
+                                  width:'24px', textAlign:'center', color: promoColor,
+                                  borderLeft:`1px solid ${promoColor}44`, borderRight:`1px solid ${promoColor}44`,
+                                  lineHeight:'24px' }}>
+                                  {getComboQty(item.promoTag)}
+                                </span>
+                                <button onClick={() => changeComboQty(item.promoTag, 1)}
+                                  style={{ width:'24px', height:'24px', background:'transparent', border:'none',
+                                    cursor:'pointer', fontSize:'14px', color: promoColor, lineHeight:1,
+                                    display:'flex', alignItems:'center', justifyContent:'center' }}>+</button>
+                              </div>
+                              <span style={{ fontFamily:'DM Mono,monospace', fontSize:'11px',
                                 fontWeight:700, color: promoColor }}>
-                                €{promoTotal.toFixed(2)}
+                                €{(promoTotal * getComboQty(item.promoTag)).toFixed(2)}
                               </span>
                               <button
-                                onClick={() => setCart(prev => prev.filter(x => x.promoTag !== item.promoTag))}
+                                onClick={() => { setCart(prev => prev.filter(x => x.promoTag !== item.promoTag)); setComboQtyMap(prev => { const n={...prev}; delete n[item.promoTag]; return n; }); }}
                                 style={{ background:'none', border:'none', cursor:'pointer',
                                   fontFamily:'DM Mono,monospace', fontSize:'9px', color:'#aaa',
                                   padding:'1px 5px' }}>
-                                ✕ quitar
+                                ✕
                               </button>
                             </div>
                           </div>
