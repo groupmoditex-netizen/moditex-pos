@@ -73,19 +73,25 @@ export default function CatalogoAdminPage() {
 
   async function toggleCatalogo(key, current) {
     setSaving(key);
+    const newVal = !current;
+    // Optimistic update immediately
+    setCfgMap(prev => ({ ...prev, [key]: { ...(prev[key]||{}), modelo_key:key, en_catalogo:newVal } }));
     try {
       const res = await fetch('/api/catalogo', {
         method:'PUT', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ modelo_key:key, en_catalogo: !current }),
+        body: JSON.stringify({ modelo_key:key, en_catalogo: newVal }),
       }).then(r=>r.json());
       if (res.ok) {
-        setCfgMap(prev => ({ ...prev, [key]: { ...(prev[key]||{}), modelo_key:key, en_catalogo:!current } }));
-        // Re-sync from DB after 500ms to confirm
-        setTimeout(() => cargarConfig(), 600);
+        setMsg({ t:'ok', m: newVal ? '✓ Prenda visible en catálogo' : '✓ Prenda ocultada del catálogo' });
+        // Re-sync from DB to confirm
+        setTimeout(() => { cargarConfig(); setMsg(null); }, 2000);
       } else {
-        setMsg({ t:'err', m:'Error al guardar: ' + (res.error||'desconocido') + '. ¿Ejecutaste CATALOGO.sql en Supabase?' });
+        // Revert optimistic update
+        setCfgMap(prev => ({ ...prev, [key]: { ...(prev[key]||{}), modelo_key:key, en_catalogo:current } }));
+        setMsg({ t:'err', m:'Error: ' + (res.error||'desconocido') });
       }
     } catch(e) {
+      setCfgMap(prev => ({ ...prev, [key]: { ...(prev[key]||{}), modelo_key:key, en_catalogo:current } }));
       setMsg({ t:'err', m:'Error de conexión: ' + e.message });
     }
     setSaving(null);
