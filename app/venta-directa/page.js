@@ -38,7 +38,7 @@ export default function VentaDirectaPage() {
   const [tab,      setTab]     = useState('carrito'); // 'carrito' | 'cobro' (mobile tabs)
   const [promoModal, setPromoModal] = useState(false);
 
-  function precioItem(item) { if(item.tipoVenta==='PROMO') return item.precio||0; return item.tipoVenta==='MAYOR' ? (item.precioMayor||0) : (item.precioDetal||0); }
+  function precioItem(item) { if(item.promoTag) return item.precioPromo||item.precio||0; return item.tipoVenta==='MAYOR' ? (item.precioMayor||0) : (item.precioDetal||0); }
 
   const onScannerAdd = useCallback((prod, qty = 1) => {
     setCart(prev => {
@@ -165,6 +165,14 @@ export default function VentaDirectaPage() {
       {catalogo && (
         <CatalogoExplorer productos={productos} modo="salida" tipoVenta="DETAL"
           onAdd={addFromCatalog} onClose={() => setCat(false)}/>
+      )}
+      {promoModal && (
+        <ModalPromo
+          productos={productos}
+          isAdmin={true}
+          onAdd={addFromPromo}
+          onClose={() => setPromoModal(false)}
+        />
       )}
 
       {/* Mensaje */}

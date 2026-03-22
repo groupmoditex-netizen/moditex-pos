@@ -27,6 +27,7 @@ export default function ModalPromo({ productos = [], onAdd, onClose, isAdmin = f
   const [vista,     setVista]     = useState('lista');   // 'lista' | 'picker' | 'admin'
   const [promoSel,  setPromoSel]  = useState(null);
   const [selected,  setSelected]  = useState([]);        // SKUs seleccionados para el combo
+  const [tvMap,     setTvMap]     = useState({});           // { sku: 'DETAL'|'MAYOR' }
   const [buscar,    setBuscar]    = useState('');
 
   // Admin — crear/editar promo
@@ -78,6 +79,7 @@ export default function ModalPromo({ productos = [], onAdd, onClose, isAdmin = f
   function abrirPicker(promo) {
     setPromoSel(promo);
     setSelected([]);
+    setTvMap({});
     setBuscar('');
     setVista('picker');
   }
@@ -87,21 +89,35 @@ export default function ModalPromo({ productos = [], onAdd, onClose, isAdmin = f
       const existe = prev.find(x => x.sku === prod.sku);
       if (existe) return prev.filter(x => x.sku !== prod.sku);
       if (prev.length >= promoSel.num_piezas) return prev; // ya lleno
+      // Inicializar tipoVenta en MAYOR por defecto
+      if (!tvMap[prod.sku]) setTvMap(m => ({...m, [prod.sku]: 'MAYOR'}));
       return [...prev, prod];
     });
+  }
+
+  function setTv(sku, tv) {
+    setTvMap(m => ({...m, [sku]: tv}));
   }
 
   function confirmar() {
     if (!promoSel || selected.length !== promoSel.num_piezas) return;
     const precioUnitario = promoSel.precio / promoSel.num_piezas;
-    const items = selected.map(prod => ({
-      ...prod,
-      qty: 1,
-      precio: precioUnitario,
-      tipoVenta: 'PROMO',
-      promoTag: promoSel.id,
-      promoNombre: promoSel.nombre,
-    }));
+    const items = selected.map(prod => {
+      const tv = tvMap[prod.sku] || 'MAYOR';
+      // Precio: el del combo dividido entre piezas (independiente de MAYOR/DETAL)
+      // pero guardamos el tipoVenta real para saber cómo reportarlo
+      return {
+        ...prod,
+        qty: 1,
+        precio: precioUnitario,
+        precioDetal: prod.precioDetal,
+        precioMayor: prod.precioMayor,
+        tipoVenta: tv,
+        promoTag: promoSel.id,
+        promoNombre: promoSel.nombre,
+        precioPromo: precioUnitario,  // precio real que se cobra
+      };
+    });
     onAdd(items);
     onClose();
   }
@@ -290,16 +306,40 @@ export default function ModalPromo({ productos = [], onAdd, onClose, isAdmin = f
             {selected.length > 0 && (
               <div style={{ padding:'10px 18px', background:'#fff8e1', borderBottom:'1px solid #f59e0b44',
                 display:'flex', gap:'6px', flexWrap:'wrap', flexShrink:0 }}>
-                {selected.map((prod, i) => (
-                  <div key={prod.sku} onClick={() => togglePieza(prod)}
-                    style={{ display:'flex', alignItems:'center', gap:'5px', padding:'4px 8px 4px 10px',
-                      background:'#f59e0b', color:'#000', cursor:'pointer', fontSize:'12px', fontWeight:600 }}>
-                    <span style={{ width:'8px', height:'8px', borderRadius:'50%',
-                      background:colorHex(prod.color), border:'1px solid rgba(0,0,0,.2)', flexShrink:0 }}/>
-                    {prod.modelo} — {prod.color}
-                    <span style={{ fontSize:'14px', marginLeft:'2px', opacity:.7 }}>✕</span>
-                  </div>
-                ))}
+                {selected.map((prod, i) => {
+                  const tv = tvMap[prod.sku] || 'MAYOR';
+                  return (
+                    <div key={prod.sku}
+                      style={{ display:'flex', alignItems:'center', gap:'0',
+                        border:'1px solid #f59e0b', overflow:'hidden', flexShrink:0 }}>
+                      {/* Nombre prenda */}
+                      <div style={{ display:'flex', alignItems:'center', gap:'5px',
+                        padding:'4px 8px 4px 10px', background:'#fff8e1', color:'#000',
+                        fontSize:'11px', fontWeight:600 }}>
+                        <span style={{ width:'7px', height:'7px', borderRadius:'50%',
+                          background:colorHex(prod.color), border:'1px solid rgba(0,0,0,.2)', flexShrink:0 }}/>
+                        {prod.modelo}
+                      </div>
+                      {/* Toggle MAYOR/DETAL */}
+                      {['MAYOR','DETAL'].map(t => (
+                        <button key={t} onClick={() => setTv(prod.sku, t)}
+                          style={{ padding:'4px 7px', border:'none', borderLeft:'1px solid #f59e0b',
+                            cursor:'pointer', fontFamily:'DM Mono,monospace', fontSize:'8px', fontWeight:700,
+                            background: tv===t ? '#f59e0b' : 'transparent',
+                            color: tv===t ? '#000' : '#999', transition:'background .1s' }}>
+                          {t[0]}
+                        </button>
+                      ))}
+                      {/* Quitar */}
+                      <button onClick={() => togglePieza(prod)}
+                        style={{ padding:'4px 7px', border:'none', borderLeft:'1px solid #f59e0b',
+                          cursor:'pointer', background:'transparent', color:'#aaa', fontSize:'13px',
+                          lineHeight:1 }}>
+                        ✕
+                      </button>
+                    </div>
+                  );
+                })}
                 {Array.from({ length: falta }).map((_, i) => (
                   <div key={`empty-${i}`}
                     style={{ padding:'4px 14px', border:'2px dashed #f59e0b', color:'#f59e0b',
@@ -369,13 +409,17 @@ export default function ModalPromo({ productos = [], onAdd, onClose, isAdmin = f
                           {prod.sku} · Stock: <strong style={{ color:'var(--blue)' }}>{prod.disponible}</strong>
                         </div>
                       </div>
-                      {/* Stock badge */}
+                      {/* Precios */}
                       <div style={{ textAlign:'right', flexShrink:0 }}>
-                        <div style={{ fontFamily:'DM Mono,monospace', fontSize:'10px',
-                          color:'#888', marginBottom:'2px' }}>€{(prod.precioDetal||0).toFixed(2)}</div>
+                        <div style={{ fontFamily:'DM Mono,monospace', fontSize:'9px', color:'#aaa', lineHeight:1.5 }}>
+                          D:€{(prod.precioDetal||0).toFixed(2)}<br/>
+                          M:€{(prod.precioMayor||0).toFixed(2)}
+                        </div>
                         {isSelected && (
                           <div style={{ fontFamily:'DM Mono,monospace', fontSize:'9px',
-                            color:'#f59e0b', fontWeight:700 }}>→ €{(promoSel.precio/promoSel.num_piezas).toFixed(2)}</div>
+                            color:'#f59e0b', fontWeight:700, marginTop:'2px' }}>
+                            PROMO €{(promoSel.precio/promoSel.num_piezas).toFixed(2)}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -390,7 +434,9 @@ export default function ModalPromo({ productos = [], onAdd, onClose, isAdmin = f
               <div style={{ flex:1, fontFamily:'DM Mono,monospace', fontSize:'10px', color:'#888' }}>
                 {falta > 0
                   ? `Selecciona ${falta} prenda${falta !== 1 ? 's' : ''} más para completar el combo`
-                  : <span style={{ color:'var(--green)', fontWeight:700 }}>✅ Combo completo — €{promoSel.precio.toFixed(2)}</span>}
+                  : <span style={{ color:'var(--green)', fontWeight:700 }}>
+                      ✅ Combo completo · €{promoSel.precio.toFixed(2)} · {Object.values(tvMap).filter(t=>t==='MAYOR').length}M / {Object.values(tvMap).filter(t=>t==='DETAL').length}D
+                    </span>}
               </div>
               <button onClick={confirmar} disabled={falta > 0}
                 style={{ padding:'11px 24px', background: falta === 0 ? '#f59e0b' : '#ccc',

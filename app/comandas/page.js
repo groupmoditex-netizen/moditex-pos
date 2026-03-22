@@ -35,7 +35,7 @@ const METODOS = [
 const inp = {width:'100%',padding:'9px 11px',background:'var(--bg2)',border:'1px solid var(--border)',fontFamily:'Poppins,sans-serif',fontSize:'13px',outline:'none',boxSizing:'border-box'};
 const lbl = {fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.16em',textTransform:'uppercase',color:'#555',display:'block',marginBottom:'5px'};
 
-function precioItem(it){ return it.tipoVenta==='MAYOR'?(it.precioMayor||0):(it.precioDetal||0); }
+function precioItem(it){ if(it.promoTag) return it.precioPromo||it.precio||0; return it.tipoVenta==='MAYOR'?(it.precioMayor||0):(it.precioDetal||0); }
 const CM={BLANCO:'#d0d0d0',NEGRO:'#1a1a1a',AZUL:'#3b6fd4',ROJO:'#d63b3b',VERDE:'#2d9e4a',ROSA:'#f07aa0',GRIS:'#6b7280',AMARILLO:'#f5c842',NARANJA:'#f57c42',MORADO:'#7c4fd4',VINOTINTO:'#8b2035',BEIGE:'#d4b896',CORAL:'#f26e5b',CELESTE:'#7ec8e3'};
 function colorHex(n){const k=(n||'').toUpperCase().trim();return CM[k]||CM[k.split(' ')[0]]||'#9ca3af';}
 function fmtNum(n){return Number(n||0).toLocaleString('es-VE',{minimumFractionDigits:2,maximumFractionDigits:2});}
@@ -209,6 +209,7 @@ function ModalNueva({ clientes, productos, onClose, onSave }) {
   /* ── Paso 2: Prendas ─────────────────────────────── */
   const [items,    setItems]   = useState([]);
   const [catalogo, setCatalogo]= useState(false);
+  const [promoModal, setPromoModal] = useState(false);
 
   /* ── Paso 3: Entrega & Pago ──────────────────────── */
   const [fechaEnt, setFechaEnt]= useState('');
