@@ -6,7 +6,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 
 const LOGO_URL  = "https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/moditex-logo.jpg";
-const ISOTIPO_URL = "https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/ISOTIPO%20PNG.png";
 const WA_NUMBER = "584120363131";
 const WA_NUMBER2= "584127534435";
 
@@ -399,7 +398,7 @@ export default function CatalogoPage() {
       <nav className="cat-nav">
         <div style={{ display:'flex', alignItems:'center', gap:'14px' }}>
           <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
-            <img src={ISOTIPO_URL} alt="M" style={{ height:'36px', width:'36px', objectFit:'contain' }}/>
+            <img src="https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/ISOTIPO%20PNG.png" alt="M" style={{ height:'36px', width:'36px', objectFit:'contain' }}/>
             <div>
               <div style={{ fontFamily:"'Playfair Display',serif", fontSize:'15px', fontWeight:900, color:'#fff', letterSpacing:'.05em', lineHeight:1 }}>MODITEX</div>
               <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'6.5px', color:'#c9a84c', letterSpacing:'.35em', textTransform:'uppercase', marginTop:'2px' }}>GROUP</div>
@@ -737,7 +736,7 @@ export default function CatalogoPage() {
       {/* ── FOOTER ── */}
       <div style={{ background:'#0a0a0a', padding:'30px 28px', textAlign:'center', marginTop:'40px' }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:'12px', marginBottom:'14px' }}>
-          <img src={{ISOTIPO_URL}} alt="M" style={{ height:'44px', width:'44px', objectFit:'contain' }}/>
+          <img src={"https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/ISOTIPO%20PNG.png"} alt="M" style={{ height:'44px', width:'44px', objectFit:'contain' }}/>
           <div style={{ textAlign:'left' }}>
             <div style={{ fontFamily:"'Playfair Display',serif", fontSize:'18px', fontWeight:900, color:'#fff', letterSpacing:'.05em', lineHeight:1 }}>MODITEX</div>
             <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'7px', color:'#c9a84c', letterSpacing:'.35em', textTransform:'uppercase', marginTop:'3px' }}>GROUP</div>

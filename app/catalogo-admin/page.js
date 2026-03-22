@@ -33,24 +33,18 @@ export default function CatalogoAdminPage() {
   async function cargarConfig() {
     setLoading(true);
     try {
-      const res = await fetch('/api/catalogo').then(r => r.json());
+      // Fuente única: tabla catalogo_config directamente
+      const res = await fetch('/api/catalogo-config').then(r => r.json());
       if (res.ok) {
         const map = {};
-        // La API retorna solo los en_catalogo=true. Necesitamos traer todos.
-        // Por ahora cargamos lo que hay y el resto empieza en false
-        res.modelos.forEach(m => { map[m.key] = m; });
+        (res.configs||[]).forEach(cfg => { map[cfg.modelo_key] = cfg; });
         setCfgMap(map);
+      } else {
+        setMsg({ t:'err', m:'No se pudo cargar config: ' + (res.error||'error') });
       }
-    } catch {}
-    // También fetch directo de la tabla
-    try {
-      const res2 = await fetch('/api/catalogo-config').then(r => r.json()).catch(() => ({ ok:false }));
-      if (res2.ok) {
-        const map2 = {};
-        res2.configs.forEach(c => { map2[c.modelo_key] = c; });
-        setCfgMap(map2);
-      }
-    } catch {}
+    } catch(e) {
+      setMsg({ t:'err', m:'Error de conexión: ' + e.message });
+    }
     setLoading(false);
   }
 
