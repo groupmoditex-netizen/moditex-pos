@@ -57,7 +57,6 @@ export async function PUT(request) {
     const { modelo_key, en_catalogo, foto_url, descripcion, fotos_extra, orden } = body;
     if (!modelo_key) return NextResponse.json({ ok:false, error:'modelo_key requerido' }, { status:400 });
 
-    // ── Check if record exists ────────────────────────────────────
     const { data: existing, error: selectError } = await supabase
       .from('catalogo_config')
       .select('id')
@@ -65,7 +64,7 @@ export async function PUT(request) {
       .maybeSingle();
 
     if (selectError) {
-      return NextResponse.json({ ok:false, error:'Error al buscar registro: ' + selectError.message, step:'select' }, { status:500 });
+      return NextResponse.json({ ok:false, error:'Select error: '+selectError.message }, { status:500 });
     }
 
     const campos = {};
@@ -79,29 +78,24 @@ export async function PUT(request) {
     let action;
 
     if (existing?.id) {
-      // ── UPDATE — pedir de vuelta el registro para confirmar que cambió ──
+      // UPDATE — con .select() para detectar si RLS bloqueó silenciosamente
       const { data: updated, error: updateError } = await supabase
         .from('catalogo_config')
         .update(campos)
         .eq('id', existing.id)
-        .select('id, en_catalogo');  // <-- CRÍTICO: detecta si RLS bloqueó silenciosamente
+        .select('id');
 
       if (updateError) {
-        return NextResponse.json({
-          ok: false,
-          error: 'Error en UPDATE: ' + updateError.message,
-          step: 'update',
-        }, { status:500 });
+        return NextResponse.json({ ok:false, error:'Update error: '+updateError.message, step:'update' }, { status:500 });
       }
 
-      // Si RLS bloquea el UPDATE, Supabase devuelve data:[] sin error.
-      // Sin este check, el API respondería ok:true aunque nada haya cambiado.
+      // Si RLS bloquea, Supabase devuelve data:[] sin error → capturamos esto
       if (!updated || updated.length === 0) {
         return NextResponse.json({
           ok: false,
-          error: 'El UPDATE no afectó ninguna fila. Posible bloqueo de RLS o permisos insuficientes. Verifica SUPABASE_SERVICE_KEY en Vercel y ejecuta CATALOGO.sql en Supabase.',
+          error: 'UPDATE bloqueado (0 filas afectadas). Verifica SUPABASE_SERVICE_KEY en Vercel y ejecuta CATALOGO.sql en Supabase.',
           step: 'update_zero_rows',
-          debug: { id: existing.id, campos },
+          hint: 'La variable SUPABASE_SERVICE_KEY probablemente no está configurada en Vercel → Settings → Environment Variables',
         }, { status:500 });
       }
 
@@ -109,26 +103,18 @@ export async function PUT(request) {
       action = 'updated';
 
     } else {
-      // ── INSERT ────────────────────────────────────────────────────
+      // INSERT
       const { data: inserted, error: insertError } = await supabase
         .from('catalogo_config')
         .insert({ modelo_key, ...campos })
         .select('id');
 
       if (insertError) {
-        return NextResponse.json({
-          ok: false,
-          error: 'Error en INSERT: ' + insertError.message,
-          step: 'insert',
-        }, { status:500 });
+        return NextResponse.json({ ok:false, error:'Insert error: '+insertError.message, step:'insert' }, { status:500 });
       }
 
       if (!inserted || inserted.length === 0) {
-        return NextResponse.json({
-          ok: false,
-          error: 'El INSERT no devolvió datos. Verifica permisos RLS.',
-          step: 'insert_zero_rows',
-        }, { status:500 });
+        return NextResponse.json({ ok:false, error:'INSERT bloqueado (0 filas). Verifica RLS.', step:'insert_zero_rows' }, { status:500 });
       }
 
       resultId = inserted[0].id;
