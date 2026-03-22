@@ -1,26 +1,17 @@
 'use client';
-/**
- * /catalogo — Catálogo público para clientes de Moditex Group
- * Sin login · Stock en tiempo real · Carrito → WhatsApp
- */
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 
-const LOGO_URL  = "https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/moditex-logo.jpg";
+const ISOTIPO   = "https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/ISOTIPO%20PNG.png";
 const WA_NUMBER = "584120363131";
 const WA_NUMBER2= "584127534435";
 
-const NIVEL_CFG = {
-  disponible: { label:'Disponible',      color:'#22c55e', bg:'#f0fdf4', dot:'#22c55e' },
-  pocas:      { label:'Pocas unidades',  color:'#f59e0b', bg:'#fffbeb', dot:'#f59e0b' },
-  agotado:    { label:'Bajo pedido',     color:'#94a3b8', bg:'#f8fafc', dot:'#94a3b8' },
+const NIVEL = {
+  disponible: { label:'Disponible',     dot:'#22c55e', text:'#16a34a', bg:'rgba(34,197,94,.1)'  },
+  pocas:      { label:'Pocas unidades', dot:'#f59e0b', text:'#d97706', bg:'rgba(245,158,11,.1)' },
+  agotado:    { label:'Bajo pedido',    dot:'#94a3b8', text:'#64748b', bg:'rgba(148,163,184,.1)'},
 };
-
-const CAT_ICONS = {
-  'BODY':'👙','BODIES':'👙','CHAQUETA':'🧥','CONJUNTO':'👗','ENTERIZO':'🩱',
-  'FALDA':'👘','PANTS':'👖','SHORT':'🩳','TOPS':'👕','TOP':'👕',
-  'TRAJE DE BANO':'🩱','TRIKINIS':'🩱','VESTIDO':'💃','DEFAULT':'🏷️',
-};
-function catIcon(c){ const k=(c||'').toUpperCase(); for(const[key,v] of Object.entries(CAT_ICONS)){if(k.includes(key))return v;} return CAT_ICONS.DEFAULT; }
+const CAT_ICONS = {'BODY':'👙','BODIES':'👙','CHAQUETA':'🧥','CONJUNTO':'👗','ENTERIZO':'🩱','FALDA':'👘','PANTS':'👖','SHORT':'🩳','TOPS':'👕','TOP':'👕','TRAJE DE BANO':'🩱','TRIKINIS':'🩱','VESTIDO':'💃','DEFAULT':'🏷️'};
+function catIcon(c){const k=(c||'').toUpperCase();for(const[key,v] of Object.entries(CAT_ICONS)){if(k.includes(key))return v;}return CAT_ICONS.DEFAULT;}
 
 export default function CatalogoPage() {
   const [modelos,   setModelos]   = useState([]);
@@ -28,11 +19,11 @@ export default function CatalogoPage() {
   const [error,     setError]     = useState('');
   const [filtrocat, setFiltrocat] = useState('');
   const [buscar,    setBuscar]    = useState('');
-  const [modal,     setModal]     = useState(null);  // modelo seleccionado
-  const [carrito,   setCarrito]   = useState([]);    // [{modelo,color,sku,qty,precio}]
-  const [carritoOpen, setCarritoOpen] = useState(false);
-  const [nombre,    setNombre]    = useState('');
+  const [modal,     setModal]     = useState(null);
   const [fotoIdx,   setFotoIdx]   = useState(0);
+  const [carrito,   setCarrito]   = useState([]);
+  const [cartOpen,  setCartOpen]  = useState(false);
+  const [nombre,    setNombre]    = useState('');
 
   useEffect(() => { cargar(); }, []);
 
@@ -47,685 +38,447 @@ export default function CatalogoPage() {
   }
 
   const categorias = useMemo(() => [...new Set(modelos.map(m => m.categoria))].sort(), [modelos]);
-
-  const filtrados = useMemo(() => {
+  const filtrados  = useMemo(() => {
     let r = modelos;
     if (filtrocat) r = r.filter(m => m.categoria === filtrocat);
-    if (buscar.trim()) {
-      const q = buscar.toLowerCase();
-      r = r.filter(m => `${m.modelo} ${m.categoria} ${m.descripcion}`.toLowerCase().includes(q));
-    }
+    if (buscar.trim()) { const q = buscar.toLowerCase(); r = r.filter(m => `${m.modelo} ${m.categoria} ${m.descripcion}`.toLowerCase().includes(q)); }
     return r;
   }, [modelos, filtrocat, buscar]);
 
   // Carrito
-  function addToCart(modelo, variante) {
+  function addToCart(modelo, v) {
     setCarrito(prev => {
-      const ex = prev.find(x => x.sku === variante.sku);
-      if (ex) return prev.map(x => x.sku === variante.sku ? {...x, qty: x.qty + 1} : x);
-      return [...prev, {
-        sku: variante.sku, modelo: modelo.modelo,
-        color: variante.color, talla: variante.talla,
-        precio: modelo.precioDetal, qty: 1,
-        nivel: variante.nivel,
-      }];
+      const ex = prev.find(x => x.sku === v.sku);
+      if (ex) return prev.map(x => x.sku===v.sku ? {...x, qty:x.qty+1} : x);
+      return [...prev, {sku:v.sku, modelo:modelo.modelo, color:v.color, talla:v.talla, nivel:v.nivel, qty:1}];
     });
   }
-  function removeFromCart(sku) { setCarrito(prev => prev.filter(x => x.sku !== sku)); }
-  function changeQty(sku, d)   { setCarrito(prev => prev.map(x => x.sku === sku ? {...x, qty: Math.max(1, x.qty + d)} : x)); }
-  const totalItems = carrito.reduce((a, x) => a + x.qty, 0);
-
-  function buildWAMessage() {
-    const lines = carrito.map(item =>
-      `  • ${item.qty}x ${item.modelo} — ${item.color}${item.talla && item.talla !== 'UNICA' ? ' (T:'+item.talla+')' : ''}`
-    ).join('\n');
-    return encodeURIComponent(
-      `Hola, mi nombre es *${nombre || 'Cliente'}* y este es mi pedido:\n\n${lines}\n\n` +
-      `Por favor confírmenme el monto para proceder con la transferencia. ¡Gracias! 🙏`
-    );
-  }
+  function removeFromCart(sku) { setCarrito(prev => prev.filter(x => x.sku!==sku)); }
+  function changeQty(sku, d)   { setCarrito(prev => prev.map(x => x.sku===sku ? {...x, qty:Math.max(1,x.qty+d)} : x)); }
+  const totalItems = carrito.reduce((a,x) => a+x.qty, 0);
+  const cartQty    = (sku) => carrito.find(x=>x.sku===sku)?.qty || 0;
+  const isInCart   = (sku) => carrito.some(x=>x.sku===sku);
 
   function sendWA(num) {
     if (!carrito.length) return;
-    window.open(`https://wa.me/${num}?text=${buildWAMessage()}`, '_blank');
+    const lines = carrito.map(i=>`  • ${i.qty}x ${i.modelo} — ${i.color}${i.talla&&i.talla!=='UNICA'?' (T:'+i.talla+')':''}`).join('\n');
+    window.open(`https://wa.me/${num}?text=${encodeURIComponent(`Hola, mi nombre es *${nombre||'Cliente'}* y este es mi pedido:\n\n${lines}\n\nPor favor confírmenme el monto para proceder con la transferencia. ¡Gracias! 🙏`)}`, '_blank');
   }
 
-  // Modal fotos
   const fotosModal = useMemo(() => {
     if (!modal) return [];
-    const fotos = [];
-    if (modal.foto_url)    fotos.push(modal.foto_url);
-    if (modal.fotos_extra) modal.fotos_extra.split(',').map(s=>s.trim()).filter(Boolean).forEach(f => fotos.push(f));
-    return fotos;
+    const f = [];
+    if (modal.foto_url) f.push(modal.foto_url);
+    if (modal.fotos_extra) modal.fotos_extra.split(',').map(s=>s.trim()).filter(Boolean).forEach(u=>f.push(u));
+    return f;
   }, [modal]);
 
+  function abrirModal(m) { setModal(m); setFotoIdx(0); document.body.style.overflow='hidden'; }
+  function cerrarModal()  { setModal(null); document.body.style.overflow=''; }
+
   return (
-    <div style={{ minHeight:'100vh', background:'#f8f8f6', fontFamily:"'Poppins',sans-serif" }}>
+    <div style={{minHeight:'100vh',background:'#fafaf8',fontFamily:"'Poppins',sans-serif"}}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@700;900&family=DM+Mono:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Poppins:wght@300;400;500;600&family=DM+Mono&display=swap');
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+        ::-webkit-scrollbar{width:4px;height:4px} ::-webkit-scrollbar-track{background:transparent} ::-webkit-scrollbar-thumb{background:#ddd;border-radius:2px}
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        /* NAV */
+        .nav{background:#0a0a0a;height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;position:sticky;top:0;z-index:200;border-bottom:1px solid #1a1a1a;}
+        .nav-brand{display:flex;align-items:center;gap:9px;text-decoration:none;}
+        .nav-brand img{height:30px;width:30px;object-fit:contain;}
+        .nav-name{font-family:'Cormorant Garamond',serif;font-size:15px;font-weight:700;color:#fff;letter-spacing:.1em;}
+        .nav-sub{font-family:'DM Mono',monospace;font-size:5.5px;color:#c9a84c;letter-spacing:.45em;text-transform:uppercase;display:block;margin-top:1px;}
+        .nav-cart{display:flex;align-items:center;gap:7px;padding:7px 14px;background:#c9a84c;color:#000;border:none;cursor:pointer;font-family:'Poppins',sans-serif;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;transition:background .15s;}
+        .nav-cart:hover{background:#e0bc5e;}
+        .nav-badge{background:#000;color:#c9a84c;border-radius:50%;width:16px;height:16px;font-size:8px;font-weight:700;display:flex;align-items:center;justify-content:center;}
 
-        /* ── NAVBAR ── */
-        .cat-nav {
-          background: #0a0a0a; padding: 0 28px; height: 60px;
-          display: flex; align-items: center; justify-content: space-between;
-          position: sticky; top: 0; z-index: 100;
-          border-bottom: 1px solid #1f1f1f;
-        }
-        .cat-nav-logo { height: 36px; width: auto; object-fit: contain; }
-        .cat-nav-tagline {
-          font-family: 'DM Mono', monospace; font-size: 8px;
-          color: rgba(255,255,255,.3); letter-spacing: .2em;
-          text-transform: uppercase; display: none;
-        }
-        .cat-cart-btn {
-          position: relative; padding: 8px 16px;
-          background: #c9a84c; color: #000; border: none; cursor: pointer;
-          font-family: 'Poppins', sans-serif; font-size: 11px; font-weight: 700;
-          letter-spacing: .06em; text-transform: uppercase;
-          display: flex; align-items: center; gap: 7px;
-          transition: background .15s;
-        }
-        .cat-cart-btn:hover { background: #e0bc5e; }
-        .cat-cart-badge {
-          background: #000; color: #c9a84c;
-          border-radius: 50%; width: 18px; height: 18px;
-          font-size: 9px; font-weight: 700;
-          display: flex; align-items: center; justify-content: center;
-        }
+        /* HERO */
+        .hero{background:#0a0a0a;padding:28px 24px;text-align:center;}
+        .hero-ey{font-family:'DM Mono',monospace;font-size:8px;color:#c9a84c;letter-spacing:.3em;text-transform:uppercase;margin-bottom:7px;}
+        .hero-t{font-family:'Cormorant Garamond',serif;font-size:32px;font-weight:700;color:#fff;line-height:1.1;}
+        .hero-s{font-family:'Poppins',sans-serif;font-size:11px;color:rgba(255,255,255,.3);margin-top:5px;}
+        .hero-lv{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;margin-top:14px;}
+        .hero-lv-i{display:flex;align-items:center;gap:5px;font-family:'DM Mono',monospace;font-size:8px;color:rgba(255,255,255,.25);letter-spacing:.06em;}
 
-        /* ── HERO ── */
-        .cat-hero {
-          background: #0a0a0a; padding: 40px 28px;
-          text-align: center; border-bottom: 1px solid #1f1f1f;
-        }
+        /* FILTERS */
+        .filt{background:#fff;border-bottom:1px solid #ebebeb;padding:11px 24px;display:flex;align-items:center;gap:7px;flex-wrap:wrap;position:sticky;top:56px;z-index:100;}
+        .filt-srch{flex:1;min-width:160px;max-width:260px;padding:7px 12px;border:1px solid #e5e5e0;font-family:'Poppins',sans-serif;font-size:12px;outline:none;background:#fafaf8;transition:border-color .15s;}
+        .filt-srch:focus{border-color:#c9a84c;}
+        .filt-tag{padding:5px 12px;border:1px solid #e5e5e0;background:#fff;cursor:pointer;font-family:'DM Mono',monospace;font-size:8px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#aaa;transition:all .12s;white-space:nowrap;}
+        .filt-tag:hover{color:#0a0a0a;border-color:#0a0a0a;}
+        .filt-tag.on{background:#0a0a0a;color:#c9a84c;border-color:#0a0a0a;}
 
-        /* ── FILTROS ── */
-        .cat-filters {
-          background: #fff; padding: 14px 28px;
-          border-bottom: 1px solid #e5e5e0;
-          display: flex; align-items: center; gap: 12px;
-          flex-wrap: wrap; position: sticky; top: 60px; z-index: 90;
-        }
-        .cat-search {
-          flex: 1; min-width: 200px; max-width: 320px;
-          padding: 8px 14px; border: 1px solid #e5e5e0;
-          font-family: 'Poppins', sans-serif; font-size: 12px;
-          outline: none; background: #f8f8f6;
-          transition: border-color .15s;
-        }
-        .cat-search:focus { border-color: #c9a84c; }
-        .cat-filter-btn {
-          padding: 7px 14px; border: 1px solid #e5e5e0;
-          background: #fff; cursor: pointer;
-          font-family: 'DM Mono', monospace; font-size: 9px;
-          font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
-          color: #888; transition: all .12s; white-space: nowrap;
-        }
-        .cat-filter-btn:hover { border-color: #c9a84c; color: #c9a84c; }
-        .cat-filter-btn.active { background: #0a0a0a; color: #c9a84c; border-color: #0a0a0a; }
+        /* SECTION HDR */
+        .sec-h{padding:14px 24px 10px;background:#fafaf8;border-bottom:1px solid #ebebeb;display:flex;align-items:baseline;gap:9px;}
+        .sec-h-name{font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:700;color:#111;}
+        .sec-h-cnt{font-family:'DM Mono',monospace;font-size:8.5px;color:#bbb;letter-spacing:.1em;}
 
-        /* ── GRID ── */
-        .cat-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-          gap: 1px; background: #e5e5e0;
-          padding: 0;
-        }
-        .cat-card {
-          background: #fff; cursor: pointer;
-          transition: transform .18s, box-shadow .18s;
-          display: flex; flex-direction: column;
-        }
-        .cat-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.1); z-index: 1; position: relative; }
-        .cat-card-img {
-          aspect-ratio: 3/4; overflow: hidden; background: #f0f0ec;
-          position: relative;
-        }
-        .cat-card-img img {
-          width: 100%; height: 100%; object-fit: cover;
-          transition: transform .4s;
-        }
-        .cat-card:hover .cat-card-img img { transform: scale(1.04); }
-        .cat-card-no-img {
-          width: 100%; height: 100%; display: flex;
-          align-items: center; justify-content: center;
-          flex-direction: column; gap: 8px;
-          color: #ccc; font-size: 40px;
-        }
-        .cat-card-body { padding: 14px 16px; flex: 1; display: flex; flex-direction: column; }
-        .cat-card-cat {
-          font-family: 'DM Mono', monospace; font-size: 8px;
-          color: #aaa; letter-spacing: .18em; text-transform: uppercase;
-          margin-bottom: 4px;
-        }
-        .cat-card-name {
-          font-family: 'Playfair Display', serif;
-          font-size: 15px; font-weight: 700; color: #111;
-          margin-bottom: 6px; line-height: 1.3;
-        }
-        .cat-card-desc {
-          font-size: 11px; color: #777; line-height: 1.55;
-          margin-bottom: 10px; flex: 1;
-        }
-        .cat-card-colores {
-          display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px;
-        }
-        .cat-color-dot {
-          width: 16px; height: 16px; border-radius: 50%;
-          border: 2px solid rgba(0,0,0,.1);
-          title: attr(data-color);
-        }
-        .cat-card-footer {
-          display: flex; align-items: center;
-          justify-content: space-between; gap: 8px;
-          padding-top: 10px; border-top: 1px solid #f0f0ec;
-        }
-        .cat-nivel {
-          display: flex; align-items: center; gap: 5px;
-          font-family: 'DM Mono', monospace; font-size: 8px;
-          font-weight: 700; text-transform: uppercase; letter-spacing: .1em;
-        }
-        .cat-nivel-dot { width: 6px; height: 6px; border-radius: 50%; }
-        .cat-ver-btn {
-          padding: 6px 14px; background: #0a0a0a; color: #fff;
-          border: none; cursor: pointer;
-          font-family: 'Poppins', sans-serif; font-size: 10px; font-weight: 600;
-          transition: background .15s; white-space: nowrap;
-        }
-        .cat-ver-btn:hover { background: #c9a84c; color: #000; }
+        /* GRID */
+        .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:1px;background:#ebebeb;}
 
-        /* ── MODAL ── */
-        .cat-modal-overlay {
-          position: fixed; inset: 0; background: rgba(0,0,0,.65);
-          z-index: 500; display: flex; align-items: center; justify-content: center;
-          padding: 20px;
-          animation: fadeIn .15s ease;
-        }
-        @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
-        .cat-modal {
-          background: #fff; width: 100%; max-width: 860px;
-          max-height: 90vh; overflow-y: auto;
-          display: grid; grid-template-columns: 1fr 1fr;
-          animation: slideUp .2s ease;
-        }
-        @keyframes slideUp { from { transform: translateY(20px); opacity:0; } to { transform:none; opacity:1; } }
-        .cat-modal-close {
-          position: absolute; top: 16px; right: 16px;
-          width: 32px; height: 32px; background: rgba(0,0,0,.4);
-          border: none; cursor: pointer; color: #fff;
-          font-size: 14px; border-radius: 50%;
-          display: flex; align-items: center; justify-content: center;
-          z-index: 10;
-        }
-        .cat-modal-imgs { position: relative; background: #f0f0ec; }
-        .cat-modal-img-main {
-          aspect-ratio: 3/4; overflow: hidden;
-        }
-        .cat-modal-img-main img {
-          width: 100%; height: 100%; object-fit: cover;
-        }
-        .cat-modal-thumbs {
-          display: flex; gap: 6px; padding: 8px;
-          overflow-x: auto;
-        }
-        .cat-modal-thumb {
-          width: 60px; height: 75px; object-fit: cover;
-          cursor: pointer; border: 2px solid transparent;
-          flex-shrink: 0; transition: border-color .12s;
-        }
-        .cat-modal-thumb.active { border-color: #c9a84c; }
-        .cat-modal-info { padding: 28px; display: flex; flex-direction: column; gap: 16px; }
-        .cat-modal-cat  { font-family: 'DM Mono', monospace; font-size: 8px; color: #aaa; letter-spacing: .2em; text-transform: uppercase; }
-        .cat-modal-name { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700; color: #111; line-height: 1.25; }
-        .cat-modal-desc { font-size: 13px; color: #666; line-height: 1.7; }
-        .cat-modal-price {
-          font-family: 'DM Mono', monospace;
-        }
-        .cat-variantes { display: flex; flex-direction: column; gap: 6px; }
-        .cat-variante-row {
-          display: flex; align-items: center; gap: 10px;
-          padding: 10px 12px; border: 1px solid #f0f0ec;
-          cursor: pointer; transition: border-color .12s;
-        }
-        .cat-variante-row:hover { border-color: #c9a84c; }
-        .cat-variante-row.agotado { opacity: .5; cursor: default; }
-        .cat-variante-color { width: 20px; height: 20px; border-radius: 50%; border: 2px solid rgba(0,0,0,.1); flex-shrink: 0; }
-        .cat-variante-name { font-size: 12px; font-weight: 500; flex: 1; }
-        .cat-variante-nivel {
-          font-family: 'DM Mono', monospace; font-size: 8px;
-          font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
-        }
-        .cat-add-btn {
-          padding: 7px 14px; border: none; cursor: pointer;
-          font-family: 'Poppins', sans-serif; font-size: 10px; font-weight: 700;
-          text-transform: uppercase; letter-spacing: .06em;
-          background: #0a0a0a; color: #fff; transition: background .12s;
-          white-space: nowrap;
-        }
-        .cat-add-btn:hover { background: #c9a84c; color: #000; }
-        .cat-add-btn.added { background: #22c55e; color: #fff; }
+        /* CARD */
+        .card{background:#fff;cursor:pointer;display:flex;flex-direction:column;transition:transform .2s,box-shadow .2s;position:relative;}
+        .card:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(0,0,0,.09);z-index:2;}
+        .card-img{aspect-ratio:3/4;overflow:hidden;background:#f2f2ef;position:relative;}
+        .card-img img{width:100%;height:100%;object-fit:cover;transition:transform .5s;}
+        .card:hover .card-img img{transform:scale(1.05);}
+        .card-no-img{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:44px;color:#d8d8d2;}
+        .card-badge{position:absolute;top:9px;left:9px;padding:3px 8px;font-family:'DM Mono',monospace;font-size:7px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;}
+        .card-body{padding:13px 14px 14px;flex:1;display:flex;flex-direction:column;}
+        .card-cat{font-family:'DM Mono',monospace;font-size:7px;color:#c0c0b8;letter-spacing:.2em;text-transform:uppercase;margin-bottom:3px;}
+        .card-name{font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:700;color:#111;line-height:1.2;margin-bottom:5px;}
+        .card-desc{font-family:'Poppins',sans-serif;font-size:10.5px;color:#aaa;line-height:1.6;margin-bottom:10px;flex:1;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+        .card-colors{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:11px;}
+        .card-dot{width:13px;height:13px;border-radius:50%;border:1.5px solid rgba(0,0,0,.07);}
+        .card-foot{display:flex;align-items:center;justify-content:space-between;border-top:1px solid #f2f2ef;padding-top:9px;}
+        .card-niv{display:flex;align-items:center;gap:4px;font-family:'DM Mono',monospace;font-size:7.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;}
+        .card-btn{padding:6px 12px;background:#0a0a0a;color:#fff;border:none;cursor:pointer;font-family:'Poppins',sans-serif;font-size:10px;font-weight:600;transition:background .15s;}
+        .card-btn:hover{background:#c9a84c;color:#000;}
 
-        /* ── CARRITO DRAWER ── */
-        .cat-cart-overlay {
-          position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 600;
-        }
-        .cat-cart-drawer {
-          position: fixed; top: 0; right: 0; bottom: 0;
-          width: min(400px, 100vw); background: #fff;
-          z-index: 601; display: flex; flex-direction: column;
-          box-shadow: -4px 0 30px rgba(0,0,0,.15);
-          animation: slideInRight .2s ease;
-        }
-        @keyframes slideInRight { from { transform: translateX(100%); } to { transform:none; } }
-        .cart-header {
-          padding: 18px 20px; background: #0a0a0a;
-          display: flex; align-items: center; justify-content: space-between;
-        }
-        .cart-title { font-family: 'Playfair Display', serif; font-size: 16px; font-weight: 700; color: #fff; }
-        .cart-close {
-          width: 28px; height: 28px; background: none; border: 1px solid #333;
-          cursor: pointer; color: #888; font-size: 12px;
-          display: flex; align-items: center; justify-content: center;
-        }
-        .cart-items { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; }
-        .cart-item {
-          display: grid; grid-template-columns: auto 1fr auto;
-          gap: 12px; padding: 12px; border: 1px solid #f0f0ec; align-items: center;
-        }
-        .cart-item-color { width: 24px; height: 24px; border-radius: 50%; border: 2px solid rgba(0,0,0,.1); flex-shrink: 0; }
-        .cart-item-info .name { font-size: 12px; font-weight: 600; }
-        .cart-item-info .sub { font-family: 'DM Mono', monospace; font-size: 9px; color: #aaa; margin-top: 1px; }
-        .cart-item-ctrl { display: flex; align-items: center; gap: 0; border: 1px solid #f0f0ec; }
-        .cart-qty-btn { width: 24px; height: 24px; border: none; background: #f8f8f6; cursor: pointer; font-size: 14px; }
-        .cart-qty { width: 28px; text-align: center; font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 700; }
-        .cart-remove { margin-left: 6px; background: none; border: none; cursor: pointer; color: #ccc; font-size: 12px; }
-        .cart-footer { padding: 16px 20px; border-top: 1px solid #f0f0ec; display: flex; flex-direction: column; gap: 10px; }
-        .cart-nombre {
-          width: 100%; padding: 10px 12px; border: 1px solid #e5e5e0;
-          font-family: 'Poppins', sans-serif; font-size: 12px; outline: none;
-        }
-        .cart-nombre:focus { border-color: #c9a84c; }
-        .cart-wa-btn {
-          width: 100%; padding: 13px; border: none; cursor: pointer;
-          font-family: 'Poppins', sans-serif; font-size: 12px; font-weight: 700;
-          text-transform: uppercase; letter-spacing: .06em;
-          display: flex; align-items: center; justify-content: center; gap: 8px;
-          transition: background .15s;
-        }
-        .cart-wa-btn.main { background: #25d366; color: #000; }
-        .cart-wa-btn.main:hover { background: #22c55e; }
-        .cart-wa-btn.sec  { background: #f0f0ec; color: #333; }
-        .cart-wa-btn.sec:hover { background: #e5e5e0; }
+        /* MODAL OVERLAY */
+        .mo{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:500;display:flex;align-items:flex-end;justify-content:center;animation:mFade .18s ease;}
+        @media(min-width:680px){.mo{align-items:center;padding:20px;}}
+        @keyframes mFade{from{opacity:0}to{opacity:1}}
 
-        /* ── EMPTY / LOADING ── */
-        .cat-empty { text-align: center; padding: 80px 24px; }
-        .cat-section-title {
-          padding: 20px 28px 10px;
-          font-family: 'DM Mono', monospace; font-size: 9px;
-          color: #aaa; letter-spacing: .22em; text-transform: uppercase;
-          border-bottom: 1px solid #e5e5e0; margin-bottom: 0;
-          background: #f8f8f6;
-        }
+        /* MODAL BOX — dos columnas en desktop, apilado en mobile */
+        .mb{background:#fff;width:100%;max-width:860px;max-height:95vh;overflow:hidden;display:flex;flex-direction:column;position:relative;animation:mUp .22s ease;}
+        @media(min-width:680px){.mb{flex-direction:row;max-height:90vh;}}
+        @keyframes mUp{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
+        .mb-close{position:absolute;top:10px;right:10px;width:30px;height:30px;background:rgba(0,0,0,.45);border:none;cursor:pointer;color:#fff;font-size:13px;border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:10;}
 
-        /* ── WA FLOAT ── */
-        .cat-wa-float {
-          position: fixed; bottom: 24px; left: 24px; z-index: 300;
-          width: 52px; height: 52px; border-radius: 50%;
-          background: #25d366; border: none; cursor: pointer;
-          display: flex; align-items: center; justify-content: center;
-          font-size: 24px; box-shadow: 0 4px 16px rgba(37,211,102,.4);
-          transition: transform .15s;
-          text-decoration: none;
-        }
-        .cat-wa-float:hover { transform: scale(1.08); }
+        /* FOTOS — mobile: max 52vw altura, desktop: 45% ancho fijo */
+        .mb-imgs{flex-shrink:0;width:100%;overflow:hidden;background:#f2f2ef;display:flex;flex-direction:column;}
+        @media(max-width:679px){.mb-imgs{max-height:52vw;}}
+        @media(min-width:680px){.mb-imgs{width:44%;max-height:none;}}
+        .mb-main{flex:1;min-height:0;overflow:hidden;}
+        .mb-main img{width:100%;height:100%;object-fit:cover;display:block;}
+        .mb-thumbs{display:flex;gap:4px;padding:5px 7px;background:#f8f8f6;overflow-x:auto;flex-shrink:0;}
+        .mb-thumb{width:44px;height:55px;object-fit:cover;cursor:pointer;border:2px solid transparent;flex-shrink:0;transition:border-color .12s;}
+        .mb-thumb.on{border-color:#c9a84c;}
 
-        @media (max-width: 640px) {
-          .cat-modal { grid-template-columns: 1fr; }
-          .cat-modal-imgs { max-height: 300px; }
-          .cat-filters { padding: 10px 14px; }
-          .cat-grid { grid-template-columns: repeat(2, 1fr); }
-          .cat-nav { padding: 0 14px; }
-          .cat-nav-tagline { display: none; }
-        }
-        @media (max-width: 400px) {
-          .cat-grid { grid-template-columns: 1fr; }
+        /* INFO PANEL — scroll independiente */
+        .mb-info{flex:1;min-width:0;overflow-y:auto;padding:20px 20px 80px;display:flex;flex-direction:column;gap:13px;}
+        @media(min-width:680px){.mb-info{padding:26px 26px 90px;}}
+        .mb-cat{font-family:'DM Mono',monospace;font-size:7.5px;color:#bbb;letter-spacing:.22em;text-transform:uppercase;}
+        .mb-name{font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:700;color:#111;line-height:1.2;}
+        .mb-desc{font-family:'Poppins',sans-serif;font-size:12px;color:#666;line-height:1.75;}
+        .mb-tela{font-family:'DM Mono',monospace;font-size:8.5px;color:#bbb;letter-spacing:.1em;}
+        .mb-vh{font-family:'DM Mono',monospace;font-size:8px;color:#bbb;letter-spacing:.2em;text-transform:uppercase;margin-bottom:7px;}
+
+        /* VARIANTE ROW */
+        .vr{display:flex;align-items:center;gap:11px;padding:9px 11px;border:1px solid #f0f0ec;cursor:pointer;transition:border-color .12s;margin-bottom:5px;}
+        .vr:hover:not(.vr-ag){border-color:#c9a84c;}
+        .vr.vr-ag{opacity:.38;cursor:default;}
+        .vr.vr-sel{border-color:#c9a84c;background:#fffbf0;}
+        .vr-clr{width:22px;height:22px;border-radius:50%;border:2px solid rgba(0,0,0,.07);flex-shrink:0;}
+        .vr-name{font-family:'Poppins',sans-serif;font-size:12px;font-weight:500;flex:1;}
+        .vr-niv{font-family:'DM Mono',monospace;font-size:7.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;display:flex;align-items:center;gap:4px;}
+
+        /* Qty control within variant */
+        .qc{display:flex;align-items:center;border:1px solid #e5e5e0;flex-shrink:0;}
+        .qb{width:26px;height:26px;border:none;background:#f8f8f6;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;transition:background .1s;color:#333;}
+        .qb:hover{background:#e5e5e0;}
+        .qn{width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:700;border-left:1px solid #e5e5e0;border-right:1px solid #e5e5e0;}
+        .vr-add{padding:7px 12px;background:#0a0a0a;color:#fff;border:none;cursor:pointer;font-family:'Poppins',sans-serif;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;transition:background .15s;white-space:nowrap;flex-shrink:0;}
+        .vr-add:hover{background:#c9a84c;color:#000;}
+
+        /* Bottom sticky bar inside modal */
+        .mb-bar{position:sticky;bottom:0;background:#fff;border-top:1px solid #ebebeb;padding:11px 20px;display:flex;gap:8px;align-items:center;}
+        @media(min-width:680px){.mb-bar{padding:12px 26px;}}
+        .mb-bar-hint{font-family:'DM Mono',monospace;font-size:8px;color:#bbb;flex:1;letter-spacing:.06em;}
+        .mb-bar-btn{padding:10px 18px;background:#c9a84c;color:#000;border:none;cursor:pointer;font-family:'Poppins',sans-serif;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;transition:background .15s;white-space:nowrap;}
+        .mb-bar-btn:hover{background:#e0bc5e;}
+
+        /* CART DRAWER */
+        .co{position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:600;}
+        .cd{position:fixed;top:0;right:0;bottom:0;width:min(390px,100vw);background:#fff;z-index:601;display:flex;flex-direction:column;box-shadow:-6px 0 32px rgba(0,0,0,.14);animation:cR .2s ease;}
+        @keyframes cR{from{transform:translateX(100%)}to{transform:none}}
+        .cd-h{padding:15px 18px;background:#0a0a0a;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+        .cd-title{font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:700;color:#fff;}
+        .cd-count{font-family:'DM Mono',monospace;font-size:8px;color:#c9a84c;background:rgba(201,168,76,.12);border:1px solid rgba(201,168,76,.25);padding:3px 8px;}
+        .cd-cx{width:27px;height:27px;background:none;border:1px solid #333;cursor:pointer;color:#777;font-size:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+        .cd-items{flex:1;overflow-y:auto;}
+        .cd-item{display:grid;grid-template-columns:auto 1fr auto;gap:11px;padding:13px 18px;border-bottom:1px solid #f5f5f3;align-items:center;}
+        .cd-dot{width:26px;height:26px;border-radius:50%;border:2px solid rgba(0,0,0,.07);flex-shrink:0;}
+        .cd-iname{font-family:'Poppins',sans-serif;font-size:12px;font-weight:600;color:#111;}
+        .cd-isub{font-family:'DM Mono',monospace;font-size:9px;color:#bbb;margin-top:2px;}
+        .cd-iniv{font-family:'DM Mono',monospace;font-size:8px;font-weight:700;margin-top:3px;}
+        .cd-ctrl{display:flex;align-items:center;gap:4px;}
+        .cd-qc{display:flex;align-items:center;border:1px solid #e5e5e0;}
+        .cd-qb{width:27px;height:27px;border:none;background:#f8f8f6;cursor:pointer;font-size:14px;transition:background .1s;}
+        .cd-qb:hover{background:#e5e5e0;}
+        .cd-qn{width:28px;height:27px;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:12px;font-weight:700;border-left:1px solid #e5e5e0;border-right:1px solid #e5e5e0;}
+        .cd-del{background:none;border:none;cursor:pointer;color:#d4d4d4;font-size:13px;padding:3px 5px;transition:color .1s;}
+        .cd-del:hover{color:#ef4444;}
+        .cd-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:40px;}
+        .cd-foot{padding:14px 18px;border-top:1px solid #ebebeb;display:flex;flex-direction:column;gap:9px;}
+        .cd-input{width:100%;padding:9px 11px;border:1px solid #e5e5e0;font-family:'Poppins',sans-serif;font-size:12px;outline:none;transition:border-color .15s;}
+        .cd-input:focus{border-color:#c9a84c;}
+        .cd-hint{font-family:'DM Mono',monospace;font-size:8px;color:#bbb;text-align:center;letter-spacing:.06em;line-height:1.9;padding:0 4px;}
+        .cd-wa{width:100%;padding:12px;border:none;cursor:pointer;font-family:'Poppins',sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;justify-content:center;gap:7px;transition:all .15s;}
+        .cd-wa.m{background:#25d366;color:#000;} .cd-wa.m:hover{background:#22c55e;}
+        .cd-wa.s{background:#f0f0ec;color:#555;} .cd-wa.s:hover{background:#e5e5e0;}
+        .cd-clr{padding:6px;background:none;border:1px solid #f0f0ec;cursor:pointer;font-family:'DM Mono',monospace;font-size:8px;color:#ccc;letter-spacing:.1em;text-transform:uppercase;transition:all .1s;}
+        .cd-clr:hover{border-color:#ef4444;color:#ef4444;}
+
+        /* WA FLOAT */
+        .wf{position:fixed;bottom:22px;left:18px;z-index:300;width:48px;height:48px;border-radius:50%;background:#25d366;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:21px;box-shadow:0 4px 16px rgba(37,211,102,.4);text-decoration:none;transition:transform .15s;}
+        .wf:hover{transform:scale(1.1);}
+
+        /* FOOTER */
+        .foot{background:#0a0a0a;padding:32px 24px;margin-top:48px;text-align:center;}
+        .foot-brand{display:flex;align-items:center;justify-content:center;gap:11px;margin-bottom:13px;}
+        .foot-brand img{height:38px;width:38px;object-fit:contain;}
+        .foot-name{font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:#fff;letter-spacing:.08em;}
+        .foot-sub{font-family:'DM Mono',monospace;font-size:6px;color:#c9a84c;letter-spacing:.45em;text-transform:uppercase;margin-top:3px;}
+        .foot-info{font-family:'DM Mono',monospace;font-size:8.5px;color:rgba(255,255,255,.2);letter-spacing:.1em;line-height:2.3;}
+        .foot-info a{color:#c9a84c;text-decoration:none;}
+
+        /* EMPTY */
+        .empty{text-align:center;padding:70px 24px;}
+        .empty-icon{font-size:44px;margin-bottom:12px;}
+        .empty-txt{font-family:'DM Mono',monospace;font-size:11px;color:#bbb;margin-bottom:14px;line-height:1.8;}
+        .empty-btn{padding:8px 20px;background:#0a0a0a;color:#fff;border:none;cursor:pointer;font-family:'Poppins',sans-serif;font-size:11px;font-weight:600;}
+
+        @media(max-width:520px){
+          .nav{padding:0 14px;} .hero{padding:22px 14px;} .filt{padding:9px 14px;}
+          .sec-h{padding:11px 14px 8px;} .grid{grid-template-columns:repeat(2,1fr);}
+          .hero-t{font-size:25px;} .foot{padding:26px 14px;margin-top:36px;}
         }
       `}</style>
 
-      {/* ── NAVBAR ── */}
-      <nav className="cat-nav">
-        <div style={{ display:'flex', alignItems:'center', gap:'14px' }}>
-          <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
-            <img src="https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/ISOTIPO%20PNG.png" alt="M" style={{ height:'36px', width:'36px', objectFit:'contain' }}/>
-            <div>
-              <div style={{ fontFamily:"'Playfair Display',serif", fontSize:'15px', fontWeight:900, color:'#fff', letterSpacing:'.05em', lineHeight:1 }}>MODITEX</div>
-              <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'6.5px', color:'#c9a84c', letterSpacing:'.35em', textTransform:'uppercase', marginTop:'2px' }}>GROUP</div>
-            </div>
-          </div>
-          <div className="cat-nav-tagline">Barquisimeto · Venezuela</div>
-        </div>
-        <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
-          <button className="cat-cart-btn" onClick={() => setCarritoOpen(true)}>
-            🛒 Mi pedido
-            {totalItems > 0 && <span className="cat-cart-badge">{totalItems}</span>}
-          </button>
-        </div>
+      {/* NAV */}
+      <nav className="nav">
+        <a href="/catalogo" className="nav-brand">
+          <img src={ISOTIPO} alt="M"/>
+          <div><div className="nav-name">MODITEX</div><span className="nav-sub">GROUP</span></div>
+        </a>
+        <button className="nav-cart" onClick={() => setCartOpen(true)}>
+          🛒 Mi pedido {totalItems>0 && <span className="nav-badge">{totalItems}</span>}
+        </button>
       </nav>
 
-      {/* ── HERO ── */}
-      <div className="cat-hero">
-        <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'9px', color:'#c9a84c', letterSpacing:'.28em', textTransform:'uppercase', marginBottom:'10px' }}>
-          Colección disponible
-        </div>
-        <div style={{ fontFamily:"'Playfair Display',serif", fontSize:'28px', fontWeight:900, color:'#fff', marginBottom:'8px' }}>
-          Moditex Group
-        </div>
-        <div style={{ fontFamily:"'Poppins',sans-serif", fontSize:'12px', color:'rgba(255,255,255,.45)', marginBottom:'20px' }}>
-          Fabricamos tu propia marca · Venta al mayor
-        </div>
-        {/* Leyenda de estados */}
-        <div style={{ display:'flex', gap:'18px', justifyContent:'center', flexWrap:'wrap' }}>
-          {Object.entries(NIVEL_CFG).map(([k, cfg]) => (
-            <div key={k} style={{ display:'flex', alignItems:'center', gap:'6px' }}>
-              <span style={{ width:'8px', height:'8px', borderRadius:'50%', background:cfg.dot, display:'inline-block' }}/>
-              <span style={{ fontFamily:"'DM Mono',monospace", fontSize:'9px', color:'rgba(255,255,255,.45)', letterSpacing:'.08em' }}>
-                {cfg.label}
-              </span>
+      {/* HERO */}
+      <div className="hero">
+        <div className="hero-ey">Colección disponible</div>
+        <div className="hero-t">Moditex Group</div>
+        <div className="hero-s">Fabricamos tu propia marca · Venta al mayor</div>
+        {modelos.length>0 && <div style={{fontFamily:"'DM Mono',monospace",fontSize:'8px',color:'rgba(255,255,255,.2)',marginTop:'5px',letterSpacing:'.1em'}}>{modelos.length} prenda{modelos.length!==1?'s':''} en catálogo</div>}
+        <div className="hero-lv">
+          {Object.entries(NIVEL).map(([k,v]) => (
+            <div key={k} className="hero-lv-i">
+              <span style={{width:'6px',height:'6px',borderRadius:'50%',background:v.dot,display:'inline-block'}}/>
+              {v.label}
             </div>
           ))}
         </div>
       </div>
 
-      {/* ── FILTROS ── */}
-      <div className="cat-filters">
-        <input className="cat-search" placeholder="🔍 Buscar por modelo, descripción…"
-          value={buscar} onChange={e => setBuscar(e.target.value)}/>
-        <button className={`cat-filter-btn${!filtrocat ? ' active' : ''}`}
-          onClick={() => setFiltrocat('')}>Todas</button>
+      {/* FILTROS */}
+      <div className="filt">
+        <input className="filt-srch" placeholder="Buscar prenda…" value={buscar} onChange={e=>setBuscar(e.target.value)}/>
+        <button className={`filt-tag${!filtrocat?' on':''}`} onClick={()=>setFiltrocat('')}>Todas</button>
         {categorias.map(cat => (
-          <button key={cat}
-            className={`cat-filter-btn${filtrocat === cat ? ' active' : ''}`}
-            onClick={() => setFiltrocat(filtrocat === cat ? '' : cat)}>
+          <button key={cat} className={`filt-tag${filtrocat===cat?' on':''}`} onClick={()=>setFiltrocat(filtrocat===cat?'':cat)}>
             {catIcon(cat)} {cat}
           </button>
         ))}
       </div>
 
-      {/* ── CONTENIDO ── */}
+      {/* CONTENIDO */}
       {loading ? (
-        <div className="cat-empty">
-          <div style={{ fontSize:'40px', marginBottom:'12px' }}>✨</div>
-          <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'12px', color:'#aaa' }}>Cargando catálogo…</div>
-        </div>
+        <div className="empty"><div className="empty-icon">✨</div><div className="empty-txt">Cargando catálogo…</div></div>
       ) : error ? (
-        <div className="cat-empty">
-          <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'12px', color:'#ef4444' }}>⚠ {error}</div>
-          <button onClick={cargar} style={{ marginTop:'12px', padding:'8px 16px', background:'#0a0a0a', color:'#fff', border:'none', cursor:'pointer', fontFamily:"'Poppins',sans-serif", fontSize:'11px' }}>Reintentar</button>
-        </div>
-      ) : modelos.length === 0 ? (
-        <div className="cat-empty">
-          <div style={{ fontSize:'40px', marginBottom:'12px' }}>🏷️</div>
-          <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'12px', color:'#aaa', marginBottom:'8px' }}>
-            El catálogo está vacío por el momento
-          </div>
-          <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'9px', color:'#ccc' }}>
-            Pronto tendremos productos disponibles
-          </div>
-        </div>
-      ) : filtrados.length === 0 ? (
-        <div className="cat-empty">
-          <div style={{ fontSize:'40px', marginBottom:'12px' }}>🔍</div>
-          <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'12px', color:'#aaa', marginBottom:'16px' }}>
-            Sin resultados para "{buscar || filtrocat}"
-          </div>
-          <button onClick={() => { setBuscar(''); setFiltrocat(''); }}
-            style={{ padding:'9px 20px', background:'#0a0a0a', color:'#fff', border:'none', cursor:'pointer',
-              fontFamily:"'Poppins',sans-serif", fontSize:'11px', fontWeight:600 }}>
-            Ver todas las prendas
-          </button>
-        </div>
+        <div className="empty"><div className="empty-icon">⚠️</div><div className="empty-txt">{error}</div><button className="empty-btn" onClick={cargar}>Reintentar</button></div>
+      ) : modelos.length===0 ? (
+        <div className="empty"><div className="empty-icon">🏷️</div><div className="empty-txt">El catálogo está vacío por el momento.<br/>Pronto habrá novedades.</div></div>
+      ) : filtrados.length===0 ? (
+        <div className="empty"><div className="empty-icon">🔍</div><div className="empty-txt">Sin resultados para "{buscar||filtrocat}"</div><button className="empty-btn" onClick={()=>{setBuscar('');setFiltrocat('');}}>Ver todas</button></div>
       ) : (
-        <>
-          {/* Agrupar por categoría */}
-          {(filtrocat ? [filtrocat] : categorias.filter(c => filtrados.some(m => m.categoria === c))).map(cat => {
-            const items = filtrados.filter(m => m.categoria === cat);
-            if (!items.length) return null;
-            return (
-              <div key={cat}>
-                <div className="cat-section-title">{catIcon(cat)} {cat} ({items.length})</div>
-                <div className="cat-grid">
-                  {items.map(modelo => {
-                    // Nivel general del modelo (el mejor disponible)
-                    const varDisp = modelo.variantes.filter(v => v.nivel !== 'agotado');
-                    const nivelGeneral = varDisp.length === 0 ? 'agotado' : varDisp.some(v => v.nivel === 'disponible') ? 'disponible' : 'pocas';
-                    const nivelCfg = NIVEL_CFG[nivelGeneral];
-                    // Colores únicos de las variantes
-                    const coloresMap = {};
-                    modelo.variantes.forEach(v => { coloresMap[v.color] = v.nivel; });
-
-                    return (
-                      <div key={modelo.key} className="cat-card" onClick={() => { setModal(modelo); setFotoIdx(0); }}>
-                        <div className="cat-card-img">
-                          {modelo.foto_url ? (
-                            <img src={modelo.foto_url} alt={modelo.modelo} loading="lazy"/>
-                          ) : (
-                            <div className="cat-card-no-img">
-                              <span>{catIcon(modelo.categoria)}</span>
-                              <span style={{ fontFamily:"'DM Mono',monospace", fontSize:'9px', color:'#ccc' }}>{modelo.modelo}</span>
-                            </div>
-                          )}
-                          {/* Badge nivel */}
-                          <div style={{
-                            position:'absolute', top:'10px', left:'10px',
-                            background: nivelGeneral === 'agotado' ? 'rgba(0,0,0,.6)' : nivelCfg.bg,
-                            color: nivelCfg.color, padding:'3px 9px',
-                            fontFamily:"'DM Mono',monospace", fontSize:'7px',
-                            fontWeight:700, letterSpacing:'.12em', textTransform:'uppercase',
-                          }}>
-                            {nivelCfg.label}
-                          </div>
+        (filtrocat ? [filtrocat] : categorias.filter(c=>filtrados.some(m=>m.categoria===c))).map(cat => {
+          const items = filtrados.filter(m=>m.categoria===cat);
+          if (!items.length) return null;
+          return (
+            <div key={cat}>
+              <div className="sec-h">
+                <span style={{fontSize:'16px'}}>{catIcon(cat)}</span>
+                <span className="sec-h-name">{cat}</span>
+                <span className="sec-h-cnt">· {items.length}</span>
+              </div>
+              <div className="grid">
+                {items.map(modelo => {
+                  const varDisp = modelo.variantes.filter(v=>v.nivel!=='agotado');
+                  const ngen = varDisp.length===0?'agotado':varDisp.some(v=>v.nivel==='disponible')?'disponible':'pocas';
+                  const nc = NIVEL[ngen];
+                  const colores = {};
+                  modelo.variantes.forEach(v=>{colores[v.color]=v.nivel;});
+                  return (
+                    <div key={modelo.key} className="card" onClick={()=>abrirModal(modelo)}>
+                      <div className="card-img">
+                        {modelo.foto_url ? <img src={modelo.foto_url} alt={modelo.modelo} loading="lazy"/> : <div className="card-no-img">{catIcon(modelo.categoria)}</div>}
+                        <div className="card-badge" style={{background:nc.bg,color:nc.text}}>{nc.label}</div>
+                      </div>
+                      <div className="card-body">
+                        <div className="card-cat">{modelo.categoria}</div>
+                        <div className="card-name">{modelo.modelo}</div>
+                        {modelo.descripcion && <div className="card-desc">{modelo.descripcion}</div>}
+                        <div className="card-colors">
+                          {Object.entries(colores).slice(0,10).map(([color,nivel])=>(
+                            <div key={color} className="card-dot" title={color} style={{background:colorFromName(color),opacity:nivel==='agotado'?.28:1}}/>
+                          ))}
+                          {Object.keys(colores).length>10 && <span style={{fontFamily:"'DM Mono',monospace",fontSize:'8px',color:'#bbb',lineHeight:'13px'}}>+{Object.keys(colores).length-10}</span>}
                         </div>
-                        <div className="cat-card-body">
-                          <div className="cat-card-cat">{modelo.categoria}</div>
-                          <div className="cat-card-name">{modelo.modelo}</div>
-                          {modelo.descripcion && (
-                            <div className="cat-card-desc" style={{ WebkitLineClamp:2, display:'-webkit-box', WebkitBoxOrient:'vertical', overflow:'hidden' }}>
-                              {modelo.descripcion}
-                            </div>
-                          )}
-                          {/* Puntos de color */}
-                          <div className="cat-card-colores">
-                            {Object.entries(coloresMap).slice(0, 10).map(([color, nivel]) => (
-                              <div key={color} className="cat-color-dot"
-                                data-color={color}
-                                title={color}
-                                style={{
-                                  background: colorFromName(color),
-                                  opacity: nivel === 'agotado' ? .3 : 1,
-                                }}/>
-                            ))}
-                            {Object.keys(coloresMap).length > 10 && (
-                              <span style={{ fontFamily:"'DM Mono',monospace", fontSize:'8px', color:'#aaa', lineHeight:'16px' }}>
-                                +{Object.keys(coloresMap).length - 10}
-                              </span>
-                            )}
-                          </div>
-                          <div className="cat-card-footer">
-                            <div className="cat-nivel">
-                              <span className="cat-nivel-dot" style={{ background: nivelCfg.dot }}/>
-                              <span style={{ color: nivelCfg.color }}>{nivelCfg.label}</span>
-                            </div>
-                            <button className="cat-ver-btn" onClick={e => { e.stopPropagation(); setModal(modelo); setFotoIdx(0); }}>
-                              Ver prenda →
-                            </button>
-                          </div>
+                        <div className="card-foot">
+                          <div className="card-niv"><span style={{width:'5px',height:'5px',borderRadius:'50%',background:nc.dot,display:'inline-block'}}/><span style={{color:nc.text}}>{nc.label}</span></div>
+                          <button className="card-btn" onClick={e=>{e.stopPropagation();abrirModal(modelo);}}>Ver →</button>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
-        </>
+            </div>
+          );
+        })
       )}
 
-      {/* ── MODAL PRODUCTO ── */}
+      {/* MODAL */}
       {modal && (
-        <div className="cat-modal-overlay" onClick={() => setModal(null)}>
-          <div className="cat-modal" onClick={e => e.stopPropagation()} style={{ position:'relative' }}>
-            <button className="cat-modal-close" onClick={() => setModal(null)}>✕</button>
+        <div className="mo" onClick={cerrarModal}>
+          <div className="mb" onClick={e=>e.stopPropagation()}>
+            <button className="mb-close" onClick={cerrarModal}>✕</button>
 
-            {/* Fotos */}
-            <div className="cat-modal-imgs">
-              <div className="cat-modal-img-main">
-                {fotosModal.length > 0 ? (
-                  <img src={fotosModal[fotoIdx] || fotosModal[0]} alt={modal.modelo}/>
-                ) : (
-                  <div style={{ width:'100%', height:'100%', minHeight:'300px', display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:'8px', color:'#ccc', background:'#f0f0ec' }}>
-                    <span style={{ fontSize:'60px' }}>{catIcon(modal.categoria)}</span>
-                    <span style={{ fontFamily:"'DM Mono',monospace", fontSize:'10px' }}>Sin foto</span>
-                  </div>
-                )}
+            {/* FOTOS */}
+            <div className="mb-imgs">
+              <div className="mb-main">
+                {fotosModal.length>0
+                  ? <img src={fotosModal[fotoIdx]} alt={modal.modelo}/>
+                  : <div style={{width:'100%',height:'100%',minHeight:'220px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'52px',color:'#ccc',background:'#f2f2ef'}}>{catIcon(modal.categoria)}</div>
+                }
               </div>
-              {fotosModal.length > 1 && (
-                <div className="cat-modal-thumbs">
-                  {fotosModal.map((f, i) => (
-                    <img key={i} src={f} alt="" className={`cat-modal-thumb${fotoIdx === i ? ' active' : ''}`}
-                      onClick={() => setFotoIdx(i)}/>
+              {fotosModal.length>1 && (
+                <div className="mb-thumbs">
+                  {fotosModal.map((f,i)=>(
+                    <img key={i} src={f} className={`mb-thumb${fotoIdx===i?' on':''}`} onClick={()=>setFotoIdx(i)} alt=""/>
                   ))}
                 </div>
               )}
             </div>
 
-            {/* Info */}
-            <div className="cat-modal-info">
+            {/* INFO */}
+            <div className="mb-info">
               <div>
-                <div className="cat-modal-cat">{catIcon(modal.categoria)} {modal.categoria}</div>
-                <div className="cat-modal-name">{modal.modelo}</div>
+                <div className="mb-cat">{catIcon(modal.categoria)} {modal.categoria}</div>
+                <div className="mb-name">{modal.modelo}</div>
               </div>
-              {modal.descripcion && <div className="cat-modal-desc">{modal.descripcion}</div>}
-              {modal.tela && (
-                <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'9px', color:'#888', letterSpacing:'.1em' }}>
-                  TELA: {modal.tela.toUpperCase()}
-                </div>
-              )}
-              {/* Variantes */}
+              {modal.descripcion && <div className="mb-desc">{modal.descripcion}</div>}
+              {modal.tela && <div className="mb-tela">Tela: {modal.tela}</div>}
+
+              {/* VARIANTES */}
               <div>
-                <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'8px', color:'#aaa', letterSpacing:'.18em', textTransform:'uppercase', marginBottom:'8px' }}>
-                  Colores disponibles
-                </div>
-                <div className="cat-variantes">
-                  {modal.variantes.map(v => {
-                    const ncfg = NIVEL_CFG[v.nivel];
-                    const inCart = carrito.some(x => x.sku === v.sku);
-                    return (
-                      <div key={v.sku}
-                        className={`cat-variante-row${v.nivel === 'agotado' ? ' agotado' : ''}`}
-                        onClick={() => v.nivel !== 'agotado' && addToCart(modal, v)}>
-                        <div className="cat-variante-color" style={{ background: colorFromName(v.color) }}/>
-                        <div className="cat-variante-name">
-                          {v.color}
-                          {v.talla && v.talla !== 'UNICA' && <span style={{ fontFamily:"'DM Mono',monospace", fontSize:'9px', color:'#aaa', marginLeft:'6px' }}>T:{v.talla}</span>}
+                <div className="mb-vh">Elige tu color</div>
+                {modal.variantes.map(v => {
+                  const nc = NIVEL[v.nivel];
+                  const inCart = isInCart(v.sku);
+                  const qty = cartQty(v.sku);
+                  return (
+                    <div key={v.sku} className={`vr${v.nivel==='agotado'?' vr-ag':''}${inCart?' vr-sel':''}`}>
+                      <div className="vr-clr" style={{background:colorFromName(v.color)}}/>
+                      <div style={{flex:1}}>
+                        <div className="vr-name">{v.color}{v.talla&&v.talla!=='UNICA'&&<span style={{fontFamily:"'DM Mono',monospace",fontSize:'9px',color:'#aaa',marginLeft:'5px'}}>T:{v.talla}</span>}</div>
+                        <div className="vr-niv" style={{color:nc.text,marginTop:'2px'}}>
+                          <span style={{width:'5px',height:'5px',borderRadius:'50%',background:nc.dot,display:'inline-block'}}/>
+                          {nc.label}
                         </div>
-                        <div className="cat-variante-nivel" style={{ color: ncfg.color }}>
-                          <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:ncfg.dot, display:'inline-block', marginRight:'4px' }}/>
-                          {ncfg.label}
-                        </div>
-                        {v.nivel !== 'agotado' && (
-                          <button className={`cat-add-btn${inCart ? ' added' : ''}`}
-                            onClick={e => { e.stopPropagation(); addToCart(modal, v); }}>
-                            {inCart ? '✓ Agregado' : '+ Pedir'}
-                          </button>
-                        )}
                       </div>
-                    );
-                  })}
-                </div>
+                      {v.nivel!=='agotado' && (
+                        inCart ? (
+                          <div style={{display:'flex',alignItems:'center',gap:'5px'}}>
+                            <div className="qc">
+                              <button className="qb" onClick={e=>{e.stopPropagation();if(qty===1)removeFromCart(v.sku);else changeQty(v.sku,-1);}}>−</button>
+                              <span className="qn">{qty}</span>
+                              <button className="qb" onClick={e=>{e.stopPropagation();changeQty(v.sku,1);}}>+</button>
+                            </div>
+                            <button onClick={e=>{e.stopPropagation();removeFromCart(v.sku);}}
+                              style={{padding:'4px 6px',background:'none',border:'1px solid #f0f0ec',cursor:'pointer',color:'#d4d4d4',fontSize:'11px',transition:'color .1s'}}
+                              onMouseEnter={e=>e.currentTarget.style.color='#ef4444'}
+                              onMouseLeave={e=>e.currentTarget.style.color='#d4d4d4'}>✕</button>
+                          </div>
+                        ) : (
+                          <button className="vr-add" onClick={e=>{e.stopPropagation();addToCart(modal,v);}}>+ Pedir</button>
+                        )
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-              <div style={{ padding:'12px', background:'#fffbeb', border:'1px solid #fde68a', fontFamily:"'DM Mono',monospace", fontSize:'9px', color:'#92400e', lineHeight:1.7 }}>
-                💡 Selecciona el color que deseas y agrégalo a tu pedido.<br/>
-                Cuando estés listo, envía tu pedido por WhatsApp.
+
+              <div style={{padding:'9px 11px',background:'#fffbf0',border:'1px solid #fde68a44',fontFamily:"'DM Mono',monospace",fontSize:'9px',color:'#92400e',lineHeight:1.8}}>
+                💡 Selecciona el color y la cantidad. Cuando estés lista, envía tu pedido por WhatsApp.
               </div>
             </div>
+
+            {/* BARRA INFERIOR */}
+            {totalItems>0 && (
+              <div className="mb-bar">
+                <span className="mb-bar-hint">{totalItems} prenda{totalItems!==1?'s':''} en tu pedido</span>
+                <button className="mb-bar-btn" onClick={()=>{cerrarModal();setCartOpen(true);}}>Ver pedido →</button>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* ── CARRITO DRAWER ── */}
-      {carritoOpen && (
+      {/* CARRITO */}
+      {cartOpen && (
         <>
-          <div className="cat-cart-overlay" onClick={() => setCarritoOpen(false)}/>
-          <div className="cat-cart-drawer">
-            <div className="cart-header">
-              <div className="cart-title">Mi Pedido</div>
-              <button className="cart-close" onClick={() => setCarritoOpen(false)}>✕</button>
+          <div className="co" onClick={()=>setCartOpen(false)}/>
+          <div className="cd">
+            <div className="cd-h">
+              <div className="cd-title">Mi Pedido</div>
+              {carrito.length>0 && <span className="cd-count">{totalItems} prenda{totalItems!==1?'s':''}</span>}
+              <button className="cd-cx" onClick={()=>setCartOpen(false)}>✕</button>
             </div>
 
-            {carrito.length === 0 ? (
-              <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:'10px', padding:'24px' }}>
-                <span style={{ fontSize:'40px' }}>🛒</span>
-                <span style={{ fontFamily:"'DM Mono',monospace", fontSize:'11px', color:'#aaa' }}>Tu pedido está vacío</span>
-                <button onClick={() => setCarritoOpen(false)}
-                  style={{ padding:'8px 20px', background:'#0a0a0a', color:'#fff', border:'none', cursor:'pointer', fontFamily:"'Poppins',sans-serif", fontSize:'11px', fontWeight:600, marginTop:'8px' }}>
-                  Ver catálogo
-                </button>
+            {carrito.length===0 ? (
+              <div className="cd-empty">
+                <span style={{fontSize:'38px'}}>🛒</span>
+                <span style={{fontFamily:"'DM Mono',monospace",fontSize:'10px',color:'#bbb',textAlign:'center'}}>Tu pedido está vacío</span>
+                <button onClick={()=>setCartOpen(false)} style={{padding:'8px 18px',background:'#0a0a0a',color:'#fff',border:'none',cursor:'pointer',fontFamily:"'Poppins',sans-serif",fontSize:'11px',fontWeight:600,marginTop:'5px'}}>Ver catálogo</button>
               </div>
             ) : (
               <>
-                <div className="cart-items">
+                <div className="cd-items">
                   {carrito.map(item => {
-                    const ncfg = NIVEL_CFG[item.nivel];
+                    const nc = NIVEL[item.nivel];
                     return (
-                      <div key={item.sku} className="cart-item">
-                        <div className="cart-item-color" style={{ background: colorFromName(item.color) }}/>
-                        <div className="cart-item-info">
-                          <div className="name">{item.modelo}</div>
-                          <div className="sub">{item.color}{item.talla && item.talla !== 'UNICA' ? ' · T:'+item.talla : ''}</div>
-                          <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'8px', color:ncfg.color, marginTop:'2px', fontWeight:700 }}>
-                            {ncfg.label}
-                          </div>
+                      <div key={item.sku} className="cd-item">
+                        <div className="cd-dot" style={{background:colorFromName(item.color)}}/>
+                        <div>
+                          <div className="cd-iname">{item.modelo}</div>
+                          <div className="cd-isub">{item.color}{item.talla&&item.talla!=='UNICA'?' · T:'+item.talla:''}</div>
+                          <div className="cd-iniv" style={{color:nc.text}}>{nc.label}</div>
                         </div>
-                        <div style={{ display:'flex', alignItems:'center', gap:'4px' }}>
-                          <div className="cart-item-ctrl">
-                            <button className="cart-qty-btn" onClick={() => changeQty(item.sku, -1)}>−</button>
-                            <span className="cart-qty">{item.qty}</span>
-                            <button className="cart-qty-btn" onClick={() => changeQty(item.sku, 1)}>+</button>
+                        <div className="cd-ctrl">
+                          <div className="cd-qc">
+                            <button className="cd-qb" onClick={()=>{if(item.qty===1)removeFromCart(item.sku);else changeQty(item.sku,-1);}}>−</button>
+                            <span className="cd-qn">{item.qty}</span>
+                            <button className="cd-qb" onClick={()=>changeQty(item.sku,1)}>+</button>
                           </div>
-                          <button className="cart-remove" onClick={() => removeFromCart(item.sku)}>✕</button>
+                          <button className="cd-del" onClick={()=>removeFromCart(item.sku)}>✕</button>
                         </div>
                       </div>
                     );
                   })}
                 </div>
-
-                <div className="cart-footer">
-                  <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'9px', color:'#aaa', letterSpacing:'.1em', textTransform:'uppercase' }}>
-                    Tu nombre para el pedido
-                  </div>
-                  <input className="cart-nombre" placeholder="ej: María González"
-                    value={nombre} onChange={e => setNombre(e.target.value)}/>
-
-                  <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'9px', color:'#888', lineHeight:1.6, padding:'8px 10px', background:'#f8f8f6', borderLeft:'3px solid #c9a84c' }}>
-                    Se enviará un mensaje a WhatsApp con tu pedido.<br/>
-                    Una asesora confirmará el monto para tu transferencia.
-                  </div>
-
-                  <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'9px', color:'#aaa', textAlign:'center', letterSpacing:'.1em', textTransform:'uppercase' }}>Enviar a:</div>
-
-                  <button className="cart-wa-btn main" onClick={() => sendWA(WA_NUMBER)}>
-                    📱 WhatsApp 1 — {WA_NUMBER.replace('58', '+58 ')}
-                  </button>
-                  <button className="cart-wa-btn sec" onClick={() => sendWA(WA_NUMBER2)}>
-                    📱 WhatsApp 2 — {WA_NUMBER2.replace('58', '+58 ')}
-                  </button>
-
-                  <button onClick={() => setCarrito([])}
-                    style={{ padding:'7px', background:'none', border:'1px solid #f0f0ec', cursor:'pointer', fontFamily:"'DM Mono',monospace", fontSize:'8px', color:'#ccc', letterSpacing:'.1em', textTransform:'uppercase' }}>
-                    Vaciar pedido
-                  </button>
+                <div className="cd-foot">
+                  <div style={{fontFamily:"'DM Mono',monospace",fontSize:'8px',color:'#bbb',letterSpacing:'.12em',textTransform:'uppercase'}}>Tu nombre</div>
+                  <input className="cd-input" placeholder="ej: María González" value={nombre} onChange={e=>setNombre(e.target.value)}/>
+                  <div className="cd-hint">Tu pedido se enviará por WhatsApp.<br/>Una asesora te confirma el monto.</div>
+                  <button className="cd-wa m" onClick={()=>sendWA(WA_NUMBER)}>📱 Enviar · WA 1</button>
+                  <button className="cd-wa s" onClick={()=>sendWA(WA_NUMBER2)}>📱 Enviar · WA 2</button>
+                  <button className="cd-clr" onClick={()=>setCarrito([])}>Vaciar pedido</button>
                 </div>
               </>
             )}
@@ -733,53 +486,29 @@ export default function CatalogoPage() {
         </>
       )}
 
-      {/* ── FOOTER ── */}
-      <div style={{ background:'#0a0a0a', padding:'30px 28px', textAlign:'center', marginTop:'40px' }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:'12px', marginBottom:'14px' }}>
-          <img src={"https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/ISOTIPO%20PNG.png"} alt="M" style={{ height:'44px', width:'44px', objectFit:'contain' }}/>
-          <div style={{ textAlign:'left' }}>
-            <div style={{ fontFamily:"'Playfair Display',serif", fontSize:'18px', fontWeight:900, color:'#fff', letterSpacing:'.05em', lineHeight:1 }}>MODITEX</div>
-            <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'7px', color:'#c9a84c', letterSpacing:'.35em', textTransform:'uppercase', marginTop:'3px' }}>GROUP</div>
-          </div>
+      {/* FOOTER */}
+      <div className="foot">
+        <div className="foot-brand">
+          <img src={ISOTIPO} alt="M"/>
+          <div><div className="foot-name">MODITEX</div><div className="foot-sub">GROUP</div></div>
         </div>
-        <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'9px', color:'rgba(255,255,255,.25)', letterSpacing:'.16em', lineHeight:2 }}>
-          MODITEX GROUP · BARQUISIMETO, VENEZUELA<br/>
-          <a href={`https://wa.me/${WA_NUMBER}`} target="_blank" rel="noreferrer"
-            style={{ color:'#c9a84c', textDecoration:'none' }}>+58 412-036-3131</a>
+        <div className="foot-info">
+          BARQUISIMETO · VENEZUELA<br/>
+          <a href={`https://wa.me/${WA_NUMBER}`} target="_blank" rel="noreferrer">+58 412-036-3131</a>
           {' · '}
-          <a href={`https://wa.me/${WA_NUMBER2}`} target="_blank" rel="noreferrer"
-            style={{ color:'#c9a84c', textDecoration:'none' }}>+58 412-753-4435</a>
+          <a href={`https://wa.me/${WA_NUMBER2}`} target="_blank" rel="noreferrer">+58 412-753-4435</a>
         </div>
       </div>
 
-      {/* ── WhatsApp flotante ── */}
-      <a href={`https://wa.me/${WA_NUMBER}`} target="_blank" rel="noreferrer" className="cat-wa-float">
-        💬
-      </a>
+      <a href={`https://wa.me/${WA_NUMBER}`} target="_blank" rel="noreferrer" className="wf">💬</a>
     </div>
   );
 }
 
-/* Convierte nombre de color a hex aproximado */
 function colorFromName(name) {
-  const n = (name||'').toLowerCase().trim();
-  const map = {
-    'negro':'#1a1a1a','blanco':'#f5f5f0','rojo':'#dc2626','azul':'#2563eb',
-    'azul marino':'#1e3a5f','azul rey':'#1d4ed8','verde':'#16a34a','verde oscuro':'#14532d',
-    'verde pistacho':'#84cc16','amarillo':'#eab308','rosado':'#ec4899','rosa':'#f472b6',
-    'morado':'#9333ea','violeta':'#7c3aed','lila':'#a78bfa','naranja':'#ea580c',
-    'salmon':'#fb923c','coral':'#f87171','beige':'#d4b896','camel':'#b87c4c',
-    'café':'#92400e','cafe':'#92400e','marrón':'#78350f','marron':'#78350f',
-    'gris':'#6b7280','gris claro':'#d1d5db','gris oscuro':'#374151',
-    'nude':'#e8c9a0','vinotinto':'#7f1d1d','vino':'#7f1d1d','blanco crema':'#fefce8',
-    'turquesa':'#0d9488','celeste':'#38bdf8','fucsia':'#d946ef','terracota':'#b45309',
-    'dorado':'#d97706','plateado':'#94a3b8','chocolate':'#431407','caqui':'#a3a36a',
-  };
-  for (const [k, v] of Object.entries(map)) {
-    if (n.includes(k)) return v;
-  }
-  // Hash fallback
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
-  return `hsl(${Math.abs(h) % 360}, 45%, 55%)`;
+  const n=(name||'').toLowerCase().trim();
+  const m={'negro':'#1a1a1a','blanco':'#f5f5f0','rojo':'#dc2626','azul':'#2563eb','azul marino':'#1e3a5f','azul rey':'#1d4ed8','verde':'#16a34a','verde oscuro':'#14532d','verde pistacho':'#84cc16','amarillo':'#eab308','rosado':'#ec4899','rosa':'#f472b6','morado':'#9333ea','violeta':'#7c3aed','lila':'#a78bfa','naranja':'#ea580c','salmon':'#fb923c','coral':'#f87171','beige':'#d4b896','camel':'#b87c4c','café':'#92400e','cafe':'#92400e','marrón':'#78350f','marron':'#78350f','gris':'#6b7280','gris claro':'#d1d5db','gris oscuro':'#374151','nude':'#e8c9a0','vinotinto':'#7f1d1d','vino':'#7f1d1d','blanco crema':'#fefce8','turquesa':'#0d9488','celeste':'#38bdf8','fucsia':'#d946ef','terracota':'#b45309','dorado':'#d97706','plateado':'#94a3b8','chocolate':'#431407','caqui':'#a3a36a'};
+  for(const[k,v] of Object.entries(m)){if(n.includes(k))return v;}
+  let h=0; for(let i=0;i<name.length;i++)h=name.charCodeAt(i)+((h<<5)-h);
+  return `hsl(${Math.abs(h)%360},40%,52%)`;
 }
