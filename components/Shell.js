@@ -501,11 +501,26 @@ export default function Shell({ children, title }) {
 
           {/* Logo */}
           <Link href="/dashboard" className="sh-logo">
-            <img
-              src="https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/moditex-logo.jpg"
-              alt="Moditex Group"
-              style={{ height:'40px', width:'auto', objectFit:'contain', filter:'brightness(1)' }}
-            />
+            {/* Isotipo cuadrado — mostramos solo la M */}
+            <div style={{
+              width:'34px', height:'34px', overflow:'hidden',
+              borderRadius:'3px', flexShrink:0,
+              border:'1px solid rgba(201,168,76,.3)',
+            }}>
+              <img
+                src="https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/moditex-logo.jpg"
+                alt="M"
+                style={{
+                  width:'100%', height:'100%',
+                  objectFit:'cover',
+                  objectPosition:'50% 30%',
+                }}
+              />
+            </div>
+            <div style={{ marginLeft:'10px' }}>
+              <div style={{ fontFamily:"'Playfair Display',serif", fontSize:'16px', fontWeight:900, color:'#fff', letterSpacing:'.05em', lineHeight:1 }}>MODITEX</div>
+              <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'7px', color:'#c9a84c', letterSpacing:'.35em', textTransform:'uppercase', marginTop:'2px' }}>GROUP</div>
+            </div>
           </Link>
 
           {/* Mobile logo */}
