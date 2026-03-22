@@ -211,8 +211,8 @@ export default function CatalogoPage() {
         .mb-thumb.on{border-color:#c9a84c;}
 
         /* INFO PANEL — scroll independiente */
-        .mb-info{flex:1;min-width:0;overflow-y:auto;padding:20px 20px 80px;display:flex;flex-direction:column;gap:13px;}
-        @media(min-width:680px){.mb-info{padding:26px 26px 90px;}}
+        .mb-info{flex:1;min-width:0;overflow-y:auto;padding:20px 20px 16px;display:flex;flex-direction:column;gap:13px;overflow-x:hidden;}
+        @media(min-width:680px){.mb-info{padding:26px 26px 20px;}}
         .mb-cat{font-family:'DM Mono',monospace;font-size:7.5px;color:#bbb;letter-spacing:.22em;text-transform:uppercase;}
         .mb-name{font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:700;color:#111;line-height:1.2;}
         .mb-desc{font-family:'Poppins',sans-serif;font-size:12px;color:#666;line-height:1.75;}
@@ -438,6 +438,8 @@ export default function CatalogoPage() {
               )}
             </div>
 
+            {/* INFO + BAR wrapper — columna flex para que la barra quede pegada al fondo */}
+            <div style={{flex:1,display:'flex',flexDirection:'column',minWidth:0,overflow:'hidden'}}>
             {/* INFO */}
             <div className="mb-info">
               <div>
@@ -499,24 +501,24 @@ export default function CatalogoPage() {
               </div>
             </div>
 
-</div>
-
-          {/* BARRA PEDIDO — fija al fondo del modal */}
-          {totalItems>0 && (
-            <div style={{flexShrink:0,background:'#fff',borderTop:'2px solid #c9a84c',padding:'10px 20px',display:'flex',alignItems:'center',gap:'10px'}}>
-              <div style={{display:'flex',alignItems:'center',gap:'7px',flex:1}}>
-                <span style={{width:'8px',height:'8px',borderRadius:'50%',background:'#16c65a',display:'inline-block',flexShrink:0}}/>
-                <span style={{fontFamily:"'DM Mono',monospace",fontSize:'9px',color:'#555',fontWeight:700}}>{totalItems} prenda{totalItems!==1?'s':''} en pedido</span>
+            {/* BARRA PEDIDO — fija al fondo del panel info */}
+            {totalItems>0 && (
+              <div style={{flexShrink:0,background:'#fff',borderTop:'2px solid #c9a84c',padding:'10px 20px',display:'flex',alignItems:'center',gap:'10px'}}>
+                <div style={{display:'flex',alignItems:'center',gap:'7px',flex:1}}>
+                  <span style={{width:'8px',height:'8px',borderRadius:'50%',background:'#16c65a',display:'inline-block',flexShrink:0}}/>
+                  <span style={{fontFamily:"'DM Mono',monospace",fontSize:'9px',color:'#555',fontWeight:700}}>{totalItems} prenda{totalItems!==1?'s':''} en pedido</span>
+                </div>
+                <button style={{padding:'10px 20px',background:'#c9a84c',color:'#000',border:'none',cursor:'pointer',fontFamily:"'Poppins',sans-serif",fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'.08em',flexShrink:0,transition:'background .15s'}}
+                  onClick={()=>{cerrarModal();setCartOpen(true);}}
+                  onMouseEnter={e=>e.currentTarget.style.background='#e0bc5e'}
+                  onMouseLeave={e=>e.currentTarget.style.background='#c9a84c'}>
+                  Ver pedido →
+                </button>
               </div>
-              <button style={{padding:'10px 20px',background:'#c9a84c',color:'#000',border:'none',cursor:'pointer',fontFamily:"'Poppins',sans-serif",fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'.08em',flexShrink:0,transition:'background .15s'}}
-                onClick={()=>{cerrarModal();setCartOpen(true);}}
-                onMouseEnter={e=>e.currentTarget.style.background='#e0bc5e'}
-                onMouseLeave={e=>e.currentTarget.style.background='#c9a84c'}>
-                Ver pedido →
-              </button>
-            </div>
-          )}
-        </div>
+            )}
+            </div>{/* close info+bar wrapper */}
+          </div>{/* close .mb */}
+        </div>{/* close .mo */}
       )}
 
       {/* CARRITO */}
