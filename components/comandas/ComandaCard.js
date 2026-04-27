@@ -260,7 +260,7 @@ const ComandaCard = memo(({
       </div>
 
       {isExpanded && (
-        <div style={{borderTop:'1px solid var(--border-soft)', padding:'18px', background:'rgba(0,0,0,.015)', display:'grid', gridTemplateColumns:'1fr 1fr', gap:'24px'}} className="premium-expanded-grid">
+        <div style={{borderTop:'1px solid var(--border-soft)', padding:'18px', background:'rgba(0,0,0,.015)', display:'grid', gridTemplateColumns:'1fr 1fr', gap:'24px'}} className="comanda-expanded-grid-responsive">
           <div>
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'12px'}}>
               <h4 style={{margin:0, fontFamily:'Playfair Display,serif', fontSize:'14px', color:'var(--ink)', display:'flex', alignItems:'center', gap:'8px'}}>

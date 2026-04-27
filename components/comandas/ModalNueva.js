@@ -768,8 +768,12 @@ export default function ModalNueva({ onClose, onSave, clientes=[], productos=[],
             }
             
             .pago-form-grid-responsive {
-              grid-template-columns: 1fr !important;
-              gap: 15px !important;
+              display: flex !important;
+              flex-direction: column !important;
+              gap: 12px !important;
+            }
+            .pago-form-grid-responsive > div {
+              width: 100% !important;
             }
             .pago-form-second-row-responsive { width: 100% !important; }
             .pago-form-button-responsive { width: 100% !important; height: 45px !important; margin-top: 5px; }
