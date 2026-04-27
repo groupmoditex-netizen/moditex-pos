@@ -296,19 +296,19 @@ export default function ModalNueva({ onClose, onSave, clientes=[], productos=[],
       <div className="modal-content" onClick={e=>e.stopPropagation()} style={{background:'var(--bg)',width:'100%',maxWidth:'900px',height:'90vh',borderRadius:'20px',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'0 20px 40px rgba(0,0,0,0.3)'}}>
         
         {/* HEADER */}
-        <div style={{padding:'20px 30px',background:'var(--surface)',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-          <div>
-            <h3 style={{margin:0,fontFamily:'Playfair Display,serif',fontSize:'22px'}}>Nueva Comanda</h3>
-            <div style={{display:'flex',gap:'15px',marginTop:'8px'}}>
+        <div className="modal-header-responsive" style={{padding:'20px 30px',background:'var(--surface)',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+          <div style={{flex:1}}>
+            <h3 className="modal-title-responsive" style={{margin:0,fontFamily:'Playfair Display,serif',fontSize:'22px'}}>Nueva Comanda</h3>
+            <div className="phases-container-responsive" style={{display:'flex',gap:'15px',marginTop:'8px',overflowX:'auto',paddingBottom:'5px'}}>
                {[1,2,3].map(n => (
-                 <div key={n} style={{display:'flex',alignItems:'center',gap:'6px',opacity:fase===n?1:0.4}}>
+                 <div key={n} style={{display:'flex',alignItems:'center',gap:'6px',opacity:fase===n?1:0.4,flexShrink:0}}>
                    <span style={{width:'20px',height:'20px',borderRadius:'50%',background:fase>=n?'var(--ink)':'#ccc',color:'#fff',fontSize:'10px',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700}}>{n}</span>
-                   <span style={{fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em'}}>{n===1?'Cliente':n===2?'Productos':'Pago/Notas'}</span>
+                   <span className="phase-text-responsive" style={{fontSize:'10px',fontWeight:700,textTransform:'uppercase',letterSpacing:'.1em'}}>{n===1?'Cliente':n===2?'Productos':'Pago/Notas'}</span>
                  </div>
                ))}
             </div>
           </div>
-          <button onClick={onClose} style={{background:'none',border:'none',fontSize:'20px',cursor:'pointer',opacity:0.5}}>✕</button>
+          <button onClick={onClose} style={{background:'none',border:'none',fontSize:'20px',cursor:'pointer',opacity:0.5,padding:'10px'}}>✕</button>
         </div>
 
         {/* BODY */}
@@ -454,7 +454,7 @@ export default function ModalNueva({ onClose, onSave, clientes=[], productos=[],
           )}
 
           {fase === 2 && (
-            <div style={{display:'grid',gridTemplateColumns:'1fr 320px',gap:'20px',height:'100%',animation:'fadeIn 0.4s ease-out'}}>
+            <div className="phase-2-grid-responsive" style={{display:'grid',gridTemplateColumns:'1fr 320px',gap:'20px',height:'100%',animation:'fadeIn 0.4s ease-out'}}>
                <div style={{display:'flex',flexDirection:'column',gap:'20px'}}>
                   {/* SCANNER POS (USB + CAMARA + MULTIPLICADOR) */}
                   <div style={{background:'var(--surface)', padding:'15px', borderRadius:'16px', border:'1px solid var(--border)', boxShadow:'0 10px 25px rgba(0,0,0,0.05)'}}>
@@ -572,7 +572,7 @@ export default function ModalNueva({ onClose, onSave, clientes=[], productos=[],
 
           {fase === 3 && (
             <div style={{maxWidth:'700px',margin:'0 auto',width:'100%',display:'flex',flexDirection:'column',gap:'15px',animation:'fadeIn 0.4s'}}>
-               <div style={{background:'var(--surface)',padding:'18px',borderRadius:'16px',border:'1px solid var(--border)',display:'grid',gridTemplateColumns:'1fr 1fr',gap:'15px'}}>
+               <div className="phase-3-top-grid-responsive" style={{background:'var(--surface)',padding:'18px',borderRadius:'16px',border:'1px solid var(--border)',display:'grid',gridTemplateColumns:'1fr 1fr',gap:'15px'}}>
                   <div>
                     <label style={{...lbl,marginBottom:'6px'}}>Agencia / Entrega</label>
                     <select value={agencia_envio} onChange={e=>setAgencia_envio(e.target.value)} style={{...inp,borderRadius:'10px',height:'38px'}}>
@@ -625,7 +625,7 @@ export default function ModalNueva({ onClose, onSave, clientes=[], productos=[],
 
                   {/* Formulario para agregar nuevo pago */}
                   <div style={{background:'var(--bg2)',padding:'12px',borderRadius:'12px',border:'1px dashed var(--border-strong)'}}>
-                     <div style={{display:'grid',gridTemplateColumns:'1.5fr 1fr auto',gap:'10px',alignItems:'flex-end'}}>
+                     <div className="pago-form-grid-responsive" style={{display:'grid',gridTemplateColumns:'1.5fr 1fr auto',gap:'10px',alignItems:'flex-end'}}>
                         <div>
                           <label style={lbl}>Método y Monto</label>
                           <div style={{display:'flex',gap:'4px'}}>
@@ -642,21 +642,21 @@ export default function ModalNueva({ onClose, onSave, clientes=[], productos=[],
                             <input type="number" value={pago_monto} onChange={e=>setPago_monto(e.target.value)} style={{...inp,width:'85px',borderRadius:'8px',height:'36px'}} placeholder="0.00"/>
                           </div>
                         </div>
-                        <div>
+                        <div className="pago-form-second-row-responsive">
                           <label style={lbl}>Ref / Tasa</label>
                           <div style={{display:'flex',gap:'4px'}}>
                             <input value={pago_referencia} onChange={e=>setPago_referencia(e.target.value)} style={{...inp,borderRadius:'8px',height:'36px',flex:1}} placeholder="Ref..."/>
                             <input type="number" value={pago_tasa} onChange={e=>setPago_tasa(e.target.value)} disabled={pago_divisa!=='BS'} style={{...inp,width:'85px',borderRadius:'8px',height:'36px',opacity:pago_divisa!=='BS'?.5:1}} placeholder="Tasa"/>
                           </div>
                         </div>
-                        <button onClick={agregarPagoALista} disabled={!pago_metodo || !pago_monto} style={{height:'36px',background:'var(--blue)',color:'#fff',border:'none',padding:'0 15px',borderRadius:'8px',fontWeight:700,cursor:'pointer',opacity:(!pago_metodo||!pago_monto)?0.5:1,fontSize:'12px'}}>
+                        <button className="pago-form-button-responsive" onClick={agregarPagoALista} disabled={!pago_metodo || !pago_monto} style={{height:'36px',background:'var(--blue)',color:'#fff',border:'none',padding:'0 15px',borderRadius:'8px',fontWeight:700,cursor:'pointer',opacity:(!pago_metodo||!pago_monto)?0.5:1,fontSize:'12px'}}>
                            + Añadir
                         </button>
                      </div>
                   </div>
 
                   {/* RESUMEN DE SALDOS POS PREMIUM */}
-                  <div style={{marginTop:'15px', display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'10px'}}>
+                  <div className="saldos-grid-responsive" style={{marginTop:'15px', display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'10px'}}>
                      <div style={{background:'var(--surface)', padding:'10px', borderRadius:'12px', border:'1.5px solid var(--border)', textAlign:'center', boxShadow:'0 2px 4px rgba(0,0,0,0.02)'}}>
                         <div style={lbl}>Total Orden</div>
                         <div style={{fontSize:'16px', fontWeight:900, color:'var(--ink)', fontFamily:'Inter,sans-serif'}}>€{fmtNum(totalComanda)}</div>
@@ -674,7 +674,7 @@ export default function ModalNueva({ onClose, onSave, clientes=[], productos=[],
                         boxShadow:'0 2px 8px rgba(0,0,0,0.04)',
                         transition:'all 0.3s'
                      }}>
-                        <div style={lbl}>{resta > 0.01 ? 'Falta por Pagar' : (resta < -0.01 ? 'Vuelto / Excedente' : 'Saldada')}</div>
+                        <div className="lbl-saldo-responsive" style={lbl}>{resta > 0.01 ? 'Falta por Pagar' : (resta < -0.01 ? 'Vuelto / Excedente' : 'Saldada')}</div>
                         <div style={{fontSize:'16px', fontWeight:900, color: resta > 0.01 ? '#f59e0b' : (resta < -0.01 ? '#10b981' : 'var(--ink)'), fontFamily:'Inter,sans-serif'}}>
                            {resta === 0 ? '✓' : `€${fmtNum(Math.abs(resta))}`}
                         </div>
@@ -722,20 +722,20 @@ export default function ModalNueva({ onClose, onSave, clientes=[], productos=[],
         )}
 
         {/* FOOTER */}
-        <div style={{padding:'20px 30px',background:'var(--surface)',borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between'}}>
-          <button onClick={guardarBorrador} style={{background:'none',border:'1px solid var(--border)',padding:'12px 20px',borderRadius:'10px',fontSize:'13px',fontWeight:600,cursor:'pointer'}}>Guardar en Espera</button>
+        <div className="modal-footer-responsive" style={{padding:'20px 30px',background:'var(--surface)',borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between'}}>
+          <button className="footer-btn-borrador-responsive" onClick={guardarBorrador} style={{background:'none',border:'1px solid var(--border)',padding:'12px 20px',borderRadius:'10px',fontSize:'13px',fontWeight:600,cursor:'pointer'}}>Guardar en Espera</button>
           
-          <div style={{display:'flex',gap:'12px'}}>
-            {fase > 1 && <button onClick={()=>setFase(fase-1)} style={{background:'none',border:'1px solid var(--border)',padding:'12px 25px',borderRadius:'10px',fontSize:'13px',fontWeight:600,cursor:'pointer'}}>Anterior</button>}
+          <div className="footer-btns-right-responsive" style={{display:'flex',gap:'12px'}}>
+            {fase > 1 && <button className="footer-btn-prev-responsive" onClick={()=>setFase(fase-1)} style={{background:'none',border:'1px solid var(--border)',padding:'12px 25px',borderRadius:'10px',fontSize:'13px',fontWeight:600,cursor:'pointer'}}>Anterior</button>}
             {fase < 3 ? (
-              <button onClick={avanzarFase} style={{background:'var(--ink)',color:'#fff',border:'none',padding:'12px 30px',borderRadius:'10px',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>Siguiente</button>
+              <button className="footer-btn-next-responsive" onClick={avanzarFase} style={{background:'var(--ink)',color:'#fff',border:'none',padding:'12px 30px',borderRadius:'10px',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>Siguiente</button>
             ) : (
-              <div style={{display:'flex',gap:'10px'}}>
-                <button onClick={()=>crearComanda(true)} disabled={saving} style={{background:'var(--green-soft)',color:'var(--green)',border:'1px solid var(--green)',padding:'12px 25px',borderRadius:'10px',fontSize:'13px',fontWeight:800,cursor:'pointer',opacity:saving?0.5:1}}>
-                  {saving?'⏳':'CREAR + EMPACAR'}
+              <div className="footer-final-btns-responsive" style={{display:'flex',gap:'10px'}}>
+                <button className="footer-btn-empacar-responsive" onClick={()=>crearComanda(true)} disabled={saving} style={{background:'var(--green-soft)',color:'var(--green)',border:'1px solid var(--green)',padding:'12px 25px',borderRadius:'10px',fontSize:'13px',fontWeight:800,cursor:'pointer',opacity:saving?0.5:1}}>
+                   + EMPACAR
                 </button>
-                <button onClick={()=>crearComanda(false)} disabled={saving} style={{background:'var(--green)',color:'#fff',border:'none',padding:'12px 30px',borderRadius:'10px',fontSize:'13px',fontWeight:900,cursor:'pointer',opacity:saving?0.5:1}}>
-                  {saving?'CREANDO...':'FINALIZAR COMANDA'}
+                <button className="footer-btn-finalizar-responsive" onClick={()=>crearComanda(false)} disabled={saving} style={{background:'var(--green)',color:'#fff',border:'none',padding:'12px 30px',borderRadius:'10px',fontSize:'13px',fontWeight:900,cursor:'pointer',opacity:saving?0.5:1}}>
+                   FINALIZAR
                 </button>
               </div>
             )}
@@ -745,6 +745,53 @@ export default function ModalNueva({ onClose, onSave, clientes=[], productos=[],
           .search-result-item:hover { background: var(--bg2) !important; }
           @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
           @keyframes fadeInSlide { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+          /* MEDIA QUERIES PARA MOBILE */
+          @media (max-width: 600px) {
+            .modal-content {
+              height: 100vh !important;
+              max-height: 100vh !important;
+              border-radius: 0 !important;
+            }
+            .modal-header-responsive { padding: 15px !important; }
+            .modal-title-responsive { font-size: 18px !important; }
+            .phase-text-responsive { display: none !important; }
+            
+            .phase-2-grid-responsive {
+              grid-template-columns: 1fr !important;
+              display: flex !important;
+              flex-direction: column !important;
+            }
+            
+            .phase-3-top-grid-responsive {
+              grid-template-columns: 1fr !important;
+            }
+            
+            .pago-form-grid-responsive {
+              grid-template-columns: 1fr !important;
+              gap: 15px !important;
+            }
+            .pago-form-second-row-responsive { width: 100% !important; }
+            .pago-form-button-responsive { width: 100% !important; height: 45px !important; margin-top: 5px; }
+            
+            .saldos-grid-responsive {
+              grid-template-columns: 1fr 1fr !important;
+            }
+            .lbl-saldo-responsive { font-size: 7px !important; }
+
+            .modal-footer-responsive {
+              flex-direction: column !important;
+              gap: 15px !important;
+              padding: 15px !important;
+            }
+            .footer-btn-borrador-responsive { width: 100% !important; order: 2; }
+            .footer-btns-right-responsive { width: 100% !important; order: 1; gap: 8px !important; }
+            .footer-btn-prev-responsive { flex: 1 !important; padding: 12px 10px !important; }
+            .footer-btn-next-responsive { flex: 2 !important; }
+            .footer-final-btns-responsive { width: 100% !important; }
+            .footer-btn-empacar-responsive { flex: 1 !important; padding: 12px 5px !important; font-size: 11px !important; }
+            .footer-btn-finalizar-responsive { flex: 1.5 !important; padding: 12px 5px !important; font-size: 11px !important; }
+          }
         `}}/>
       </div>
     </div>
