@@ -250,7 +250,7 @@ export default function SalidaPage() {
           </button>
           <button onClick={registrar} disabled={guardando||!cart.length}
             style={{padding:'11px 28px',background:cart.length?motivoCfg.color:'#ccc',color:'#fff',border:'none',cursor:cart.length?'pointer':'not-allowed',fontFamily:'Poppins,sans-serif',fontSize:'13px',fontWeight:700,textTransform:'uppercase',letterSpacing:'.06em',opacity:guardando?.6:1,transition:'background .2s'}}>
-            {guardando?'⏳ Registrando...`':`↓ REGISTRAR SALIDA · ${fmtNum(totalUds)} UDS`}
+            {guardando?'⏳ Registrando...':`↓ REGISTRAR SALIDA · ${fmtNum(totalUds)} UDS`}
           </button>
         </div>
 

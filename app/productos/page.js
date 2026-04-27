@@ -23,14 +23,16 @@ const lbl={fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.16em',t
 // ── Modal para editar UN producto (precios, categoría, modelo, talla, color) ─────
 function ModalEditarProducto({ prod, onClose, onSave }) {
   const [form, setForm] = useState({
-    categoria:   prod.categoria,
-    modelo:      prod.modelo,
-    talla:       prod.talla,
-    color:       prod.color,
-    precioDetal: prod.precioDetal,
-    precioMayor: prod.precioMayor,
-    precioCosto: prod.precioCosto || 0,
-    tela:        prod.tela || '',
+    categoria:           prod.categoria,
+    modelo:              prod.modelo,
+    talla:               prod.talla,
+    color:               prod.color,
+    precioDetal:         prod.precioDetal,
+    precioMayor:         prod.precioMayor,
+    precioCosto:         prod.precioCosto || 0,
+    tela:                prod.tela || '',
+    minMayorista:        prod.minMayorista        ?? 6,
+    modelosMinMayorista: prod.modelosMinMayorista ?? 3,
   });
   const [guardando, setGuardando] = useState(false);
   const [err, setErr] = useState('');
@@ -41,7 +43,11 @@ function ModalEditarProducto({ prod, onClose, onSave }) {
     try {
       const res = await fetch(`/api/productos/${prod.sku}`, {
         method: 'PUT', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          minMayorista:        form.minMayorista,
+          modelosMinMayorista: form.modelosMinMayorista,
+        }),
       }).then(r=>r.json());
       if (res.ok) onSave();
       else setErr(res.error || 'Error al guardar');
@@ -143,6 +149,30 @@ function ModalEditarProducto({ prod, onClose, onSave }) {
                   Margen detal: <strong>+€ {(form.precioDetal-form.precioCosto).toFixed(2)} ({margin}%)</strong>
                 </div>
               )}
+            </div>
+
+            {/* ── CAMPO NUEVO: Regla de Precio Mayorista ── */}
+            <div style={{gridColumn:'span 2',background:'#e8f5e9',border:'1px solid rgba(22,198,90,.25)',padding:'12px'}}>
+              <label style={{...lbl,color:'#2e7d32',marginBottom:'6px'}}>⚡ Regla de Precio Mayorista</label>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
+                <div>
+                  <label style={lbl}>Mínimo piezas del PEDIDO</label>
+                  <input type="number" min="1" value={form.minMayorista}
+                    onChange={e=>setForm(f=>({...f,minMayorista:parseInt(e.target.value)||6}))}
+                    style={inp} placeholder="6"/>
+                  <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#555',marginTop:'3px'}}>Total del pedido ≥ este valor para activar precio mayor</div>
+                </div>
+                <div>
+                  <label style={lbl}>Mín. piezas de ESTE modelo</label>
+                  <input type="number" min="1" value={form.modelosMinMayorista}
+                    onChange={e=>setForm(f=>({...f,modelosMinMayorista:parseInt(e.target.value)||3}))}
+                    style={inp} placeholder="3"/>
+                  <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#555',marginTop:'3px'}}>Piezas mínimas de este modelo específico</div>
+                </div>
+              </div>
+              <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#388e3c',marginTop:'8px',padding:'6px 8px',background:'rgba(22,198,90,.08)',borderLeft:'2px solid #16c65a'}}>
+                Precio MAYOR si: pedido ≥ <strong>{form.minMayorista}</strong> pzs TOTAL y este modelo ≥ <strong>{form.modelosMinMayorista}</strong> pzs
+              </div>
             </div>
           </div>
         </div>
@@ -457,11 +487,15 @@ function ModalNuevoProducto({ onClose, onSave }) {
 // ── Modal edición masiva por modelo — cambia precio detal/mayor/costo a todos los SKUs del grupo ──
 function ModalEditarGrupo({ modelo, variantes, onClose, onSave }) {
   const base = variantes[0] || {};
+  const [nuevoModelo, setNuevoModelo] = useState(modelo);
   const [precioDetal, setPD] = useState(base.precioDetal  || 0);
   const [precioMayor, setPM] = useState(base.precioMayor  || 0);
   const [precioCosto, setPC] = useState(base.precioCosto  || 0);
   const [tela,        setTela] = useState(base.tela || '');
-  const [editarTela,  setEditarTela] = useState(false); // toggle para mostrar campo tela
+  const [editarTela,  setEditarTela] = useState(false);
+  const [minMayorista,        setMinMay] = useState(base.minMayorista        ?? 6);
+  const [modelosMinMayorista, setMinMod] = useState(base.modelosMinMayorista ?? 3);
+  const [editarMayorista, setEditarMay] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [err, setErr] = useState('');
   const [ok,  setOk]  = useState('');
@@ -476,6 +510,7 @@ function ModalEditarGrupo({ modelo, variantes, onClose, onSave }) {
     ? ((precioDetal - precioCosto) / precioDetal * 100).toFixed(1) : null;
 
   async function guardar() {
+    if (!nuevoModelo.trim()) { setErr('El nombre del modelo no puede estar vacío'); return; }
     if (precioDetal <= 0) { setErr('Precio detal requerido'); return; }
     setGuardando(true); setErr('');
     try {
@@ -484,9 +519,9 @@ function ModalEditarGrupo({ modelo, variantes, onClose, onSave }) {
           method: 'PUT', headers: {'Content-Type':'application/json'},
           body: JSON.stringify({
             precioDetal, precioMayor, precioCosto,
-            categoria: v.categoria, modelo: v.modelo, talla: v.talla,
-            // Solo incluir tela si el usuario activó la edición
+            categoria: v.categoria, modelo: nuevoModelo.trim().toUpperCase(), talla: v.talla,
             ...(editarTela && tela !== undefined ? { tela } : {}),
+            ...(editarMayorista ? { minMayorista, modelosMinMayorista } : {}),
           }),
         }).then(r=>r.json())
       );
@@ -526,6 +561,12 @@ function ModalEditarGrupo({ modelo, variantes, onClose, onSave }) {
               ⚠️ Las variantes tienen precios distintos. Al guardar se unificarán todos.
             </div>
           )}
+
+          {/* Nombre / Modelo */}
+          <div>
+            <label style={lbl}>Nombre / Modelo del Grupo</label>
+            <input value={nuevoModelo} onChange={e=>setNuevoModelo(e.target.value)} style={inp} placeholder="Ej: BODY LICRA SEUL" />
+          </div>
 
           {/* Colores afectados */}
           <div>
@@ -608,6 +649,42 @@ function ModalEditarGrupo({ modelo, variantes, onClose, onSave }) {
                     Se aplicará: <strong>{tela}</strong> → {variantes.length} variantes
                   </div>
                 )}
+              </div>
+            )}
+          </div>
+
+          {/* ── CAMPO NUEVO: Regla Mayorista (masiva) ── */}
+          <div style={{border:'1px solid rgba(22,198,90,.3)',borderRadius:'4px',overflow:'hidden'}}>
+            <button
+              onClick={()=>setEditarMay(v=>!v)}
+              style={{display:'flex',justifyContent:'space-between',alignItems:'center',width:'100%',padding:'10px 14px',background:'#e8f5e9',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'12px',fontWeight:600,textAlign:'left',color:'#2e7d32'}}>
+              <span>⚡ Regla Mayorista {editarMayorista ? '(editando)' : ''}</span>
+              <span style={{display:'flex',gap:'12px',alignItems:'center'}}>
+                <span style={{fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#555',fontWeight:400}}>
+                  {editarMayorista ? '' : `≥${minMayorista} pzs pedido / ≥${modelosMinMayorista} pzs modelo`}
+                </span>
+                <span style={{fontSize:'11px',color:'#999'}}>{editarMayorista?'▲':'▼'}</span>
+              </span>
+            </button>
+            {editarMayorista && (
+              <div style={{padding:'12px 14px',borderTop:'1px solid rgba(22,198,90,.2)',background:'#f1f8e9'}}>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
+                  <div>
+                    <label style={lbl}>Mínimo piezas del PEDIDO</label>
+                    <input type="number" min="1" value={minMayorista}
+                      onChange={e=>setMinMay(parseInt(e.target.value)||6)}
+                      style={inp} placeholder="6"/>
+                  </div>
+                  <div>
+                    <label style={lbl}>Mín. piezas de ESTE modelo</label>
+                    <input type="number" min="1" value={modelosMinMayorista}
+                      onChange={e=>setMinMod(parseInt(e.target.value)||3)}
+                      style={inp} placeholder="3"/>
+                  </div>
+                </div>
+                <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#388e3c',marginTop:'8px'}}>
+                  Se aplicará a las {variantes.length} variantes del modelo
+                </div>
               </div>
             )}
           </div>
@@ -732,7 +809,7 @@ export default function ProductosPage() {
           <div style={{overflowX:'auto'}}>
             <table style={{width:'100%',borderCollapse:'collapse',minWidth:'750px'}}>
               <thead><tr style={{background:'#efefef'}}>
-                {['SKU','Categoría','Modelo','Color','Talla','P. Detal €','P. Mayor €','Costo €','Stock',''].map(h=>(
+                {['SKU','Categoría','Modelo','Tela','Color','Talla','P. Detal €','P. Mayor €','Costo €','Stock',''].map(h=>(
                   <th key={h} style={{padding:'8px 12px',textAlign:'left',fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.14em',textTransform:'uppercase',color:'#444',whiteSpace:'nowrap'}}>{h}</th>
                 ))}
               </tr></thead>
@@ -746,6 +823,7 @@ export default function ProductosPage() {
                       <td style={{padding:'9px 12px',fontFamily:'DM Mono,monospace',fontSize:'10px',color:'var(--blue)'}}>{p.sku}</td>
                       <td style={{padding:'9px 12px'}}><span style={{background:'var(--bg3)',padding:'2px 7px',fontFamily:'DM Mono,monospace',fontSize:'8px'}}>{p.categoria}</span></td>
                       <td style={{padding:'9px 12px',fontWeight:600,fontSize:'12px'}}>{p.modelo}</td>
+                      <td style={{padding:'9px 12px',fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#888'}}>{p.tela || '—'}</td>
                       <td style={{padding:'9px 12px',fontSize:'12px'}}>
                         <span style={{width:'8px',height:'8px',borderRadius:'50%',background:colorHex(p.color),display:'inline-block',verticalAlign:'middle',marginRight:'4px',border:'1px solid rgba(0,0,0,.1)'}}/>
                         {p.color}

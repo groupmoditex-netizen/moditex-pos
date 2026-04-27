@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 function fmtFecha(d) {
   if (!d) return '—';
@@ -13,8 +13,8 @@ const lbl = {fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.15em'
 const inp = {width:'100%',padding:'8px 10px',background:'var(--bg)',border:'1px solid var(--border)',fontFamily:'Poppins,sans-serif',fontSize:'12px',outline:'none',boxSizing:'border-box'};
 
 // ── Vista previa de guía ─────────────────────────────────────────────────────
-function GuiaPreview({ cmd, metodoEnvio, destino, receptor }) {
-  let prods = cmd.productos;
+function GuiaPreview({ cmd, metodoEnvio, destino, receptor, items = [] }) {
+  let prods = items;
   if (typeof prods === 'string') try { prods = JSON.parse(prods); } catch { prods = []; }
   if (!Array.isArray(prods)) prods = [];
   const cli = cmd._cliente;
@@ -22,14 +22,14 @@ function GuiaPreview({ cmd, metodoEnvio, destino, receptor }) {
   return (
     <div style={{padding:'20px',maxWidth:'620px',margin:'0 auto',fontFamily:'Arial,sans-serif',fontSize:'12px',color:'#111',border:'1px solid #ddd',background:'#fff'}}>
       {/* Cabecera */}
-      <div style={{borderBottom:'3px solid #c0392b',paddingBottom:'12px',marginBottom:'18px',display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+      <div style={{borderBottom:'3px solid #000',paddingBottom:'12px',marginBottom:'18px',display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
         <div>
-          <div style={{fontSize:'20px',fontWeight:900,letterSpacing:'.04em',color:'#c0392b'}}>MODITEX GROUP</div>
+          <div style={{fontSize:'20px',fontWeight:900,letterSpacing:'.04em',color:'#000'}}>MODITEX GROUP</div>
           <div style={{fontSize:'9px',color:'#555',marginTop:'2px',letterSpacing:'.12em'}}>FABRICAMOS TU PROPIA MARCA DE ROPA · BARQUISIMETO</div>
         </div>
         <div style={{textAlign:'right'}}>
           <div style={{fontSize:'8px',fontFamily:'monospace',color:'#888',letterSpacing:'.1em',textTransform:'uppercase'}}>Guía de Envío</div>
-          <div style={{fontSize:'13px',fontWeight:700,fontFamily:'monospace',color:'#c0392b',marginTop:'2px'}}>{cmd.id}</div>
+          <div style={{fontSize:'13px',fontWeight:700,fontFamily:'monospace',color:'#000',marginTop:'2px'}}>{cmd.id}</div>
           <div style={{fontSize:'9px',color:'#666',marginTop:'2px'}}>{fmtFecha(cmd.fecha_creacion||cmd.created_at)}</div>
         </div>
       </div>
@@ -38,11 +38,11 @@ function GuiaPreview({ cmd, metodoEnvio, destino, receptor }) {
         {/* Destinatario */}
         <div>
           <div style={{fontSize:'7px',letterSpacing:'.16em',textTransform:'uppercase',color:'#888',marginBottom:'6px',fontFamily:'monospace',fontWeight:700}}>Datos del Comprador</div>
-          <div style={{border:'2px solid #c0392b',padding:'10px 12px',background:'#fafafa'}}>
+          <div style={{border:'2px solid #C5A021',padding:'10px 12px',background:'#fafafa'}}>
             <div style={{fontWeight:900,fontSize:'15px',marginBottom:'5px'}}>{cmd.cliente||'—'}</div>
             {cli?.cedula   && <div style={{fontSize:'11px',color:'#333',marginBottom:'2px'}}>C.I.: <strong>{cli.cedula}</strong></div>}
             {cli?.telefono && <div style={{fontSize:'11px',color:'#333',marginBottom:'2px'}}>Tel: <strong>{cli.telefono}</strong></div>}
-            {cli?.ciudad   && <div style={{fontSize:'12px',fontWeight:700,color:'#c0392b',marginTop:'5px'}}>📍 {cli.ciudad}</div>}
+            {cli?.ciudad   && <div style={{fontSize:'12px',fontWeight:700,color:'#C5A021',marginTop:'5px'}}>📍 {cli.ciudad}</div>}
           </div>
         </div>
         {/* Envío */}
@@ -63,7 +63,7 @@ function GuiaPreview({ cmd, metodoEnvio, destino, receptor }) {
         </div>
         <table style={{width:'100%',borderCollapse:'collapse',fontSize:'11px'}}>
           <thead>
-            <tr style={{background:'#c0392b',color:'#fff'}}>
+            <tr style={{background:'#000',color:'#fff'}}>
               <th style={{padding:'5px 8px',textAlign:'left',fontWeight:600}}>Producto</th>
               <th style={{padding:'5px 8px',textAlign:'center',fontWeight:600,width:'55px'}}>Cant.</th>
             </tr>
@@ -103,7 +103,23 @@ export default function ModalTicketEnvio({ comandas, clientes=[], onClose }) {
   const [destinoMap,   setDestinoMap]  = useState({});
   const [receptorMap,  setReceptorMap] = useState({});
   const [vista,        setVista]       = useState('lista');
+  const [itemsMap,     setItemsMap]    = useState({});
+  const [loading,      setLoading]     = useState(true);
   const iframeRef = useRef(null);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch('/api/comandas/items', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: lista.map(c => c.id) })
+    })
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) setItemsMap(d.map || {});
+      setLoading(false);
+    });
+  }, []);
 
   const conCliente = lista.map(cmd=>{
     const cli = clientes.find(c=>c.id===cmd.cliente_id||c.nombre===cmd.cliente);
@@ -124,8 +140,7 @@ export default function ModalTicketEnvio({ comandas, clientes=[], onClose }) {
     const fmtF = d=>{if(!d)return'—';const p=(d||'').split('T')[0].split('-');return(p[2]||'')+'/'+(p[1]||'')+'/'+(p[0]||'');};
 
     const html = selArr.map((cmd,idx)=>{
-      let prods=cmd.productos;
-      if(typeof prods==='string')try{prods=JSON.parse(prods);}catch{prods=[];}
+      let prods = itemsMap[cmd.id] || [];
       if(!Array.isArray(prods))prods=[];
       const cli=cmd._cliente;
       const metodo=metodoMap[cmd.id]||'';
@@ -133,26 +148,26 @@ export default function ModalTicketEnvio({ comandas, clientes=[], onClose }) {
       const receptor=receptorMap[cmd.id]||'';
 
       return `
-        <div style="page-break-after:${idx<selArr.length-1?'always':'auto'};padding:22px;max-width:660px;margin:0 auto;font-family:Arial,sans-serif;font-size:12px;color:#111;">
-          <div style="border-bottom:3px solid #c0392b;padding-bottom:12px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:flex-start;">
+        <div style="page-break-inside:avoid;padding:22px 22px 40px;max-width:660px;margin:0 auto;font-family:Arial,sans-serif;font-size:12px;color:#111;${idx<selArr.length-1?'border-bottom:1px dashed #ccc;margin-bottom:20px;':''}">
+          <div style="border-bottom:3px solid #000;padding-bottom:12px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:flex-start;">
             <div>
-              <div style="font-size:20px;font-weight:900;letter-spacing:.04em;color:#c0392b;">MODITEX GROUP</div>
+              <div style="font-size:20px;font-weight:900;letter-spacing:.04em;color:#000;">MODITEX GROUP</div>
               <div style="font-size:9px;color:#555;margin-top:2px;letter-spacing:.12em;">FABRICAMOS TU PROPIA MARCA DE ROPA · BARQUISIMETO</div>
             </div>
             <div style="text-align:right;">
               <div style="font-size:8px;font-family:monospace;color:#888;letter-spacing:.1em;text-transform:uppercase;">Guía de Envío</div>
-              <div style="font-size:13px;font-weight:700;font-family:monospace;color:#c0392b;margin-top:2px;">${cmd.id}</div>
+              <div style="font-size:13px;font-weight:700;font-family:monospace;color:#000;margin-top:2px;">${cmd.id}</div>
               <div style="font-size:9px;color:#666;margin-top:2px;">${fmtF(cmd.fecha_creacion||cmd.created_at)}</div>
             </div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
             <div>
               <div style="font-size:7px;letter-spacing:.16em;text-transform:uppercase;color:#888;margin-bottom:6px;font-family:monospace;font-weight:700;">Datos del Comprador</div>
-              <div style="border:2px solid #c0392b;padding:10px 12px;background:#fafafa;">
+              <div style="border:2px solid #C5A021;padding:10px 12px;background:#fafafa;">
                 <div style="font-weight:900;font-size:15px;margin-bottom:5px;">${cmd.cliente||'—'}</div>
                 ${cli?.cedula?`<div style="font-size:11px;color:#333;margin-bottom:2px;">C.I.: <strong>${cli.cedula}</strong></div>`:''}
                 ${cli?.telefono?`<div style="font-size:11px;color:#333;margin-bottom:2px;">Tel: <strong>${cli.telefono}</strong></div>`:''}
-                ${cli?.ciudad?`<div style="font-size:12px;font-weight:700;color:#c0392b;margin-top:5px;">📍 ${cli.ciudad}</div>`:''}
+                ${cli?.ciudad?`<div style="font-size:12px;font-weight:700;color:#C5A021;margin-top:5px;">📍 ${cli.ciudad}</div>`:''}
               </div>
             </div>
             <div>
@@ -167,7 +182,7 @@ export default function ModalTicketEnvio({ comandas, clientes=[], onClose }) {
           <div style="margin-bottom:12px;">
             <div style="font-size:7px;letter-spacing:.16em;text-transform:uppercase;color:#888;margin-bottom:6px;font-family:monospace;font-weight:700;">Contenido — ${prods.length} ítem${prods.length!==1?'s':''}</div>
             <table style="width:100%;border-collapse:collapse;font-size:11px;">
-              <thead><tr style="background:#c0392b;color:#fff;"><th style="padding:5px 8px;text-align:left;">Producto</th><th style="padding:5px 8px;text-align:center;width:55px;">Cant.</th></tr></thead>
+              <thead><tr style="background:#000;color:#fff;"><th style="padding:5px 8px;text-align:left;">Producto</th><th style="padding:5px 8px;text-align:center;width:55px;">Cant.</th></tr></thead>
               <tbody>${prods.map((p,i)=>`<tr style="border-bottom:1px solid #eee;background:${i%2===0?'#fff':'#fafafa'};"><td style="padding:5px 8px;font-weight:600;">${p.modelo||p.sku||'—'}<br><span style="font-family:monospace;font-size:9px;color:#888;">${p.sku||''}</span></td><td style="padding:5px 8px;text-align:center;font-weight:700;font-size:13px;">${p.cant||p.qty||1}</td></tr>`).join('')}</tbody>
             </table>
           </div>
@@ -200,7 +215,7 @@ export default function ModalTicketEnvio({ comandas, clientes=[], onClose }) {
       {/* iframe oculto para impresión limpia */}
       <iframe ref={iframeRef} style={{position:'absolute',left:'-9999px',top:0,width:'800px',height:'600px',border:'none'}} title="print"/>
 
-      <div style={{background:'var(--bg)',border:'1px solid var(--border-strong)',width:'100%',maxWidth:'680px',maxHeight:'92vh',display:'flex',flexDirection:'column',borderTop:'2px solid #c0392b'}}>
+      <div style={{background:'var(--bg)',border:'1px solid var(--border-strong)',width:'100%',maxWidth:'680px',maxHeight:'92vh',display:'flex',flexDirection:'column',borderTop:'2px solid #000'}}>
 
         {/* Header */}
         <div style={{padding:'13px 18px',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0}}>
@@ -210,7 +225,7 @@ export default function ModalTicketEnvio({ comandas, clientes=[], onClose }) {
           </div>
           <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
             {!esUnica&&<button onClick={()=>setVista(v=>v==='lista'?'preview':'lista')} style={{padding:'6px 12px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:600,textTransform:'uppercase'}}>{vista==='lista'?'👁 Vista Previa':'← Lista'}</button>}
-            <button onClick={imprimir} disabled={selec.size===0} style={{padding:'6px 16px',background:'#c0392b',color:'#fff',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:700,textTransform:'uppercase',opacity:selec.size===0?.4:1}}>🖨️ Imprimir ({selec.size})</button>
+            <button onClick={imprimir} disabled={selec.size===0} style={{padding:'6px 16px',background:'#000',color:'#fff',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:700,textTransform:'uppercase',opacity:selec.size===0?.4:1}}>🖨️ Imprimir ({selec.size})</button>
             <button onClick={onClose} style={{background:'none',border:'1px solid var(--border)',width:'28px',height:'28px',cursor:'pointer',fontSize:'13px',display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
           </div>
         </div>
@@ -231,7 +246,11 @@ export default function ModalTicketEnvio({ comandas, clientes=[], onClose }) {
         <div style={{flex:1,overflowY:'auto',padding:'14px 18px'}}>
 
           {/* LISTA */}
-          {(vista==='lista'||esUnica)&&(
+          {loading ? (
+            <div style={{padding:'50px',textAlign:'center',color:'#888',fontFamily:'DM Mono,monospace',fontSize:'12px'}}>
+              ⏳ Preparando datos de impresión...
+            </div>
+          ) : (vista==='lista'||esUnica)&&(
             <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
               {!esUnica&&(
                 <div style={{display:'flex',gap:'8px',marginBottom:'2px'}}>
@@ -248,11 +267,11 @@ export default function ModalTicketEnvio({ comandas, clientes=[], onClose }) {
                 const isSel = selec.has(cmd.id);
                 const cli   = cmd._cliente;
                 return (
-                  <div key={cmd.id} style={{border:`1px solid ${isSel?'#c0392b':'var(--border)'}`,background:isSel?'rgba(192,57,43,.03)':'var(--bg2)',padding:'12px 14px',transition:'all .12s'}}>
+                  <div key={cmd.id} style={{border:`1px solid ${isSel?'#000':'var(--border)'}`,background:isSel?'rgba(0,0,0,.03)':'var(--bg2)',padding:'12px 14px',transition:'all .12s'}}>
                     {/* Fila superior — selección */}
                     <div style={{display:'flex',alignItems:'center',gap:'10px',cursor:esUnica?'default':'pointer',marginBottom:'11px'}} onClick={()=>!esUnica&&toggleSel(cmd.id)}>
                       {!esUnica&&(
-                        <div style={{width:'18px',height:'18px',border:`2px solid ${isSel?'#c0392b':'#ccc'}`,background:isSel?'#c0392b':'transparent',borderRadius:'3px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'all .12s'}}>
+                        <div style={{width:'18px',height:'18px',border:`2px solid ${isSel?'#000':'#ccc'}`,background:isSel?'#000':'transparent',borderRadius:'3px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'all .12s'}}>
                           {isSel&&<span style={{color:'#fff',fontSize:'11px',fontWeight:700}}>✓</span>}
                         </div>
                       )}
@@ -260,7 +279,7 @@ export default function ModalTicketEnvio({ comandas, clientes=[], onClose }) {
                         <div style={{fontWeight:700,fontSize:'13px'}}>{cmd.cliente||'—'}</div>
                         <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888',marginTop:'1px'}}>{cmd.id}</div>
                         {cli?.telefono&&<div style={{fontSize:'11px',color:'#555',marginTop:'2px'}}>📱 {cli.telefono}</div>}
-                        {cli?.ciudad&&<div style={{fontSize:'11px',color:'#c0392b',fontWeight:600,marginTop:'2px'}}>📍 {cli.ciudad}</div>}
+                        {cli?.ciudad&&<div style={{fontSize:'11px',color:'#C5A021',fontWeight:600,marginTop:'2px'}}>📍 {cli.ciudad}</div>}
                       </div>
                     </div>
 
@@ -270,7 +289,7 @@ export default function ModalTicketEnvio({ comandas, clientes=[], onClose }) {
                       <div style={{display:'flex',flexWrap:'wrap',gap:'5px'}}>
                         {METODOS_ENVIO.map(m=>(
                           <button key={m} onClick={()=>setMetodoMap(prev=>({...prev,[cmd.id]:m}))}
-                            style={{padding:'4px 10px',border:`1px solid ${metodoMap[cmd.id]===m?'#c0392b':'var(--border)'}`,background:metodoMap[cmd.id]===m?'#c0392b':'var(--bg)',color:metodoMap[cmd.id]===m?'#fff':'#555',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'9px',fontWeight:metodoMap[cmd.id]===m?700:400,transition:'all .12s'}}>
+                            style={{padding:'4px 10px',border:`1px solid ${metodoMap[cmd.id]===m?'#000':'var(--border)'}`,background:metodoMap[cmd.id]===m?'#000':'var(--bg)',color:metodoMap[cmd.id]===m?'#fff':'#555',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'9px',fontWeight:metodoMap[cmd.id]===m?700:400,transition:'all .12s'}}>
                             {m}
                           </button>
                         ))}
@@ -303,7 +322,7 @@ export default function ModalTicketEnvio({ comandas, clientes=[], onClose }) {
                 ?<div style={{textAlign:'center',padding:'40px',color:'#999',fontFamily:'DM Mono,monospace',fontSize:'11px'}}>Selecciona al menos una comanda</div>
                 :selArr.map((cmd,idx)=>(
                   <div key={cmd.id} style={{marginBottom: idx<selArr.length-1?'32px':0}}>
-                    <GuiaPreview cmd={cmd} metodoEnvio={metodoMap[cmd.id]||''} destino={destinoMap[cmd.id]||''} receptor={receptorMap[cmd.id]||''}/>
+                    <GuiaPreview cmd={cmd} items={itemsMap[cmd.id]} metodoEnvio={metodoMap[cmd.id]||''} destino={destinoMap[cmd.id]||''} receptor={receptorMap[cmd.id]||''}/>
                   </div>
                 ))
               }
@@ -317,7 +336,7 @@ export default function ModalTicketEnvio({ comandas, clientes=[], onClose }) {
             {selec.size>0?`Se imprimirán ${selec.size} guía${selec.size!==1?'s':''}.`:'Selecciona las comandas a imprimir.'}
           </div>
           <button onClick={imprimir} disabled={selec.size===0}
-            style={{padding:'8px 20px',background:'#c0392b',color:'#fff',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:700,textTransform:'uppercase',opacity:selec.size===0?.4:1}}>
+            style={{padding:'8px 20px',background:'#000',color:'#fff',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:700,textTransform:'uppercase',opacity:selec.size===0?.4:1}}>
             🖨️ Imprimir Ahora
           </button>
         </div>

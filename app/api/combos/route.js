@@ -39,14 +39,13 @@ export async function GET() {
     const { data: movs } = await supabase
       .from('movimientos')
       .select('sku,tipo,cantidad')
-      .in('tipo', ['ENTRADA','SALIDA','RESERVA']);
+      .in('tipo', ['ENTRADA','SALIDA']);
 
     // ── 4. Stock real por SKU ──────────────────────────────────────────
-    const entMap = {}, salMap = {}, resMap = {};
+    const entMap = {}, salMap = {};
     (movs || []).forEach(m => {
       if (m.tipo === 'ENTRADA')       entMap[m.sku] = (entMap[m.sku] || 0) + m.cantidad;
       else if (m.tipo === 'SALIDA')   salMap[m.sku] = (salMap[m.sku] || 0) + m.cantidad;
-      else if (m.tipo === 'RESERVA')  resMap[m.sku] = (resMap[m.sku] || 0) + m.cantidad;
     });
 
     // ── 5. Índice: modelKey|color → { stock total, mejor SKU } ─────────
@@ -58,7 +57,7 @@ export async function GET() {
     (prods || []).forEach(p => {
       const modelKey = `${p.categoria}__${p.modelo}`;
       const mcKey    = `${modelKey}|${p.color}`;
-      const realStock = Math.max(0, (p.stock_inicial || 0) + (entMap[p.sku] || 0) - (salMap[p.sku] || 0) - (resMap[p.sku] || 0));
+      const realStock = Math.max(0, (p.stock_inicial || 0) + (entMap[p.sku] || 0) - (salMap[p.sku] || 0));
 
       stockIndex[mcKey] = (stockIndex[mcKey] || 0) + realStock;
 

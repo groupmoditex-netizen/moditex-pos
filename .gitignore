@@ -1,5 +1,12 @@
-node_modules/ 
-.next/ 
-.env.local 
-*.exe 
-out/ 
+node_modules/
+.next/
+.env.local
+.env
+*.exe
+out/
+*.zip
+*.log
+.DS_Store
+scratch/
+*.bak
+.tempmediaStorage/

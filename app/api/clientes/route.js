@@ -5,12 +5,13 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    const { data: clientes, error } = await supabase.from('clientes').select('*').order('nombre');
+    const { data: clientes, error } = await supabase.from('vista_clientes_stats').select('*').order('nombre');
     if (error) return NextResponse.json({ok:false,error:error.message},{status:500});
-    const { data: movs } = await supabase.from('movimientos').select('cliente_id,contacto,tipo,cantidad,precio_venta').eq('tipo','SALIDA');
-    const gMap={},pMap={};
-    (movs||[]).forEach(m=>{const ref=m.cliente_id||m.contacto||'';if(!ref)return;gMap[ref]=(gMap[ref]||0)+((m.precio_venta||0)*m.cantidad);pMap[ref]=(pMap[ref]||0)+1;});
-    return NextResponse.json((clientes||[]).map(c=>({...c,totalGastado:gMap[c.id]||gMap[c.nombre]||0,totalPedidos:pMap[c.id]||pMap[c.nombre]||0})));
+    return NextResponse.json((clientes||[]).map(c=>({
+      ...c,
+      totalGastado: Number(c.total_gastado || 0),
+      totalPedidos: Number(c.total_pedidos || 0)
+    })));
   } catch(err){return NextResponse.json({ok:false,error:err.message},{status:500});}
 }
 

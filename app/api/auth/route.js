@@ -34,10 +34,16 @@ export async function POST(request) {
 
     const userData = { email: user.email, nombre: user.nombre, rol: user.rol };
 
-    const sesion = JSON.stringify({
+    const sesionJSON = JSON.stringify({
       usuario: userData,
       expira: Date.now() + 7 * 24 * 60 * 60 * 1000,
     });
+
+    const { createHmac } = await import('crypto');
+    const SECRET = process.env.SESSION_SECRET || 'moditex-dev-secret-CHANGE_IN_PRODUCTION';
+    const b64 = Buffer.from(sesionJSON).toString('base64url');
+    const sig = createHmac('sha256', SECRET).update(b64).digest('hex');
+    const sesion = `${b64}.${sig}`;
 
     const response = NextResponse.json({ ok: true, usuario: userData });
 

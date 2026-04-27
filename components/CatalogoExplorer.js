@@ -18,7 +18,7 @@ function catIcon(c){const k=(c||'').toUpperCase();for(const [key,v] of Object.en
  *   onAdd: (prod, qty, tipoVenta) => void   ← llamado POR CADA ítem al confirmar
  *   onClose: () => void
  */
-export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVentaInit = 'DETAL', onAdd, onClose }) {
+export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVentaInit = 'DETAL', onAdd, onRemove, itemsEnCesta = [], onClose, compact = false }) {
   const [vista,   setVista]  = useState('categorias');
   const [catSel,  setCatSel] = useState('');
   const [modSel,  setModSel] = useState('');
@@ -26,12 +26,16 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
   const [qtyMap,  setQtyMap]   = useState({});
   const [tvMap,   setTvMap]    = useState({});
 
-  // ── Carrito acumulativo interno ───────────────────────────────────
-  // pending: { [sku]: { prod, qty, tv } }
-  const [pending, setPending] = useState({});
+  // ── Mapeo de lo que ya está en la cesta ───────────────────────────
+  const cestaMap = useMemo(() => {
+    return itemsEnCesta.reduce((acc, it) => {
+      acc[it.sku] = (acc[it.sku] || 0) + (it.cant || 1);
+      return acc;
+    }, {});
+  }, [itemsEnCesta]);
 
-  const totalPendingUds = Object.values(pending).reduce((a,x)=>a+x.qty, 0);
-  const totalPendingItems = Object.keys(pending).length;
+  const totalCestaItems = itemsEnCesta.length;
+  const totalCestaUds = itemsEnCesta.reduce((a,b)=>a+(b.cant||1), 0);
 
   // ── Preservar scroll al cambiar qty/tv ───────────────────────────
   const bodyRef     = useRef(null);
@@ -101,40 +105,32 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
   function irCats(){ resetScroll(); setCatSel(''); setModSel(''); setVista('categorias'); }
   function irModelos(){ resetScroll(); setModSel(''); setVista('modelos'); }
 
-  // ── Agregar al carrito interno (NO cierra el catálogo) ────────────
+  // ── Agregar directo (Modo Supermercado) ────────────
   function handleAdd(p) {
     const qty = getQty(p.sku);
     const tv  = getTv(p.sku);
     saveScroll();
-    setPending(prev => {
-      const ex = prev[p.sku];
-      if (ex) return { ...prev, [p.sku]: { ...ex, qty: ex.qty + qty, tv } };
-      return { ...prev, [p.sku]: { prod: p, qty, tv } };
-    });
-    // Resetear qty a 1 después de agregar
+    onAdd(p, qty, tv);
     setQtyMap(m => ({ ...m, [p.sku]: 1 }));
   }
 
-  // ── Quitar del carrito ────────────────────────────────────────────
-  function removeFromPending(sku) {
+  // ── Quitar de la cesta ────────────────────────────────────────────
+  function handleRemove(p) {
     saveScroll();
-    setPending(prev => { const n={...prev}; delete n[sku]; return n; });
+    if(onRemove) onRemove(p.sku);
   }
 
-  // ── Confirmar: enviar todos los ítems pendientes al padre ─────────
+  // ── Confirmar (Solo cerrar modal) ─────────
   function confirmar() {
-    Object.values(pending).forEach(({ prod, qty, tv }) => {
-      onAdd(prod, qty, tv);
-    });
-    onClose();
+    if (onClose) onClose();
   }
 
   const estilo = {
-    overlay: {position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:'16px',backdropFilter:'blur(3px)'},
-    box:     {background:'var(--bg)',border:'1px solid var(--border-strong)',borderTop:'3px solid var(--red)',width:'100%',maxWidth:'900px',maxHeight:'92vh',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'0 20px 60px rgba(0,0,0,.2)'},
-    hdr:     {display:'flex',alignItems:'center',gap:'12px',padding:'14px 20px',borderBottom:'1px solid var(--border)',background:'var(--bg2)',flexShrink:0},
-    body:    {flex:1,overflowY:'auto',padding:'16px 20px'},
-    secLbl:  {fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#666',letterSpacing:'.18em',textTransform:'uppercase',marginBottom:'13px'},
+    overlay: compact ? {display:'flex',flexDirection:'column',flex:1, height:'100%'} : {position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:'16px',backdropFilter:'blur(3px)'},
+    box:     compact ? {background:'var(--bg)',border:'none',borderRadius:'0',display:'flex',flexDirection:'column',overflow:'hidden',height:'100%'} : {background:'var(--bg)',border:'1px solid var(--border-strong)',borderTop:'3px solid var(--red)',width:'100%',maxWidth:'900px',maxHeight:'92vh',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'0 20px 60px rgba(0,0,0,.2)'},
+    hdr:     {display:'flex',alignItems:'center',gap:'12px',padding:compact?'12px 0':'14px 20px',borderBottom:compact?'none':'1px solid var(--border)',background:compact?'transparent':'var(--bg2)',flexShrink:0},
+    body:    {flex:1,overflowY:'auto',padding:compact?'0':'16px 20px'},
+    secLbl:  {fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888',letterSpacing:'.15em',textTransform:'uppercase',marginBottom:'15px',fontWeight:700},
   };
 
   function Breadcrumb() {
@@ -151,80 +147,52 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
   }
 
   function ProdCard({ p }) {
-    const tv      = getTv(p.sku);
-    const qty     = getQty(p.sku);
     const noStock = modo==='salida' && p.disponible<=0;
     const dot     = colorHex(p.color);
     const sc      = p.disponible>3?'var(--green)':p.disponible>0?'var(--warn)':'var(--red)';
-    const inPending = pending[p.sku];
-    const pendQty   = inPending?.qty || 0;
+    const inPending = cestaMap[p.sku] > 0;
+    const pendQty   = cestaMap[p.sku] || 0;
 
     return (
-      <div style={{background:'var(--surface)',border:`1.5px solid ${inPending?'var(--green)':'var(--border)'}`,padding:'13px',display:'flex',flexDirection:'column',gap:'8px',opacity:noStock?.45:1,position:'relative',transition:'border-color .15s'}}>
+      <div style={{background:'var(--surface)',border:`1px solid ${inPending?'var(--green)':'var(--border)'}`,borderRadius:'10px',padding:'10px',display:'flex',flexDirection:'column',gap:'6px',position:'relative',transition:'all 0.2s',boxShadow:inPending?'0 4px 12px rgba(34,197,94,0.1)':'none'}}>
         {/* Badge de cantidad en carrito */}
         {inPending && (
-          <div style={{position:'absolute',top:'-8px',right:'-8px',background:'var(--green)',color:'#fff',borderRadius:'50%',width:'22px',height:'22px',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:'10px',fontWeight:700,boxShadow:'0 2px 6px rgba(0,0,0,.2)',zIndex:2}}>
+          <div style={{position:'absolute',top:'-8px',right:'-8px',background:'var(--green)',color:'#fff',borderRadius:'50%',width:'22px',height:'22px',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:'10px',fontWeight:700,boxShadow:'0 2px 6px rgba(0,0,0,.2)',zIndex:2,animation:'fadeIn 0.2s'}}>
             {pendQty}
           </div>
         )}
-        <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
-          <span style={{width:'12px',height:'12px',borderRadius:'50%',background:dot,border:'1px solid rgba(0,0,0,.12)',flexShrink:0}}/>
-          <div>
-            <div style={{fontSize:'12px',fontWeight:700}}>{p.modelo}</div>
-            <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'var(--blue)'}}>{p.sku}</div>
+        <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
+          <span style={{width:'8px',height:'8px',borderRadius:'50%',background:dot,border:'1.5px solid #fff',boxShadow:'0 2px 4px rgba(0,0,0,0.1)',flexShrink:0}}/>
+          <div style={{minWidth:0}}>
+            <div style={{fontSize:'12px',fontWeight:800,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden',lineHeight:'1.1',minHeight:'2.2em'}}>{p.modelo}</div>
+            <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'var(--blue)',marginTop:'2px'}}>{p.sku}</div>
           </div>
         </div>
-        <div style={{fontSize:'11px',color:'#666',fontFamily:'DM Mono,monospace'}}>
+        <div style={{fontSize:'10px',color:'#888',fontFamily:'DM Mono,monospace',height:'15px'}}>
           {p.color}{p.talla&&p.talla!=='UNICA'?` · T:${p.talla}`:''}
         </div>
-        {/* Tipo venta toggle — solo en modo salida */}
-        {modo !== 'entrada' && (
-        <div style={{display:'flex',border:'1px solid var(--border)',overflow:'hidden'}}>
-          {['DETAL','MAYOR'].map(t=>(
-            <button key={t} onClick={()=>setTv(p.sku,t)}
-              style={{flex:1,padding:'4px 6px',border:'none',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'9px',letterSpacing:'.08em',textTransform:'uppercase',
-                background:tv===t?(t==='DETAL'?'var(--blue)':'var(--warn)'):'var(--bg3)',
-                color:tv===t?'#fff':'var(--muted)',fontWeight:tv===t?700:400,transition:'all .12s'}}>
-              {t==='DETAL'?`D: € ${(p.precioDetal||0).toFixed(2)}`:`M: € ${(p.precioMayor||0).toFixed(2)}`}
-            </button>
-          ))}
-        </div>
-        )}
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-          <span style={{fontFamily:'DM Mono,monospace',fontSize:'11px',fontWeight:700,color:sc}}>
+        
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:'4px'}}>
+          <span style={{fontFamily:'DM Mono,monospace',fontSize:'10px',fontWeight:700,color:sc}}>
             {p.disponible>0?`${p.disponible} uds`:'🏭 Sin stock'}
           </span>
           {inPending && (
-            <button onClick={()=>removeFromPending(p.sku)} style={{background:'none',border:'1px solid var(--red)',color:'var(--red)',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'8px',padding:'2px 6px',fontWeight:700}}>
-              ✕ Quitar
+            <button onClick={()=>handleRemove(p)} style={{background:'none',border:'none',color:'var(--red)',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'8px',padding:'2px 0',fontWeight:700}}>
+              ✕ Borrar todo
             </button>
           )}
         </div>
-        <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
-          <div style={{display:'flex',border:'1px solid var(--border)',overflow:'hidden'}}>
-            <button onClick={()=>setQty(p.sku,qty-1)} style={{width:'28px',height:'28px',background:'var(--bg3)',border:'none',cursor:'pointer',fontSize:'16px',display:'flex',alignItems:'center',justifyContent:'center'}}>−</button>
-            <input
-              key={qty}
-              type="number" min="1"
-              defaultValue={qty}
-              onBlur={e => {
-                const v = Math.max(1, parseInt(e.target.value) || 1);
-                setQty(p.sku, v);
-              }}
-              onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-              style={{width:'40px',textAlign:'center',border:'none',borderLeft:'1px solid var(--border)',borderRight:'1px solid var(--border)',fontFamily:'DM Mono,monospace',fontSize:'13px',fontWeight:700,outline:'none',background:'var(--surface)'}}/>
-            <button onClick={()=>setQty(p.sku,qty+1)} style={{width:'28px',height:'28px',background:'var(--bg3)',border:'none',cursor:'pointer',fontSize:'16px',display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>
-          </div>
-          <button onClick={()=>!noStock&&handleAdd(p)}
-            disabled={noStock}
-            style={{flex:1,padding:'7px 10px',
-              background: inPending ? 'var(--green)' : 'var(--ink)',
-              color:'#fff',border:'none',cursor:noStock?'not-allowed':'pointer',
-              fontFamily:'DM Mono,monospace',fontSize:'9px',fontWeight:700,letterSpacing:'.1em',textTransform:'uppercase',
-              opacity:noStock?.4:1,transition:'background .15s'}}>
-            {inPending ? `✓ EN LISTA (${pendQty})` : '+ AGREGAR'}
-          </button>
-        </div>
+
+        <button onClick={() => handleAdd(p)}
+          style={{width:'100%',padding:'10px 5px',borderRadius:'8px',
+            background: inPending ? 'var(--green-soft)' : (p.disponible<=0 ? 'var(--warn-soft)' : 'var(--ink)'),
+            color: inPending ? 'var(--green)' : ((p.disponible<=0) ? '#000' : '#fff'), 
+            border: inPending ? '1.5px solid var(--green)' : 'none', 
+            cursor:'pointer',
+            fontFamily:'DM Mono,monospace',fontSize:'10px',fontWeight:900,letterSpacing:'.05em',textTransform:'uppercase',
+            transition:'all .2s'}}>
+          {inPending ? `✓ CARGADO` : (p.disponible<=0 ? '+ SOLICITAR' : '+ AÑADIR')}
+        </button>
       </div>
     );
   }
@@ -234,25 +202,27 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
         {/* Header */}
         <div style={estilo.hdr}>
           <div style={{flex:1}}>
-            <div style={{fontFamily:'Playfair Display,serif',fontSize:'16px',fontWeight:700,display:'flex',alignItems:'center',gap:'10px'}}>
-              ⊞ Explorar Catálogo
-              <span style={{fontFamily:'DM Mono,monospace',fontSize:'9px',fontWeight:700,letterSpacing:'.1em',textTransform:'uppercase',padding:'2px 9px',background:modo==='entrada'?'var(--green-soft)':'var(--red-soft)',color:modo==='entrada'?'var(--green)':'var(--red)'}}>
-                {modo.toUpperCase()}
-              </span>
+            <div style={{fontFamily:'Playfair Display,serif',fontSize:compact?'14px':'16px',fontWeight:700,display:'flex',alignItems:'center',gap:'10px'}}>
+              {compact ? '⊞ Catálogo' : '⊞ Explorar Catálogo'}
+              {!compact && (
+                <span style={{fontFamily:'DM Mono,monospace',fontSize:'9px',fontWeight:700,letterSpacing:'.1em',textTransform:'uppercase',padding:'2px 9px',background:modo==='entrada'?'var(--green-soft)':'var(--red-soft)',color:modo==='entrada'?'var(--green)':'var(--red)'}}>
+                  {modo?.toUpperCase() || 'SALIDA'}
+                </span>
+              )}
             </div>
             <Breadcrumb/>
           </div>
-          <button onClick={onClose} style={{background:'none',border:'1px solid var(--border)',width:'28px',height:'28px',cursor:'pointer',fontSize:'13px',display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
+          {!compact && <button onClick={onClose} style={{background:'none',border:'1px solid var(--border)',width:'28px',height:'28px',cursor:'pointer',fontSize:'13px',display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>}
         </div>
 
         {/* Search bar */}
-        <div style={{padding:'10px 20px',borderBottom:'1px solid var(--border)',background:'var(--bg)',flexShrink:0}}>
-          <div style={{display:'flex',alignItems:'center',gap:'8px',background:'var(--bg2)',border:'1px solid var(--border)',padding:'8px 12px'}}>
-            <span style={{color:'#555'}}>🔍</span>
+        <div style={{padding:compact?'10px 0':'10px 20px',borderBottom:compact?'none':'1px solid var(--border)',background:'transparent',flexShrink:0}}>
+          <div style={{display:'flex',alignItems:'center',gap:'8px',background:'var(--bg2)',border:compact?'none':'1px solid var(--border)',borderRadius:compact?'12px':'0',padding:'10px 14px',boxShadow:compact?'inset 0 2px 4px rgba(0,0,0,0.03)':'none'}}>
+            <span style={{color:'#666',fontSize:'14px'}}>🔍</span>
             <input value={buscar}
               onChange={e=>{const v=e.target.value;setBuscar(v);if(v.length>=2){resetScroll();setVista('busqueda');}else if(vista==='busqueda'){resetScroll();setVista('categorias');}}}
-              placeholder="Búsqueda rápida: modelo, color o SKU…"
-              style={{background:'none',border:'none',outline:'none',fontFamily:'Poppins,sans-serif',fontSize:'12px',color:'#111',width:'100%'}}/>
+              placeholder={compact ? "Busca SKU, modelo..." : "Búsqueda rápida: modelo, color o SKU…"}
+              style={{background:'none',border:'none',outline:'none',fontFamily:'Poppins,sans-serif',fontSize:'13px',color:'#111',width:'100%'}}/>
             {buscar&&<button onMouseDown={e=>{e.preventDefault();setBuscar('');setVista('categorias');}} style={{background:'none',border:'none',cursor:'pointer',color:'#888',fontSize:'14px',padding:0}}>✕</button>}
           </div>
         </div>
@@ -300,7 +270,7 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
           {vista==='variantes'&&(
             <>
               <div style={estilo.secLbl}>{modSel} — {variantes.length} variante{variantes.length!==1?'s':''}</div>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))',gap:'9px'}}>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:'10px'}}>
                 {variantes.map(p=><ProdCard key={p.sku} p={p}/>)}
               </div>
             </>
@@ -311,7 +281,7 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
               <div style={estilo.secLbl}>{resultadosBusq.length} resultado{resultadosBusq.length!==1?'s':''}</div>
               {resultadosBusq.length===0
                 ? <div style={{textAlign:'center',padding:'40px',fontFamily:'DM Mono,monospace',fontSize:'11px',color:'#666'}}>Sin resultados para "{buscar}"</div>
-                : <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))',gap:'9px'}}>
+                : <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:'10px'}}>
                     {resultadosBusq.map(p=><ProdCard key={p.sku} p={p}/>)}
                   </div>
               }
@@ -320,27 +290,29 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
         </div>
 
         {/* Footer — barra de confirmación */}
-        <div style={{padding:'12px 20px',borderTop:'1px solid var(--border)',background:'var(--bg2)',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0,gap:'12px'}}>
+        <div style={{padding:'8px 20px',borderTop:'1px solid var(--border)',background:'var(--bg2)',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0,gap:'12px', minHeight: '40px'}}>
           <div>
-            {totalPendingItems > 0 ? (
+            {totalCestaItems > 0 ? (
               <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
-                <span style={{background:'var(--green)',color:'#fff',borderRadius:'50%',width:'22px',height:'22px',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:'10px',fontWeight:700,flexShrink:0}}>
-                  {totalPendingItems}
+                <span style={{background:'var(--green)',color:'#fff',borderRadius:'50%',width:'20px',height:'20px',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'DM Mono,monospace',fontSize:'9px',fontWeight:700,flexShrink:0}}>
+                  {totalCestaItems}
                 </span>
-                <span style={{fontFamily:'DM Mono,monospace',fontSize:'10px',color:'var(--green)',fontWeight:700}}>
-                  {totalPendingItems} SKU{totalPendingItems!==1?'s':''} · {totalPendingUds} ud{totalPendingUds!==1?'s':''} seleccionada{totalPendingUds!==1?'s':''}
+                <span style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'var(--green)',fontWeight:700}}>
+                  {totalCestaItems} SKU{totalCestaItems!==1?'s':''} · {totalCestaUds} ud{totalCestaUds!==1?'s':''}
                 </span>
               </div>
             ) : (
-              <span style={{fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#888'}}>
-                Selecciona productos y agrégalos al carrito
+              <span style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888'}}>
+                Selecciona productos...
               </span>
             )}
           </div>
-          <button onClick={confirmar}
-            style={{padding:'9px 20px',background: totalPendingItems>0 ? 'var(--green)' : 'var(--ink)',color:'#fff',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'12px',fontWeight:700,textTransform:'uppercase',letterSpacing:'.05em',transition:'background .15s',whiteSpace:'nowrap'}}>
-            {totalPendingItems>0 ? `✓ Confirmar ${totalPendingUds} ud${totalPendingUds!==1?'s':''}` : '✓ Listo — volver al formulario'}
-          </button>
+          {!compact && (
+            <button onClick={confirmar}
+              style={{padding:'9px 20px',background: 'var(--ink)',color:'#fff',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'12px',fontWeight:700,textTransform:'uppercase',letterSpacing:'.05em',transition:'background .15s',whiteSpace:'nowrap'}}>
+              ✓ Cerrar Catálogo
+            </button>
+          )}
         </div>
       </div>
     </div>

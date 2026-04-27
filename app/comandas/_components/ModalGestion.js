@@ -1,10 +1,12 @@
-﻿'use client';
-import { useState, useEffect } from 'react';
+'use client';
+import { useState, useEffect, useRef } from 'react';
 import CatalogoExplorer from '@/components/CatalogoExplorer';
 import ScannerInput from '@/components/ScannerInput';
 import WidgetPago, { METODOS } from './WidgetPago';
 import { colorHex } from '@/utils/colores';
 import { fmtNum, parseProd } from '@/utils/formatters';
+import { useAuth } from '@/lib/AuthContext';
+import { generarNotaEnvio } from '@/lib/generarNotaEnvio';
 
 const S = {
   pendiente: {bg:'#fff8e1',color:'#f59e0b',border:'#f59e0b',label:'Pendiente',  icon:'🕐'},
@@ -20,12 +22,21 @@ const lbl = {fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.16em'
 export default
 function ModalGestion({ cmd, productos=[], isAdmin=false, onClose, onSave, onDelete }) {
   const sc = S[cmd.status]||S.pendiente;
+  const { usuario } = useAuth() || {};
   const [pagos,    setPagos]   = useState([]);
   const [loadP,    setLoadP]   = useState(true);
   const [notas,    setNotas]   = useState(cmd.notas||'');
   const [saving,   setSaving]  = useState(false);
   const [err,      setErr]     = useState('');
   const [deleting, setDeleting]= useState(false);
+
+  // ── Comentarios del equipo ────────────────────────────────────────
+  const [comentarios,      setComentarios]      = useState([]);
+  const [loadC,            setLoadC]            = useState(true);
+  const [nuevoComentario,  setNuevoComentario]  = useState('');
+  const [tipoComentario,   setTipoComentario]   = useState('nota');
+  const [enviandoC,        setEnviandoC]        = useState(false);
+  const comentariosEndRef = useRef(null);
 
   // â”€â”€ Estado de empacado â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Guarda cuÃ¡ntas unidades de cada SKU ya fueron empacadas fÃ­sicamente
@@ -132,6 +143,29 @@ function ModalGestion({ cmd, productos=[], isAdmin=false, onClose, onSave, onDel
     fetch(`/api/pagos?comanda_id=${cmd.id}`).then(r=>r.json())
       .then(d=>{if(d.ok)setPagos(d.pagos);}).finally(()=>setLoadP(false));
   },[cmd.id]);
+
+  useEffect(()=>{
+    fetch(`/api/comentarios?comanda_id=${cmd.id}`).then(r=>r.json())
+      .then(d=>{if(d.ok)setComentarios(d.comentarios||[]);}).finally(()=>setLoadC(false));
+  },[cmd.id]);
+
+  async function enviarComentario(){
+    const texto = nuevoComentario.trim();
+    if(!texto) return;
+    setEnviandoC(true);
+    try{
+      const res = await fetch('/api/comentarios',{
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ comanda_id:cmd.id, texto, usuario:usuario?.nombre||'Sistema', tipo:tipoComentario }),
+      }).then(r=>r.json());
+      if(res.ok){
+        setComentarios(prev=>[...prev, res.comentario]);
+        setNuevoComentario('');
+        setTimeout(()=>comentariosEndRef.current?.scrollIntoView({behavior:'smooth'}),80);
+      }
+    }catch(e){}
+    setEnviandoC(false);
+  }
 
   async function cambiarStatus(s){
     setSaving(true); setErr('');
@@ -303,7 +337,10 @@ function ModalGestion({ cmd, productos=[], isAdmin=false, onClose, onSave, onDel
                                 <span style={{fontSize:'12px',fontWeight:600}}>{p.modelo||p.sku||'â€”'}</span>
                                 {p.tipoVenta&&<span style={{background:p.tipoVenta==='MAYOR'?'var(--warn-soft)':'var(--blue-soft)',color:p.tipoVenta==='MAYOR'?'var(--warn)':'var(--blue)',padding:'0 4px',fontFamily:'DM Mono,monospace',fontSize:'8px'}}>{p.tipoVenta[0]}</span>}
                               </div>
-                              {p.sku&&<div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#888',marginTop:'2px'}}>{p.sku}{p.color?' Â· '+p.color:''}</div>}
+                              {p.sku&&<div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#888',marginTop:'2px'}}>
+                                {p.sku}{p.color?' · '+p.color:''}
+                                {p.desde_produccion && <span style={{marginLeft:'6px', background:'#eff6ff', color:'#3b82f6', border:'1px solid #bfdbfe', padding:'1px 4px', fontWeight:700}}>🏭 PRODUCCIÓN</span>}
+                              </div>}
                               {!done&&<div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'var(--red)',marginTop:'1px',fontWeight:700}}>Faltan {falta} ud{falta!==1?'s':''}</div>}
                             </div>
                             <div style={{display:'flex',alignItems:'center',border:'1px solid var(--border)',flexShrink:0}}>
@@ -331,9 +368,10 @@ function ModalGestion({ cmd, productos=[], isAdmin=false, onClose, onSave, onDel
                       <div style={{display:'flex',gap:'5px',flexWrap:'wrap'}}>
                         {prods.map((p,i)=>(
                           <span key={i} style={{background:'var(--surface)',border:'1px solid var(--border)',padding:'3px 9px',fontFamily:'DM Mono,monospace',fontSize:'9px',display:'flex',alignItems:'center',gap:'4px'}}>
-                            <strong>{p.cant}Ã—</strong> {p.modelo||p.sku||'â€”'}
+                            <strong>{p.cant}×</strong> {p.modelo||p.sku||'—'}
                             {p.tipoVenta&&<span style={{background:p.tipoVenta==='MAYOR'?'var(--warn-soft)':'var(--blue-soft)',color:p.tipoVenta==='MAYOR'?'var(--warn)':'var(--blue)',padding:'0 3px',fontSize:'8px'}}>{p.tipoVenta[0]}</span>}
-                            {p.precio>0&&<span style={{color:'var(--red)',fontSize:'9px'}}>â‚¬{p.precio}</span>}
+                            {p.precio>0&&<span style={{color:'var(--red)',fontSize:'9px'}}>€{p.precio}</span>}
+                            {p.desde_produccion && <span style={{background:'#eff6ff', color:'#3b82f6', border:'1px solid #bfdbfe', padding:'0 3px', fontSize:'8px', fontWeight:700}}>🏭 PROD</span>}
                           </span>
                         ))}
                       </div>
@@ -363,7 +401,13 @@ function ModalGestion({ cmd, productos=[], isAdmin=false, onClose, onSave, onDel
                   {cmd.status==='cancelado'&&(
                     <button onClick={()=>cambiarStatus('pendiente')} disabled={saving}
                       style={{flex:1,padding:'11px 10px',background:'var(--warn-soft)',color:'var(--warn)',border:'1px solid var(--warn)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:600}}>
-                      â†© Reactivar
+                      ↩ Reactivar
+                    </button>
+                  )}
+                  {(cmd.status==='empacado' || cmd.status==='enviado' || totalEmpacado > 0) && (
+                    <button onClick={()=>generarNotaEnvio(cmd, prods, empacadoMap)} disabled={saving}
+                      style={{flex:1,padding:'11px 10px',background:'#eff6ff',color:'#3b82f6',border:'1px solid #3b82f6',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:600}}>
+                      🖨️ Imprimir Nota
                     </button>
                   )}
                 </div>
@@ -405,9 +449,79 @@ function ModalGestion({ cmd, productos=[], isAdmin=false, onClose, onSave, onDel
             </>
           )}
 
+          {/* ── Notas rápidas ── */}
           <div>
-            <label style={lbl}>Notas</label>
-            <input value={notas} onChange={e=>setNotas(e.target.value)} placeholder="Instrucciones, observaciones..." style={inp}/>
+            <label style={lbl}>📝 Notas generales de entrega</label>
+            <input value={notas} onChange={e=>setNotas(e.target.value)} placeholder="Instrucciones de entrega, observaciones rápidas..." style={inp}/>
+          </div>
+
+          {/* ── Comentarios del equipo ── */}
+          <div style={{border:'1px solid var(--border)',borderRadius:'3px',overflow:'hidden'}}>
+            {/* Header */}
+            <div style={{padding:'9px 14px',background:'var(--bg3)',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',gap:'8px'}}>
+              <span style={{fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.14em',textTransform:'uppercase',color:'#555',fontWeight:700}}>💬 Notas del equipo</span>
+              {comentarios.length>0&&<span style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#999'}}>· {comentarios.length} nota{comentarios.length!==1?'s':''}</span>}
+            </div>
+
+            {/* Lista de comentarios */}
+            <div style={{maxHeight:'220px',overflowY:'auto',background:'var(--bg2)'}}>
+              {loadC ? (
+                <div style={{padding:'14px',textAlign:'center',fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#888'}}>Cargando...</div>
+              ) : comentarios.length===0 ? (
+                <div style={{padding:'20px',textAlign:'center',fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#bbb'}}>Sin notas aún — sé el primero en agregar una</div>
+              ) : (
+                comentarios.map(c=>{
+                  const cfg = {
+                    nota:    {icon:'🗒️',lborder:'#d1d5db',bg:'var(--surface)'},
+                    alerta:  {icon:'⚠️', lborder:'#f59e0b',bg:'#fffbeb'},
+                    logo:    {icon:'📌',lborder:'#3b82f6',bg:'#eff6ff'},
+                    empaque: {icon:'📦',lborder:'#22c55e',bg:'#f0fdf4'},
+                  }[c.tipo]||{icon:'🗒️',lborder:'#d1d5db',bg:'var(--surface)'};
+                  return (
+                    <div key={c.id} style={{padding:'10px 14px',borderBottom:'1px solid var(--border)',background:cfg.bg,borderLeft:`3px solid ${cfg.lborder}`}}>
+                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'3px'}}>
+                        <span style={{fontFamily:'DM Mono,monospace',fontSize:'9px',fontWeight:700,color:'#444'}}>{cfg.icon} {c.usuario}</span>
+                        <span style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#bbb'}}>
+                          {new Date(c.created_at).toLocaleString('es-VE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}
+                        </span>
+                      </div>
+                      <div style={{fontSize:'12px',color:'#222',lineHeight:1.5}}>{c.texto}</div>
+                    </div>
+                  );
+                })
+              )}
+              <div ref={comentariosEndRef}/>
+            </div>
+
+            {/* Form nuevo comentario */}
+            <div style={{padding:'10px 14px',borderTop:'1px solid var(--border)',background:'var(--surface)',display:'flex',flexDirection:'column',gap:'7px'}}>
+              <div style={{display:'flex',gap:'5px',flexWrap:'wrap'}}>
+                {[
+                  {id:'nota',   icon:'🗒️', label:'Nota'},
+                  {id:'alerta', icon:'⚠️',  label:'Alerta'},
+                  {id:'logo',   icon:'📌', label:'Logo / Diseño'},
+                  {id:'empaque',icon:'📦', label:'Empaque'},
+                ].map(t=>(
+                  <button key={t.id} onClick={()=>setTipoComentario(t.id)}
+                    style={{padding:'3px 8px',background:tipoComentario===t.id?'#f59e0b':'var(--bg2)',color:tipoComentario===t.id?'#000':'#666',border:`1px solid ${tipoComentario===t.id?'#f59e0b':'var(--border)'}`,cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'9px',fontWeight:tipoComentario===t.id?700:400,whiteSpace:'nowrap'}}>
+                    {t.icon} {t.label}
+                  </button>
+                ))}
+              </div>
+              <div style={{display:'flex',gap:'8px'}}>
+                <input
+                  value={nuevoComentario}
+                  onChange={e=>setNuevoComentario(e.target.value)}
+                  onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();enviarComentario();}}}
+                  placeholder="Escribe una nota para el equipo... (Enter para enviar)"
+                  style={{flex:1,padding:'8px 11px',background:'var(--bg2)',border:'1px solid var(--border)',fontFamily:'Poppins,sans-serif',fontSize:'12px',outline:'none'}}
+                />
+                <button onClick={enviarComentario} disabled={enviandoC||!nuevoComentario.trim()}
+                  style={{padding:'8px 14px',background:'#1a1a1a',color:'#fff',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:700,whiteSpace:'nowrap',opacity:(enviandoC||!nuevoComentario.trim())?.5:1}}>
+                  {enviandoC?'⏳':'+ Agregar'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 

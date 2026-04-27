@@ -80,8 +80,8 @@ export default function InventarioPage() {
             {/* Colores — tabla desktop / tarjetas mobile */}
             <div>
               {/* Cabecera desktop (oculta en mobile via CSS) */}
-              <div className="inv-table-header" style={{display:'grid',gridTemplateColumns:'2fr 60px 55px 55px 55px 65px 75px',padding:'5px 12px',background:'#f8f8f8',borderBottom:'1px solid var(--border)'}}>
-                {['Color / SKU','Talla','Ini.','Ent.','Sal.','Disp.','Estado'].map(h=>(
+              <div className="inv-table-header" style={{display:'grid',gridTemplateColumns:'2fr 75px 60px 55px 55px 55px 65px 75px',padding:'5px 12px',background:'#f8f8f8',borderBottom:'1px solid var(--border)'}}>
+                {['Color / SKU','Tela','Talla','Ini.','Ent.','Sal.','Disp.','Estado'].map(h=>(
                   <span key={h} style={{fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.1em',textTransform:'uppercase',color:'#555'}}>{h}</span>
                 ))}
               </div>
@@ -93,7 +93,7 @@ export default function InventarioPage() {
                 return(
                   <div key={c.sku}>
                     {/* Fila desktop */}
-                    <div className="inv-row-desktop" style={{display:'grid',gridTemplateColumns:'2fr 60px 55px 55px 55px 65px 75px',padding:'8px 12px',borderBottom:'1px solid var(--border)',alignItems:'center'}}>
+                    <div className="inv-row-desktop" style={{display:'grid',gridTemplateColumns:'2fr 75px 60px 55px 55px 55px 65px 75px',padding:'8px 12px',borderBottom:'1px solid var(--border)',alignItems:'center'}}>
                       <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
                         <span style={{width:'8px',height:'8px',borderRadius:'50%',background:colorHex(c.color),border:'1px solid rgba(0,0,0,.12)',flexShrink:0}}/>
                         <div>
@@ -101,6 +101,7 @@ export default function InventarioPage() {
                           <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'var(--blue)'}}>{c.sku}</div>
                         </div>
                       </div>
+                      <span style={{fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#888'}}>{c.tela || '—'}</span>
                       <span style={{fontFamily:'DM Mono,monospace',fontSize:'11px',color:'#666'}}>{c.talla}</span>
                       <span style={{fontFamily:'DM Mono,monospace',fontSize:'12px'}}>{c.stockInicial}</span>
                       <span style={{fontFamily:'DM Mono,monospace',fontSize:'12px',color:'var(--green)'}}>+{c.entradas||0}</span>

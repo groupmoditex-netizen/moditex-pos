@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import Shell from '@/components/Shell';
 import { useAppData } from '@/lib/AppContext';
 import { colorHex } from '@/utils/colores';
@@ -7,17 +7,18 @@ import { colorHex } from '@/utils/colores';
 function fmt(n) { return '€ ' + Number(n||0).toFixed(2); }
 
 // ── Layouts ──
-const PAGE_W = 204, PAGE_H = 291;
+const PAGE_W = 202, PAGE_H = 290;
 const LAYOUTS = {
-  pent10: { cols:5, rows:10, label:'5×10', sub:'50/pág ⭐', rec:true,  cw:PAGE_W/5,  ch:PAGE_H/10, bcH:12, bcScale:2, fontSize:4.2 },
-  quad8:  { cols:4, rows:8,  label:'4×8',  sub:'32/pág',   rec:false, cw:PAGE_W/4,  ch:PAGE_H/8,  bcH:16, bcScale:2, fontSize:5   },
-  tri6:   { cols:3, rows:6,  label:'3×6',  sub:'18/pág',   rec:false, cw:PAGE_W/3,  ch:PAGE_H/6,  bcH:20, bcScale:3, fontSize:6.5 },
-  duo5:   { cols:2, rows:5,  label:'2×5',  sub:'10/pág',   rec:false, cw:PAGE_W/2,  ch:PAGE_H/5,  bcH:26, bcScale:3, fontSize:8   },
-  strip2: { cols:1, rows:2,  label:'1×2',  sub:'2/pág',    rec:false, cw:PAGE_W,    ch:PAGE_H/2,  bcH:55, bcScale:4, fontSize:12  },
+  hexa10: { cols:6, rows:10, label:'6×10', sub:'60/pág 🚀', rec:true,  cw:PAGE_W/6,  ch:PAGE_H/10, bcH:11, bcScale:3, fontSize:3.8 },
+  pent10: { cols:5, rows:10, label:'5×10', sub:'50/pág ⭐', rec:false, cw:PAGE_W/5,  ch:PAGE_H/10, bcH:12, bcScale:3, fontSize:4.2 },
+  quad8:  { cols:4, rows:8,  label:'4×8',  sub:'32/pág',   rec:false, cw:PAGE_W/4,  ch:PAGE_H/8,  bcH:16, bcScale:3, fontSize:5   },
+  tri6:   { cols:3, rows:6,  label:'3×6',  sub:'18/pág',   rec:false, cw:PAGE_W/3,  ch:PAGE_H/6,  bcH:20, bcScale:4, fontSize:6.5 },
+  duo5:   { cols:2, rows:5,  label:'2×5',  sub:'10/pág',   rec:false, cw:PAGE_W/2,  ch:PAGE_H/5,  bcH:26, bcScale:4, fontSize:8   },
+  strip2: { cols:1, rows:2,  label:'1×2',  sub:'2/pág',    rec:false, cw:PAGE_W,    ch:PAGE_H/2,  bcH:55, bcScale:5, fontSize:12  },
 };
 function barcodeURL(sku, lay) {
   const h = Math.round(lay.bcH * 2.5);
-  return `https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(sku)}&scale=${lay.bcScale}&height=${h}&paddingwidth=0&paddingheight=0`;
+  return `https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(sku)}&scale=${lay.bcScale}&height=${h}&paddingwidth=1&paddingheight=0&includetext=false`;
 }
 
 // ── Etiqueta individual (para vista previa e impresión) ──
@@ -40,16 +41,16 @@ function Etiqueta({ p, lay, precio, forPrint = false }) {
       <div style={{display:'flex',flex:1,minHeight:0,overflow:'hidden'}}>
         <div style={{width:forPrint?`${Math.max(3,lay.cw*0.07)}mm`:'7px',background:'#111',
           display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
-          flexShrink:0,gap:'1px',padding:'1px 0'}}>
+          flexShrink:0,gap:'1px',padding:0}}>
           <span style={{writingMode:'vertical-rl',transform:'rotate(180deg)',fontFamily:'serif',
             fontSize:forPrint?`${Math.max(3,fs-1)}pt`:'5px',
             fontWeight:900,color:'#fff',letterSpacing:'.02em',lineHeight:1}}>MTX</span>
           <span style={{width:'2px',height:'2px',background:'#d91e1e',borderRadius:'50%',flexShrink:0}}/>
         </div>
         <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',
-          padding:forPrint?'0.5mm 1mm':'1px 2px',overflow:'hidden'}}>
+          padding:forPrint?'0 1.5mm':'0 1px',overflow:'hidden'}}>
           <img src={barcodeURL(p.sku, lay)} alt={p.sku}
-            style={{width:'100%',height:forPrint?`${lay.bcH}mm`:'100%',objectFit:'contain',display:'block'}} loading="lazy"/>
+            style={{width:'100%',height:forPrint?`${lay.bcH}mm`:'100%',objectFit:'fill',display:'block'}} />
         </div>
       </div>
       <div style={{fontFamily:'DM Mono,monospace',fontSize:forPrint?`${fs*0.85}pt`:`${fs}px`,
@@ -96,7 +97,23 @@ export default function EtiquetasPage() {
   const [vista, setVista]         = useState(false);
   const [importando, setImport]   = useState(false);
   const [importMsg, setImportMsg] = useState(null);
+  const [concepto, setConcepto]   = useState('');
   const searchRef = useRef(null);
+
+  // ── Persistencia del carrito ──
+  useEffect(() => {
+    try {
+      const guardado = localStorage.getItem('moditex_carrito_etiquetas');
+      if (guardado) {
+        const parsed = JSON.parse(guardado);
+        if (typeof parsed === 'object') setCarrito(parsed);
+      }
+    } catch (e) { console.warn('Error recuperando carrito:', e); }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('moditex_carrito_etiquetas', JSON.stringify(carrito));
+  }, [carrito]);
 
   async function importarAEntradas() {
     const skus = Object.keys(carrito);
@@ -107,7 +124,7 @@ export default function EtiquetasPage() {
       const fecha = new Date().toISOString().split('T')[0];
       const lote = skus.map(sku => ({
         sku, tipo: 'ENTRADA', cantidad: carrito[sku],
-        fecha, concepto: 'Importado desde etiquetas',
+        fecha, concepto: concepto.trim() || 'Importado desde etiquetas',
       }));
       const res = await fetch('/api/movimientos', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -115,6 +132,7 @@ export default function EtiquetasPage() {
       }).then(r => r.json());
       if (res.ok) {
         setImportMsg({ t: 'ok', m: `✓ ${totalEtiquetas} uds registradas en el almacén` });
+        setConcepto(''); // Limpiar nota tras éxito
       } else {
         setImportMsg({ t: 'error', m: res.error || 'Error al registrar' });
       }
@@ -125,7 +143,7 @@ export default function EtiquetasPage() {
     setTimeout(() => setImportMsg(null), 5000);
   }
 
-  const lay = LAYOUTS[layout];
+  const lay = LAYOUTS[layout] || LAYOUTS.pent10;
 
   // ── Categorías ──
   const categorias = useMemo(() =>
@@ -202,7 +220,7 @@ export default function EtiquetasPage() {
 
   return (
     <Shell title="Etiquetas de Código de Barras">
-      <style>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         @media print {
           * { -webkit-print-color-adjust:exact!important; print-color-adjust:exact!important; }
           .no-print { display:none!important; }
@@ -210,7 +228,7 @@ export default function EtiquetasPage() {
           body,html { margin:0; padding:0; background:#fff!important; }
           .sheet-page {
             display:grid; page-break-after:always; break-after:page;
-            margin:0!important; padding:3mm; box-sizing:border-box;
+            margin:0!important; padding:4mm; box-sizing:border-box;
             width:210mm; height:297mm;
           }
           .sheet-page:last-child { page-break-after:avoid; break-after:avoid; }
@@ -253,7 +271,7 @@ export default function EtiquetasPage() {
         .modelo-header { display:flex; align-items:center; justify-content:space-between;
           padding:7px 10px; background:var(--bg2); cursor:pointer; }
         .modelo-header:hover { background:var(--bg3); }
-      `}</style>
+      `}} />
 
       {/* ── Info banner ── */}
       <div className="no-print" style={{padding:'9px 14px',background:'var(--blue-soft)',
@@ -462,15 +480,28 @@ export default function EtiquetasPage() {
                   🖨 Imprimir ({totalEtiquetas})
                 </button>
               </div>
-              {/* Importar a Entradas — opcional */}
-              <button onClick={importarAEntradas} disabled={importando}
-                style={{width:'100%',padding:'7px',background:'none',
-                  border:'1px dashed rgba(26,122,60,.5)',color:'var(--green)',
-                  cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'10px',
-                  borderRadius:'3px',transition:'all .12s',
-                  opacity: importando ? .6 : 1}}>
-                {importando ? 'Registrando...' : '↑ Importar como entrada al almacén (opcional)'}
-              </button>
+
+              {/* Nota/Concepto e Importar */}
+              <div style={{marginTop:'10px',borderTop:'1px solid rgba(26,122,60,.15)',paddingTop:'10px'}}>
+                <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'var(--green)',
+                   marginBottom:'4px',textTransform:'uppercase',letterSpacing:'.1em'}}>
+                   Nota para el historial de stock:
+                </div>
+                <input 
+                  value={concepto}
+                  onChange={e => setConcepto(e.target.value)}
+                  placeholder="Ej: Lote #123, Contenedor..."
+                  style={{width:'100%',padding:'6px 10px',border:'1px solid rgba(26,122,60,.3)',
+                    background:'var(--bg)',fontSize:'11px',outline:'none',borderRadius:'3px',marginBottom:'6px'}}
+                />
+                <button onClick={importarAEntradas} disabled={importando}
+                  style={{width:'100%',padding:'8px',background:'var(--green)',
+                    color:'#fff',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',
+                    fontSize:'11px',fontWeight:700,borderRadius:'3px',transition:'all .12s',
+                    opacity: importando ? .6 : 1, display:'flex', alignItems:'center', justifyContent:'center', gap:'6px'}}>
+                  {importando ? 'Registrando...' : `📥 Importar ${totalEtiquetas} uds al almacén`}
+                </button>
+              </div>
             </div>
           )}
         </div>

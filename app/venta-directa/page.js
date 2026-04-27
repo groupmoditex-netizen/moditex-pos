@@ -116,6 +116,7 @@ export default function VentaDirectaPage() {
       const cmdRes = await fetch('/api/comandas', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
+          omite_reservas: true,
           cliente: cliente || 'CONSUMIDOR FINAL',
           productos: cart.map(it => ({ sku:it.sku, modelo:`${it.modelo} — ${it.color}`, cant:it.qty, precio:precioItem(it), tipoVenta:it.tipoVenta })),
           precio: totalEUR, monto_pagado: Math.min(pagandoEUR, totalEUR), status:'entregado',

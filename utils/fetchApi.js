@@ -10,11 +10,14 @@
  *   const data = await fetchApi('/api/dashboard').then(r => r.json());
  */
 export function fetchApi(url, options = {}) {
+  // keepalive: true permite que el request termine aunque se cierre la pestaña (útil para POST/PUT)
+  // limitado a payloads pequeños (<64KB), lo cual cumple nuestro caso.
+  const isMutation = options.method === 'POST' || options.method === 'PUT' || options.method === 'DELETE';
+  
   return fetch(url, {
     ...options,
-    // credentials: 'same-origin' asegura que la cookie se envíe
-    // en requests al mismo dominio (es el valor por defecto, pero lo ponemos explícito)
     credentials: 'same-origin',
+    keepalive: isMutation,
     headers: {
       ...(options.headers || {}),
     },

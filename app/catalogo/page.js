@@ -1,6 +1,7 @@
 'use client';
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabasePublic } from '@/lib/supabase-client';
+
 
 const ISOTIPO   = "https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/ISOTIPO%20PNG.png";
 const WA_NUMBER = "584120363131";
@@ -8,11 +9,12 @@ const WA_NUMBER2= "584127534435";
 
 const NIVEL = {
   disponible: { label:'Disponible',     dot:'#16c65a', text:'#16c65a', bg:'rgba(22,198,90,.12)'  },
+  produccion: { label:'Bajo pedido',    dot:'#3b82f6', text:'#3b82f6', bg:'rgba(59,130,246,.12)' },
   pocas:      { label:'Pocas unidades', dot:'#f59e0b', text:'#d97706', bg:'rgba(245,158,11,.12)' },
-  agotado:    { label:'Bajo pedido',    dot:'#94a3b8', text:'#94a3b8', bg:'rgba(148,163,184,.1)' },
+  agotado:    { label:'Agotado',        dot:'#94a3b8', text:'#94a3b8', bg:'rgba(148,163,184,.1)' },
 };
-const CAT_ICONS = {'BODY':'👙','BODIES':'👙','CHAQUETA':'🧥','CONJUNTO':'👗','ENTERIZO':'🩱','FALDA':'👘','PANTS':'👖','SHORT':'🩳','TOPS':'👕','TOP':'👕','TRAJE DE BANO':'🩱','TRIKINIS':'🩱','VESTIDO':'💃','DEFAULT':'🏷️'};
-function catIcon(c){const k=(c||'').toUpperCase();for(const[key,v] of Object.entries(CAT_ICONS)){if(k.includes(key))return v;}return CAT_ICONS.DEFAULT;}
+const CAT_ICONS = {};
+function catIcon(c){ return null; }
 
 const METODOS_ENVIO = ['MRW','Zoom','Retiro en tienda','Otro'];
 
@@ -64,7 +66,6 @@ export default function CatalogoPage() {
   const [email,        setEmail]        = useState('');
   const [emailError,   setEmailError]   = useState('');
   const [metodoEnvio,  setMetodoEnvio]  = useState('');
-  const [opening,      setOpening]      = useState(true);
   const [lightbox,     setLightbox]     = useState(false);
   const [enviando,     setEnviando]     = useState(false);
   const [settings,     setSettings]     = useState({
@@ -77,10 +78,30 @@ export default function CatalogoPage() {
   const [combosLoad,   setCombosLoad]   = useState(true);
   const [soloDisp,     setSoloDisp]     = useState(false);
   const [modalIdx,     setModalIdx]     = useState(-1);
-  const [comboLightbox, setComboLightbox] = useState(null); // { fotos:[], idx:0 }
+  const [comboLightbox, setComboLightbox] = useState(null);
   const [flashTiempo,  setFlashTiempo]  = useState('');
+  const [showTop,      setShowTop]      = useState(false);
 
   const cargarRef = useRef(null);
+
+  // ── Inyectar fuentes Google solo en cliente (evita hydration mismatch) ──
+  useEffect(() => {
+    const id = 'moditex-fonts';
+    if (document.getElementById(id)) return;
+    const link = document.createElement('link');
+    link.id   = id;
+    link.rel  = 'stylesheet';
+    link.href = 'https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Montserrat:wght@300;400;500;600&family=DM+Mono&display=swap';
+    document.head.appendChild(link);
+  }, []);
+
+  // ── Botón volver arriba ────────────────────────────────────────────────
+  useEffect(() => {
+    function onScroll() { setShowTop(window.scrollY > 400); }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
 
   async function cargar() {
     setLoading(true); setError('');
@@ -108,6 +129,9 @@ export default function CatalogoPage() {
         flash_texto: res.flash_texto || '',
         flash_hasta: res.flash_hasta || '',
         flash_color: res.flash_color || '#ef4444',
+        flash_imagen: res.flash_imagen || '',
+        flash_marquee: res.flash_marquee || 'ALERTA OFERTA ESPECIAL',
+        grid_banners: res.grid_banners || [],
       });
     }).catch(() => {});
 
@@ -115,8 +139,6 @@ export default function CatalogoPage() {
     fetch('/api/combos').then(r => r.json()).then(res => {
       if (res.ok) setCombos(res.combos || []);
     }).catch(() => {}).finally(() => setCombosLoad(false));
-
-    setTimeout(() => setOpening(false), 900);
 
     function onVisible() {
       if (document.visibilityState === 'visible') cargarRef.current();
@@ -184,11 +206,11 @@ export default function CatalogoPage() {
   }, [modal, modalIdx, filtrados, comboLightbox]);
 
   function addToCart(modelo, v) {
-    if (v.disponible <= 0) return;
+    if (v.nivel === 'agotado') return;
     playAddSound();
     setCarrito(prev => {
       const ex = prev.find(x => x.sku === v.sku);
-      const stockMax = v.disponible;
+      const stockMax = v.nivel === 'produccion' ? 999 : v.disponible;
       if (ex) {
         if (ex.qty >= stockMax) return prev; // ya en el límite
         return prev.map(x => x.sku===v.sku ? {...x, qty:x.qty+1} : x);
@@ -300,42 +322,9 @@ export default function CatalogoPage() {
   }
 
   return (
-    <div style={{minHeight:'100vh',background:'#fafaf8',fontFamily:"'Poppins',sans-serif"}}>
-      <div className={`cat-cut-top${!opening?' open':''}`} style={{pointerEvents:opening?'all':'none'}}/>
-      <div className={`cat-cut-bot${!opening?' open':''}`} style={{pointerEvents:opening?'all':'none'}}/>
-      {opening && <>
-        <div className="cat-cut-line"/>
-        <div className="cat-scissors"><svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" style={{width:'80px',height:'80px',filter:'drop-shadow(0 0 16px rgba(201,168,76,.8))'}}>
-          <g transform="rotate(-30,60,60)">
-            <ellipse cx="32" cy="28" rx="12" ry="14" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"/>
-            <ellipse cx="32" cy="28" rx="6" ry="7" fill="none" stroke="rgba(255,255,255,.3)" strokeWidth="1.5"/>
-            <path d="M22 20 Q14 12 12 10" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"/>
-            <path d="M42 34 L60 60" stroke="#fff" strokeWidth="3" strokeLinecap="round"/>
-            <path d="M60 60 L88 100" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"/>
-          </g>
-          <g transform="rotate(30,60,60)">
-            <ellipse cx="88" cy="28" rx="12" ry="14" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"/>
-            <ellipse cx="88" cy="28" rx="6" ry="7" fill="none" stroke="rgba(255,255,255,.3)" strokeWidth="1.5"/>
-            <path d="M98 20 Q106 12 108 10" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"/>
-            <path d="M78 34 L60 60" stroke="#fff" strokeWidth="3" strokeLinecap="round"/>
-            <path d="M60 60 L32 100" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"/>
-          </g>
-          <circle cx="60" cy="60" r="4" fill="#c9a84c"/>
-          <circle cx="60" cy="60" r="1.5" fill="#0a0a0a"/>
-        </svg></div>
-      </>}
+    <div style={{minHeight:'100vh',background:'#fafaf8',fontFamily:"'Montserrat',sans-serif"}}>
 
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Poppins:wght@300;400;500;600&family=DM+Mono&display=swap');
-        .cat-cut-top,.cat-cut-bot{position:fixed;left:0;right:0;height:50vh;background:#0a0a0a;z-index:900;transition:transform .65s cubic-bezier(.77,0,.175,1);}
-        .cat-cut-top{top:0;transform:translateY(0);}
-        .cat-cut-bot{bottom:0;transform:translateY(0);}
-        .cat-cut-top.open{transform:translateY(-100%);}
-        .cat-cut-bot.open{transform:translateY(100%);}
-        .cat-scissors{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:901;animation:catScissors .9s cubic-bezier(.68,-0.55,.27,1.55) forwards;}
-        @keyframes catScissors{0%{transform:translate(-50%,-50%) scale(0);opacity:0;}25%{transform:translate(-50%,-50%) scale(1.2);opacity:1;}55%{transform:translate(-50%,-50%) scale(1) rotate(0deg);opacity:1;}100%{transform:translate(-50%,-130vh) scale(0.6);opacity:0;}}
-        .cat-cut-line{position:fixed;left:0;right:0;top:50%;height:2px;background:linear-gradient(to right,transparent,#c9a84c,#fff,#c9a84c,transparent);z-index:902;animation:catLine .3s ease .1s forwards;opacity:0;}
-        @keyframes catLine{0%{opacity:0;transform:scaleX(0);}50%{opacity:1;transform:scaleX(1);}100%{opacity:0;transform:scaleX(1);}}
+      <style suppressHydrationWarning>{`
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
         ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:#f0f0ec;border-radius:4px}::-webkit-scrollbar-thumb{background:#bbb;border-radius:4px}::-webkit-scrollbar-thumb:hover{background:#888}
         .mb-nav{position:absolute;top:50%;transform:translateY(-50%);width:36px;height:36px;background:rgba(10,10,10,.65);border:none;cursor:pointer;color:#fff;font-size:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:15;transition:background .15s;backdrop-filter:blur(4px);}
@@ -345,39 +334,39 @@ export default function CatalogoPage() {
         .nav{background:#0a0a0a;height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;position:sticky;top:0;z-index:200;border-bottom:1px solid #1a1a1a;}
         .nav-brand{display:flex;align-items:center;gap:9px;text-decoration:none;}
         .nav-brand img{height:30px;width:30px;object-fit:contain;}
-        .nav-name{font-family:'Cormorant Garamond',serif;font-size:15px;font-weight:700;color:#fff;letter-spacing:.1em;}
+        .nav-name{font-family:'Playfair Display',serif;font-size:15px;font-weight:700;color:#fff;letter-spacing:.1em;}
         .nav-sub{font-family:'DM Mono',monospace;font-size:5.5px;color:#c9a84c;letter-spacing:.45em;text-transform:uppercase;display:block;margin-top:1px;}
         .nav-right{display:flex;align-items:center;gap:8px;}
         .nav-info{display:flex;align-items:center;gap:5px;padding:7px 12px;background:transparent;color:rgba(255,255,255,.5);border:1px solid #333;cursor:pointer;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;transition:all .15s;white-space:nowrap;}
         .nav-info:hover,.nav-info.on{color:#c9a84c;border-color:#c9a84c;}
-        .nav-cart{display:flex;align-items:center;gap:7px;padding:7px 14px;background:#c9a84c;color:#000;border:none;cursor:pointer;font-family:'Poppins',sans-serif;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;transition:background .15s;}
+        .nav-cart{display:flex;align-items:center;gap:7px;padding:7px 14px;background:#c9a84c;color:#000;border:none;cursor:pointer;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;transition:background .15s;}
         .nav-cart:hover{background:#e0bc5e;}
         .nav-badge{background:#000;color:#c9a84c;border-radius:50%;width:16px;height:16px;font-size:8px;font-weight:700;display:flex;align-items:center;justify-content:center;}
-        .banner-admin{padding:10px 24px;font-family:'Poppins',sans-serif;font-size:12px;line-height:1.6;display:flex;align-items:center;gap:10px;}
+        .banner-admin{padding:10px 24px;font-family:'Montserrat',sans-serif;font-size:12px;line-height:1.6;display:flex;align-items:center;gap:10px;}
         .flash-bar{display:flex;align-items:center;gap:12px;padding:10px 24px;flex-wrap:wrap;}
         .flash-txt{font-family:'DM Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.06em;flex:1;min-width:0;}
         .flash-timer{font-family:'DM Mono',monospace;font-size:13px;font-weight:800;letter-spacing:.08em;background:rgba(255,255,255,.18);padding:4px 10px;border-radius:4px;white-space:nowrap;flex-shrink:0;}
         .hero{background:#0a0a0a;padding:28px 24px;text-align:center;}
         .hero-ey{font-family:'DM Mono',monospace;font-size:8px;color:#c9a84c;letter-spacing:.3em;text-transform:uppercase;margin-bottom:7px;}
-        .hero-t{font-family:'Cormorant Garamond',serif;font-size:32px;font-weight:700;color:#fff;line-height:1.1;}
-        .hero-s{font-family:'Poppins',sans-serif;font-size:11px;color:rgba(255,255,255,.3);margin-top:5px;}
+        .hero-t{font-family:'Playfair Display',serif;font-size:32px;font-weight:700;color:#fff;line-height:1.1;}
+        .hero-s{font-family:'Montserrat',sans-serif;font-size:11px;color:rgba(255,255,255,.3);margin-top:5px;}
         .hero-lv{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;margin-top:14px;}
         .hero-lv-i{display:flex;align-items:center;gap:5px;font-family:'DM Mono',monospace;font-size:8px;color:rgba(255,255,255,.25);letter-spacing:.06em;}
         .info-banner{background:#fff;border-bottom:2px solid #f0ede6;overflow:hidden;transition:max-height .35s ease;}
         .info-inner{padding:22px 24px 26px;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;}
         .info-blk{padding:13px 15px;background:#fafaf8;border:1px solid #ebebeb;border-left:3px solid #c9a84c;}
         .info-blk-t{font-family:'DM Mono',monospace;font-size:7.5px;letter-spacing:.22em;text-transform:uppercase;color:#c9a84c;font-weight:700;margin-bottom:6px;}
-        .info-blk-b{font-family:'Poppins',sans-serif;font-size:11px;color:#555;line-height:1.75;}
+        .info-blk-b{font-family:'Montserrat',sans-serif;font-size:11px;color:#555;line-height:1.75;}
         .info-pagos{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;}
         .info-pago{padding:3px 9px;background:#0a0a0a;color:#c9a84c;font-family:'DM Mono',monospace;font-size:8px;font-weight:700;letter-spacing:.08em;}
         .filt{background:#fff;border-bottom:1px solid #ebebeb;padding:11px 24px;display:flex;align-items:center;gap:7px;flex-wrap:wrap;position:sticky;top:56px;z-index:100;}
-        .filt-srch{flex:1;min-width:160px;max-width:260px;padding:7px 12px;border:1px solid #e5e5e0;font-family:'Poppins',sans-serif;font-size:12px;outline:none;background:#fafaf8;transition:border-color .15s;}
+        .filt-srch{flex:1;min-width:160px;max-width:260px;padding:7px 12px;border:1px solid #e5e5e0;font-family:'Montserrat',sans-serif;font-size:12px;outline:none;background:#fafaf8;transition:border-color .15s;}
         .filt-srch:focus{border-color:#c9a84c;}
         .filt-tag{padding:5px 12px;border:1px solid #e5e5e0;background:#fff;cursor:pointer;font-family:'DM Mono',monospace;font-size:8px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#aaa;transition:all .12s;white-space:nowrap;}
         .filt-tag:hover{color:#0a0a0a;border-color:#0a0a0a;}
         .filt-tag.on{background:#0a0a0a;color:#c9a84c;border-color:#0a0a0a;}
         .sec-h{padding:14px 24px 10px;background:#fafaf8;border-bottom:1px solid #ebebeb;display:flex;align-items:baseline;gap:9px;}
-        .sec-h-name{font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:700;color:#111;}
+        .sec-h-name{font-family:'Playfair Display',serif;font-size:17px;font-weight:700;color:#111;}
         .sec-h-cnt{font-family:'DM Mono',monospace;font-size:8.5px;color:#bbb;letter-spacing:.1em;}
         .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:1px;background:#ebebeb;}
         .card{background:#fff;cursor:pointer;display:flex;flex-direction:column;transition:transform .2s,box-shadow .2s;position:relative;}
@@ -391,13 +380,13 @@ export default function CatalogoPage() {
         .card-consult:hover{background:#25d366;color:#000;}
         .card-body{padding:13px 14px 14px;flex:1;display:flex;flex-direction:column;}
         .card-cat{font-family:'DM Mono',monospace;font-size:7px;color:#c0c0b8;letter-spacing:.2em;text-transform:uppercase;margin-bottom:3px;}
-        .card-name{font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:700;color:#111;line-height:1.2;margin-bottom:5px;}
-        .card-desc{font-family:'Poppins',sans-serif;font-size:10.5px;color:#aaa;line-height:1.6;margin-bottom:10px;flex:1;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+        .card-name{font-family:'Playfair Display',serif;font-size:17px;font-weight:700;color:#111;line-height:1.2;margin-bottom:5px;}
+        .card-desc{font-family:'Montserrat',sans-serif;font-size:10.5px;color:#aaa;line-height:1.6;margin-bottom:10px;flex:1;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
         .card-colors{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:11px;}
         .card-dot{width:13px;height:13px;border-radius:50%;border:1.5px solid rgba(0,0,0,.07);}
         .card-foot{display:flex;align-items:center;justify-content:space-between;border-top:1px solid #f2f2ef;padding-top:9px;}
         .card-niv{display:flex;align-items:center;gap:4px;font-family:'DM Mono',monospace;font-size:7.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;}
-        .card-btn{padding:6px 12px;background:#0a0a0a;color:#fff;border:none;cursor:pointer;font-family:'Poppins',sans-serif;font-size:10px;font-weight:600;transition:background .15s;}
+        .card-btn{padding:6px 12px;background:#0a0a0a;color:#fff;border:none;cursor:pointer;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:600;transition:background .15s;}
         .card-btn:hover{background:#c9a84c;color:#000;}
         .mo{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:500;display:flex;align-items:flex-end;justify-content:center;animation:mFade .18s ease;}
         @media(min-width:680px){.mo{align-items:center;padding:20px;}}
@@ -422,11 +411,11 @@ export default function CatalogoPage() {
         .mb-info{flex:1;min-width:0;overflow-y:auto;padding:20px 20px 80px;display:flex;flex-direction:column;gap:13px;}
         @media(min-width:680px){.mb-info{padding:26px 26px 90px;}}
         .mb-cat{font-family:'DM Mono',monospace;font-size:7.5px;color:#bbb;letter-spacing:.22em;text-transform:uppercase;}
-        .mb-name{font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:700;color:#111;line-height:1.2;}
-        .mb-desc{font-family:'Poppins',sans-serif;font-size:12px;color:#666;line-height:1.75;}
+        .mb-name{font-family:'Playfair Display',serif;font-size:24px;font-weight:700;color:#111;line-height:1.2;}
+        .mb-desc{font-family:'Montserrat',sans-serif;font-size:12px;color:#666;line-height:1.75;}
         .mb-tela{font-family:'DM Mono',monospace;font-size:8.5px;color:#bbb;letter-spacing:.1em;}
         .mb-vh{font-family:'DM Mono',monospace;font-size:8px;color:#bbb;letter-spacing:.2em;text-transform:uppercase;margin-bottom:7px;}
-        .mb-consult{display:flex;align-items:center;gap:7px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;color:#16a34a;cursor:pointer;font-family:'Poppins',sans-serif;font-size:11px;font-weight:600;transition:all .15s;width:100%;justify-content:center;}
+        .mb-consult{display:flex;align-items:center;gap:7px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;color:#16a34a;cursor:pointer;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:600;transition:all .15s;width:100%;justify-content:center;}
         .mb-consult:hover{background:#dcfce7;border-color:#86efac;}
         .vr{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #f0f0ec;cursor:default;transition:border-color .12s;margin-bottom:5px;}
         .vr:hover:not(.vr-ag){border-color:#c9a84c;}
@@ -434,11 +423,11 @@ export default function CatalogoPage() {
         .vr.vr-sel{border-color:#c9a84c;background:#fffbf0;}
         .vr-clr{width:22px;height:22px;border-radius:50%;border:2px solid rgba(0,0,0,.07);flex-shrink:0;align-self:center;}
         .vr-info{flex:1;min-width:0;}
-        .vr-name{font-family:'Poppins',sans-serif;font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .vr-name{font-family:'Montserrat',sans-serif;font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
         .vr-niv{font-family:'DM Mono',monospace;font-size:8px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;display:flex;align-items:center;gap:5px;margin-top:2px;}
         .vr-ctrl{display:flex;align-items:center;gap:6px;margin-top:8px;}
         .vr-right{display:flex;align-items:center;gap:4px;flex-shrink:0;align-self:center;}
-        .vr-add{padding:7px 12px;background:#0a0a0a;color:#fff;border:none;cursor:pointer;font-family:'Poppins',sans-serif;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;transition:background .15s;white-space:nowrap;flex-shrink:0;}
+        .vr-add{padding:7px 12px;background:#0a0a0a;color:#fff;border:none;cursor:pointer;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;transition:background .15s;white-space:nowrap;flex-shrink:0;}
         .vr-add:hover{background:#c9a84c;color:#000;}
         .qc{display:flex;align-items:center;border:1px solid #e5e5e0;}
         .qb{width:28px;height:28px;border:none;background:#f8f8f6;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;transition:background .1s;color:#333;}
@@ -447,19 +436,19 @@ export default function CatalogoPage() {
         .mb-bar{position:sticky;bottom:0;background:#fff;border-top:1px solid #ebebeb;padding:11px 20px;display:flex;gap:8px;align-items:center;}
         @media(min-width:680px){.mb-bar{padding:12px 26px;}}
         .mb-bar-hint{font-family:'DM Mono',monospace;font-size:8px;color:#bbb;flex:1;letter-spacing:.06em;}
-        .mb-bar-btn{padding:10px 18px;background:#c9a84c;color:#000;border:none;cursor:pointer;font-family:'Poppins',sans-serif;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;transition:background .15s;white-space:nowrap;}
+        .mb-bar-btn{padding:10px 18px;background:#c9a84c;color:#000;border:none;cursor:pointer;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;transition:background .15s;white-space:nowrap;}
         .mb-bar-btn:hover{background:#e0bc5e;}
         .co{position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:600;}
         .cd{position:fixed;top:0;right:0;bottom:0;width:min(390px,100vw);background:#fff;z-index:601;display:flex;flex-direction:column;box-shadow:-6px 0 32px rgba(0,0,0,.14);animation:cR .2s ease;}
         @keyframes cR{from{transform:translateX(100%)}to{transform:none}}
         .cd-h{padding:15px 18px;background:#0a0a0a;display:flex;align-items:center;justify-content:space-between;gap:10px;}
-        .cd-title{font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:700;color:#fff;}
+        .cd-title{font-family:'Playfair Display',serif;font-size:17px;font-weight:700;color:#fff;}
         .cd-count{font-family:'DM Mono',monospace;font-size:8px;color:#c9a84c;background:rgba(201,168,76,.12);border:1px solid rgba(201,168,76,.25);padding:3px 8px;}
         .cd-cx{width:27px;height:27px;background:none;border:1px solid #333;cursor:pointer;color:#777;font-size:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
         .cd-items{flex:1;overflow-y:auto;min-height:80px;}
         .cd-item{display:grid;grid-template-columns:auto 1fr auto;gap:11px;padding:13px 18px;border-bottom:1px solid #f5f5f3;align-items:center;}
         .cd-dot{width:26px;height:26px;border-radius:50%;border:2px solid rgba(0,0,0,.07);flex-shrink:0;}
-        .cd-iname{font-family:'Poppins',sans-serif;font-size:12px;font-weight:600;color:#111;}
+        .cd-iname{font-family:'Montserrat',sans-serif;font-size:12px;font-weight:600;color:#111;}
         .cd-isub{font-family:'DM Mono',monospace;font-size:9px;color:#bbb;margin-top:2px;}
         .cd-iniv{font-family:'DM Mono',monospace;font-size:8px;font-weight:700;margin-top:3px;}
         .cd-ctrl{display:flex;align-items:center;gap:4px;}
@@ -472,17 +461,17 @@ export default function CatalogoPage() {
         .cd-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:40px;}
         .cd-foot{padding:14px 18px;border-top:1px solid #ebebeb;display:flex;flex-direction:column;gap:9px;overflow-y:auto;}
         .cd-label{font-family:'DM Mono',monospace;font-size:8px;color:#888;letter-spacing:.14em;text-transform:uppercase;margin-bottom:2px;}
-        .cd-input{width:100%;padding:9px 11px;border:1px solid #e5e5e0;font-family:'Poppins',sans-serif;font-size:12px;outline:none;transition:border-color .15s;}
+        .cd-input{width:100%;padding:9px 11px;border:1px solid #e5e5e0;font-family:'Montserrat',sans-serif;font-size:12px;outline:none;transition:border-color .15s;}
         .cd-input:focus{border-color:#c9a84c;}
         .cd-input.err{border-color:#ef4444;background:#fff5f5;}
         .cd-errmsg{font-family:'DM Mono',monospace;font-size:8px;color:#ef4444;letter-spacing:.06em;}
-        .cd-incentivo{padding:9px 12px;background:linear-gradient(135deg,#fffbf0,#fef3c7);border:1px solid rgba(245,158,11,.3);border-left:3px solid #c9a84c;font-family:'Poppins',sans-serif;font-size:11px;color:#92400e;line-height:1.6;margin-bottom:5px;}
+        .cd-incentivo{padding:9px 12px;background:linear-gradient(135deg,#fffbf0,#fef3c7);border:1px solid rgba(245,158,11,.3);border-left:3px solid #c9a84c;font-family:'Montserrat',sans-serif;font-size:11px;color:#92400e;line-height:1.6;margin-bottom:5px;}
         .cd-envio-opts{display:grid;grid-template-columns:1fr 1fr;gap:5px;}
         .cd-envio-opt{padding:8px 6px;border:1px solid #e5e5e0;background:#fff;cursor:pointer;font-family:'DM Mono',monospace;font-size:8.5px;font-weight:700;text-align:center;letter-spacing:.06em;text-transform:uppercase;transition:all .12s;color:#666;}
         .cd-envio-opt:hover{border-color:#0a0a0a;color:#0a0a0a;}
         .cd-envio-opt.sel{background:#0a0a0a;color:#c9a84c;border-color:#0a0a0a;}
         .cd-hint{font-family:'DM Mono',monospace;font-size:8px;color:#bbb;text-align:center;letter-spacing:.06em;line-height:1.9;padding:0 4px;}
-        .cd-wa{width:100%;padding:12px;border:none;cursor:pointer;font-family:'Poppins',sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;justify-content:center;gap:7px;transition:all .15s;}
+        .cd-wa{width:100%;padding:12px;border:none;cursor:pointer;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;justify-content:center;gap:7px;transition:all .15s;}
         .cd-wa.m{background:#25d366;color:#000;}.cd-wa.m:hover{background:#22c55e;}
         .cd-wa.s{background:#f0f0ec;color:#555;}.cd-wa.s:hover{background:#e5e5e0;}
         .cd-wa:disabled{opacity:.45;cursor:not-allowed;}
@@ -490,19 +479,22 @@ export default function CatalogoPage() {
         .cd-clr:hover{border-color:#ef4444;color:#ef4444;}
         .wf{position:fixed;bottom:22px;left:18px;z-index:300;width:48px;height:48px;border-radius:50%;background:#25d366;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:21px;box-shadow:0 4px 16px rgba(37,211,102,.4);text-decoration:none;transition:transform .15s;}
         .wf:hover{transform:scale(1.1);}
+        .top-btn{position:fixed;bottom:80px;right:18px;z-index:300;width:40px;height:40px;border-radius:50%;background:#0a0a0a;border:2px solid #c9a84c;cursor:pointer;color:#c9a84c;font-size:18px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.3);opacity:0;pointer-events:none;transition:opacity .25s,transform .2s;}
+        .top-btn.vis{opacity:1;pointer-events:all;}
+        .top-btn:hover{background:#c9a84c;color:#000;transform:scale(1.1);}
         .foot{background:#0a0a0a;padding:32px 24px;margin-top:48px;text-align:center;}
         .foot-brand{display:flex;align-items:center;justify-content:center;gap:11px;margin-bottom:13px;}
         .foot-brand img{height:38px;width:38px;object-fit:contain;}
-        .foot-name{font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:#fff;letter-spacing:.08em;}
+        .foot-name{font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:#fff;letter-spacing:.08em;}
         .foot-sub{font-family:'DM Mono',monospace;font-size:6px;color:#c9a84c;letter-spacing:.45em;text-transform:uppercase;margin-top:3px;}
         .foot-info{font-family:'DM Mono',monospace;font-size:8.5px;color:rgba(255,255,255,.2);letter-spacing:.1em;line-height:2.3;}
         .foot-info a{color:#c9a84c;text-decoration:none;}
         .empty{text-align:center;padding:70px 24px;}
         .empty-icon{font-size:44px;margin-bottom:12px;}
         .empty-txt{font-family:'DM Mono',monospace;font-size:11px;color:#bbb;margin-bottom:14px;line-height:1.8;}
-        .empty-btn{padding:8px 20px;background:#0a0a0a;color:#fff;border:none;cursor:pointer;font-family:'Poppins',sans-serif;font-size:11px;font-weight:600;}
+        .empty-btn{padding:8px 20px;background:#0a0a0a;color:#fff;border:none;cursor:pointer;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:600;}
         .combo-sec-h{padding:13px 24px 10px;background:#0d0d0d;border-bottom:1px solid #222;display:flex;align-items:baseline;gap:9px;}
-        .combo-sec-name{font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:700;color:#c9a84c;letter-spacing:.06em;}
+        .combo-sec-name{font-family:'Playfair Display',serif;font-size:17px;font-weight:700;color:#c9a84c;letter-spacing:.06em;}
         .combo-sec-cnt{font-family:'DM Mono',monospace;font-size:8.5px;color:#444;letter-spacing:.1em;}
         .combo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1px;background:#1c1c1c;}
         .combo-card{background:#111;display:flex;flex-direction:column;overflow:hidden;transition:transform .2s,box-shadow .2s;position:relative;}
@@ -513,13 +505,13 @@ export default function CatalogoPage() {
         .combo-img-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:36px;background:linear-gradient(135deg,#1a1a1a,#222);}
         .combo-badge{position:absolute;top:9px;left:9px;padding:3px 9px;background:rgba(201,168,76,.15);border:1px solid rgba(201,168,76,.3);color:#c9a84c;font-family:'DM Mono',monospace;font-size:7.5px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;backdrop-filter:blur(4px);}
         .combo-body{padding:14px 16px 16px;flex:1;display:flex;flex-direction:column;gap:10px;}
-        .combo-name{font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:#f5f5f0;line-height:1.15;}
+        .combo-name{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:#f5f5f0;line-height:1.15;}
         .combo-piezas{font-family:'DM Mono',monospace;font-size:8px;color:#555;letter-spacing:.1em;text-transform:uppercase;line-height:1.9;}
-        .combo-desc{font-family:'Poppins',sans-serif;font-size:10.5px;color:#555;line-height:1.65;}
+        .combo-desc{font-family:'Montserrat',sans-serif;font-size:10.5px;color:#555;line-height:1.65;}
         .combo-price-row{display:flex;gap:14px;align-items:flex-end;border-top:1px solid #1e1e1e;padding-top:9px;}
         .combo-price-block{display:flex;flex-direction:column;gap:2px;}
         .combo-price-lbl{font-family:'DM Mono',monospace;font-size:7px;color:#444;letter-spacing:.2em;text-transform:uppercase;}
-        .combo-price-val{font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:700;line-height:1;}
+        .combo-price-val{font-family:'Playfair Display',serif;font-size:22px;font-weight:700;line-height:1;}
         .combo-colores-lbl{font-family:'DM Mono',monospace;font-size:7.5px;color:#555;letter-spacing:.15em;text-transform:uppercase;margin-bottom:6px;}
         .combo-colores{display:flex;flex-wrap:wrap;gap:6px;}
         .combo-color-btn{display:flex;align-items:center;gap:5px;padding:5px 9px;background:rgba(255,255,255,.04);border:1px solid #2a2a2a;cursor:pointer;transition:all .15s;font-family:'DM Mono',monospace;font-size:8.5px;color:#888;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;}
@@ -536,6 +528,145 @@ export default function CatalogoPage() {
           .nav{padding:0 14px;}.hero{padding:22px 14px;}.filt{padding:9px 14px;}
           .sec-h{padding:11px 14px 8px;}.grid{grid-template-columns:repeat(2,1fr);}
           .hero-t{font-size:25px;}.foot{padding:26px 14px;margin-top:36px;}
+        }
+
+        @keyframes pulse {
+          0%, 100% { opacity: 0.8; transform: scale(1); }
+          50% { opacity: 0.3; transform: scale(0.92); }
+        }
+        @keyframes alert-marquee {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        
+        .mega-flash {
+          position: relative;
+          overflow: hidden;
+          width: 100%;
+          min-height: 250px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background-size: cover;
+          background-position: center;
+          background-repeat: no-repeat;
+        }
+        
+        .mega-flash::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: rgba(0,0,0,0.5);
+          transition: background 0.3s;
+        }
+        
+        .mega-flash:hover::before {
+          background: rgba(0,0,0,0.3);
+        }
+        
+        .mega-flash-marquee {
+          position: absolute;
+          top: 0; left: 0; right: 0;
+          height: 28px;
+          background: repeating-linear-gradient(45deg, #ef4444, #ef4444 15px, #facc15 15px, #facc15 30px);
+          display: flex;
+          align-items: center;
+          overflow: hidden;
+          z-index: 10;
+        }
+        
+        .mega-flash-marquee-inner {
+          display: flex;
+          white-space: nowrap;
+          width: max-content;
+          animation: alert-marquee 50s linear infinite;
+        }
+        
+        .mega-flash-marquee-text {
+          background: #000;
+          color: #fff;
+          font-family: 'DM Mono', monospace;
+          font-size: 11px;
+          font-weight: 800;
+          letter-spacing: .2em;
+          padding: 2px 20px;
+          margin: 0 10px;
+        }
+        
+        .mega-flash-content {
+          position: relative;
+          z-index: 2;
+          background: rgba(0,0,0,0.85);
+          padding: 30px 40px;
+          border: 3px solid;
+          transform: skew(-8deg);
+          box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+          transition: opacity 0.3s, transform 0.3s;
+          text-align: center;
+          max-width: 90%;
+        }
+        
+        .mega-flash:hover .mega-flash-content {
+          opacity: 0.85;
+          transform: skew(-8deg) scale(0.98);
+        }
+        
+        .mega-flash-content > * {
+          transform: skew(8deg);
+        }
+        
+        .mega-flash-title {
+          font-family: 'Montserrat', sans-serif;
+          font-size: 32px;
+          font-weight: 900;
+          color: #fff;
+          letter-spacing: .02em;
+          text-shadow: 0 2px 10px rgba(0,0,0,0.8);
+          line-height: 1.2;
+        }
+        
+        .mega-flash-timer {
+          display: inline-block;
+          margin-top: 10px;
+          font-family: 'DM Mono', monospace;
+          font-size: 14px;
+          font-weight: 700;
+          background: rgba(0,0,0,0.5);
+          padding: 4px 12px;
+          border-radius: 4px;
+        }
+        
+        /* Banners Intercalados */
+        .grid-banner {
+          grid-column: span 2;
+          min-height: 300px;
+          background-size: cover;
+          background-position: center;
+          background-repeat: no-repeat;
+          background-color: var(--bg3);
+          border: 1px solid var(--border);
+          display: block;
+          text-decoration: none;
+          transition: transform 0.2s, box-shadow 0.2s;
+          cursor: default;
+        }
+        a.grid-banner {
+          cursor: pointer;
+        }
+        a.grid-banner:hover {
+          transform: scale(0.99);
+          box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        @media(max-width:520px){
+          .mega-flash { min-height: 200px; }
+          .mega-flash-content { padding: 20px 25px; }
+          .mega-flash-title { font-size: 22px; }
+          .mega-flash-timer { font-size: 12px; }
+          .grid-banner {
+            grid-column: span 2;
+            min-height: 220px;
+          }
         }
       `}</style>
 
@@ -554,14 +685,29 @@ export default function CatalogoPage() {
         </div>
       </nav>
 
-      {/* ── Oferta Flash ─────────────────────────────────────────── */}
+      {/* ── MEGA OFERTA FLASH ESTILO ZARA ──────────────────────────── */}
       {settings.flash_activo && settings.flash_texto && flashTiempo !== 'Expirada' && (
-        <div className="flash-bar" style={{background: settings.flash_color, color:'#fff'}}>
-          <span style={{fontSize:'16px',flexShrink:0}}>⚡</span>
-          <span className="flash-txt">{settings.flash_texto}</span>
-          {settings.flash_hasta && flashTiempo && (
-            <span className="flash-timer">⏱ {flashTiempo}</span>
-          )}
+        <div className="mega-flash" style={{ backgroundColor: settings.flash_color, backgroundImage: settings.flash_imagen ? `url(${settings.flash_imagen})` : 'none' }}>
+          
+          <div className="mega-flash-marquee">
+            <div className="mega-flash-marquee-inner">
+              {[...Array(20)].map((_, i) => (
+                <div key={i} className="mega-flash-marquee-text">{settings.flash_marquee || 'ALERTA OFERTA ESPECIAL'}</div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mega-flash-content" style={{ borderColor: settings.flash_color }}>
+            <div>
+              <div className="mega-flash-title">{settings.flash_texto}</div>
+              {settings.flash_hasta && flashTiempo && (
+                <div className="mega-flash-timer" style={{ color: settings.flash_color }}>
+                  ⏱ {flashTiempo}
+                </div>
+              )}
+            </div>
+          </div>
+
         </div>
       )}
 
@@ -668,7 +814,7 @@ export default function CatalogoPage() {
                   <div className="combo-img" onClick={() => abrirComboLightbox(combo)} style={{cursor: combo.foto_url ? 'zoom-in' : 'default', position:'relative'}}>
                     {combo.foto_url
                       ? <img src={safeUrl(combo.foto_url)} alt={combo.nombre} loading="lazy"/>
-                      : <div className="combo-img-ph">✨</div>
+                      : <div className="combo-img-ph" style={{background:'#1a1a1a'}}><img src={ISOTIPO} alt="Moditex" style={{width:'50px',height:'50px',objectFit:'contain',opacity:0.5}}/></div>
                     }
                     <div className="combo-badge">✨ SET · {combo.num_piezas} PZS</div>
                     {combo.foto_url && <div style={{position:'absolute',bottom:8,right:8,background:'rgba(0,0,0,.55)',color:'#fff',fontFamily:"'DM Mono',monospace",fontSize:'7px',padding:'3px 7px',letterSpacing:'.08em',backdropFilter:'blur(4px)'}}>🔍 AMPLIAR</div>}
@@ -732,11 +878,11 @@ export default function CatalogoPage() {
       )}
 
       {loading ? (
-        <div className="empty"><div className="empty-icon">✨</div><div className="empty-txt">Cargando catálogo…</div></div>
+        <div className="empty"><div className="empty-icon" style={{display:'flex',justifyContent:'center',marginBottom:'15px'}}><div style={{background:'#0a0a0a',width:'80px',height:'80px',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',animation:'pulse 1.5s ease-in-out infinite',boxShadow:'0 10px 25px rgba(0,0,0,0.15)'}}><img src={ISOTIPO} alt="Moditex" style={{width:'46px',objectFit:'contain',display:'block',marginLeft:'2px'}}/></div></div><div className="empty-txt" style={{fontFamily:"'DM Mono', monospace", letterSpacing:'.1em'}}>CARGANDO CATÁLOGO...</div></div>
       ) : error ? (
         <div className="empty"><div className="empty-icon">⚠️</div><div className="empty-txt">{error}</div><button className="empty-btn" onClick={cargar}>Reintentar</button></div>
       ) : modelos.length===0 ? (
-        <div className="empty"><div className="empty-icon">🏷️</div><div className="empty-txt">El catálogo está vacío por el momento.<br/>Pronto habrá novedades.</div></div>
+        <div className="empty"><div className="empty-icon" style={{display:'flex',justifyContent:'center',marginBottom:'15px'}}><div style={{background:'#0a0a0a',width:'80px',height:'80px',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center'}}><img src={ISOTIPO} alt="Moditex" style={{width:'46px',opacity:0.6,objectFit:'contain',display:'block',marginLeft:'2px'}}/></div></div><div className="empty-txt">El catálogo está vacío por el momento.<br/>Pronto habrá novedades.</div></div>
       ) : filtrados.length===0 ? (
         <div className="empty"><div className="empty-icon">🔍</div><div className="empty-txt">Sin resultados para "{buscar||filtrocat}"</div><button className="empty-btn" onClick={()=>{setBuscar('');setFiltrocat('');}}>Ver todas</button></div>
       ) : (
@@ -758,40 +904,56 @@ export default function CatalogoPage() {
                   const nc = NIVEL[ngen];
                   const colores = {};
                   modelo.variantes.forEach(v=>{colores[v.color]=v.nivel;});
+                  
+                  const bannersToRender = (settings.grid_banners || []).filter(b => b.posicion === globalIdx + 1);
+
                   return (
-                    <div key={modelo.key} className="card" onClick={()=>abrirModal(modelo, globalIdx)}>
-                      <div className="card-img">
-                        {modelo.foto_url
-                          ? <img src={safeUrl(modelo.foto_url)} alt={modelo.modelo} loading="lazy"/>
-                          : <div className="card-no-img">{catIcon(modelo.categoria)}</div>
+                    <div key={modelo.key} style={{ display: 'contents' }}>
+                      <div className="card" onClick={()=>abrirModal(modelo, globalIdx)}>
+                        <div className="card-img">
+                          {modelo.foto_url
+                            ? <img src={safeUrl(modelo.foto_url)} alt={modelo.modelo} loading="lazy"/>
+                            : <div className="card-no-img" style={{background:'#1a1a1a'}}><img src={ISOTIPO} alt="Moditex" style={{width:'40px',height:'40px',objectFit:'contain',opacity:0.5}}/></div>
+                          }
+                          <div className="card-badge" style={{background:nc.bg,color:nc.text}}>{nc.label}</div>
+                          <button className="card-consult" onClick={e => consultarProducto(modelo, e)}>💬 Consultar</button>
+                        </div>
+                        <div className="card-body">
+                          <div className="card-cat">{modelo.categoria}</div>
+                          <div className="card-name">{modelo.modelo}</div>
+                          {modelo.descripcion && <div className="card-desc">{modelo.descripcion}</div>}
+                          <div className="card-colors">
+                            {Object.entries(colores)
+                              .filter(([,nivel]) => soloDisp ? nivel!=='agotado' : true)
+                              .slice(0,8).map(([color,nivel])=>(
+                              <div key={color} title={color}
+                                style={{display:'flex',alignItems:'center',gap:'3px',padding:'2px 6px 2px 4px',
+                                  background:nivel==='agotado'?'rgba(0,0,0,.04)':'rgba(0,0,0,.05)',
+                                  border:`1px solid ${nivel==='agotado'?'rgba(0,0,0,.06)':'rgba(0,0,0,.1)'}`,
+                                  opacity:nivel==='agotado'?.35:1,marginBottom:'2px'}}>
+                                <span style={{width:'8px',height:'8px',borderRadius:'50%',background:colorFromName(color),flexShrink:0,border:'1px solid rgba(0,0,0,.1)'}}/>
+                                <span style={{fontFamily:"'DM Mono',monospace",fontSize:'7px',color:'#555',whiteSpace:'nowrap',letterSpacing:'.03em',lineHeight:1}}>{color}</span>
+                              </div>
+                            ))}
+                            {Object.keys(colores).length>8 && <span style={{fontFamily:"'DM Mono',monospace",fontSize:'7px',color:'#bbb',alignSelf:'center'}}>+{Object.keys(colores).length-8}</span>}
+                          </div>
+                          <div className="card-foot">
+                            <div className="card-niv"><span style={{width:'5px',height:'5px',borderRadius:'50%',background:nc.dot,display:'inline-block'}}/><span style={{color:nc.text}}>{nc.label}</span></div>
+                            <button className="card-btn" onClick={e=>{e.stopPropagation();abrirModal(modelo, globalIdx);}}>Ver →</button>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {bannersToRender.map(b => {
+                        if (b.enlace && b.enlace.trim() !== '') {
+                          return (
+                            <a key={`banner-${b.id}`} href={b.enlace} target="_blank" rel="noopener noreferrer" className="grid-banner" style={{ backgroundImage: `url(${safeUrl(b.imagen_url)})` }} />
+                          );
                         }
-                        <div className="card-badge" style={{background:nc.bg,color:nc.text}}>{nc.label}</div>
-                        <button className="card-consult" onClick={e => consultarProducto(modelo, e)}>💬 Consultar</button>
-                      </div>
-                      <div className="card-body">
-                        <div className="card-cat">{modelo.categoria}</div>
-                        <div className="card-name">{modelo.modelo}</div>
-                        {modelo.descripcion && <div className="card-desc">{modelo.descripcion}</div>}
-                        <div className="card-colors">
-                          {Object.entries(colores)
-                            .filter(([,nivel]) => soloDisp ? nivel!=='agotado' : true)
-                            .slice(0,8).map(([color,nivel])=>(
-                            <div key={color} title={color}
-                              style={{display:'flex',alignItems:'center',gap:'3px',padding:'2px 6px 2px 4px',
-                                background:nivel==='agotado'?'rgba(0,0,0,.04)':'rgba(0,0,0,.05)',
-                                border:`1px solid ${nivel==='agotado'?'rgba(0,0,0,.06)':'rgba(0,0,0,.1)'}`,
-                                opacity:nivel==='agotado'?.35:1,marginBottom:'2px'}}>
-                              <span style={{width:'8px',height:'8px',borderRadius:'50%',background:colorFromName(color),flexShrink:0,border:'1px solid rgba(0,0,0,.1)'}}/>
-                              <span style={{fontFamily:"'DM Mono',monospace",fontSize:'7px',color:'#555',whiteSpace:'nowrap',letterSpacing:'.03em',lineHeight:1}}>{color}</span>
-                            </div>
-                          ))}
-                          {Object.keys(colores).length>8 && <span style={{fontFamily:"'DM Mono',monospace",fontSize:'7px',color:'#bbb',alignSelf:'center'}}>+{Object.keys(colores).length-8}</span>}
-                        </div>
-                        <div className="card-foot">
-                          <div className="card-niv"><span style={{width:'5px',height:'5px',borderRadius:'50%',background:nc.dot,display:'inline-block'}}/><span style={{color:nc.text}}>{nc.label}</span></div>
-                          <button className="card-btn" onClick={e=>{e.stopPropagation();abrirModal(modelo, globalIdx);}}>Ver →</button>
-                        </div>
-                      </div>
+                        return (
+                          <div key={`banner-${b.id}`} className="grid-banner" style={{ backgroundImage: `url(${safeUrl(b.imagen_url)})` }} />
+                        );
+                      })}
                     </div>
                   );
                 })}
@@ -821,17 +983,17 @@ export default function CatalogoPage() {
                 )}
                 {fotosModal.length>0
                   ? <img src={fotosModal[fotoIdx]} alt={modal.modelo} onClick={e=>{e.stopPropagation();setLightbox(true);}} title="Toca para ampliar"/>
-                  : <div style={{width:'100%',height:'100%',minHeight:'220px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'52px',color:'#ccc',background:'#f2f2ef'}}>{catIcon(modal.categoria)}</div>
+                  : <div style={{width:'100%',height:'100%',minHeight:'220px',display:'flex',alignItems:'center',justifyContent:'center',background:'#1a1a1a'}}><img src={ISOTIPO} alt="Moditex" style={{width:'70px',height:'70px',objectFit:'contain',opacity:0.5}}/></div>
                 }
                 <div style={{position:'absolute',bottom:0,left:0,right:0,background:'linear-gradient(to top,rgba(0,0,0,.82) 0%,rgba(0,0,0,.35) 65%,transparent 100%)',padding:'36px 18px 14px',display:'flex',gap:'0',alignItems:'flex-end'}}>
                   <div style={{flex:1,borderRight:'1px solid rgba(255,255,255,.1)',paddingRight:'14px',marginRight:'14px'}}>
                     <div style={{fontFamily:"'DM Mono',monospace",fontSize:'7px',color:'rgba(255,255,255,.45)',letterSpacing:'.25em',textTransform:'uppercase',marginBottom:'4px'}}>AL MAYOR</div>
-                    <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'30px',fontWeight:700,color:'#c9a84c',textShadow:'0 2px 12px rgba(0,0,0,1)',lineHeight:1}}>€{(modal.precioMayor||0).toFixed(2)}</div>
+                    <div style={{fontFamily:"'Playfair Display',serif",fontSize:'30px',fontWeight:700,color:'#c9a84c',textShadow:'0 2px 12px rgba(0,0,0,1)',lineHeight:1}}>€{(modal.precioMayor||0).toFixed(2)}</div>
                     <div style={{fontFamily:"'DM Mono',monospace",fontSize:'7px',color:'rgba(255,255,255,.3)',marginTop:'3px'}}>Mín. 6 piezas · 3 por modelo</div>
                   </div>
                   <div style={{flex:1}}>
                     <div style={{fontFamily:"'DM Mono',monospace",fontSize:'7px',color:'rgba(255,255,255,.45)',letterSpacing:'.25em',textTransform:'uppercase',marginBottom:'4px'}}>AL DETAL</div>
-                    <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:'30px',fontWeight:700,color:'#fff',textShadow:'0 2px 12px rgba(0,0,0,1)',lineHeight:1}}>€{(modal.precioDetal||0).toFixed(2)}</div>
+                    <div style={{fontFamily:"'Playfair Display',serif",fontSize:'30px',fontWeight:700,color:'#fff',textShadow:'0 2px 12px rgba(0,0,0,1)',lineHeight:1}}>€{(modal.precioDetal||0).toFixed(2)}</div>
                   </div>
                 </div>
               </div>
@@ -850,7 +1012,7 @@ export default function CatalogoPage() {
                   onMouseLeave={e=>e.currentTarget.style.background='#fffbf0'}>
                   <span style={{width:'8px',height:'8px',borderRadius:'50%',background:'#16c65a',display:'inline-block',flexShrink:0}}/>
                   <span style={{fontFamily:"'DM Mono',monospace",fontSize:'9px',color:'#92400e',fontWeight:700,flex:1}}>{totalItems} prenda{totalItems!==1?'s':''} en pedido</span>
-                  <span style={{fontFamily:"'Poppins',sans-serif",fontSize:'9px',fontWeight:700,color:'#92400e',letterSpacing:'.05em'}}>Ver pedido →</span>
+                  <span style={{fontFamily:"'Montserrat',sans-serif",fontSize:'9px',fontWeight:700,color:'#92400e',letterSpacing:'.05em'}}>Ver pedido →</span>
                 </div>
               )}
               <div>
@@ -859,6 +1021,13 @@ export default function CatalogoPage() {
               </div>
               {modal.descripcion && <div className="mb-desc">{modal.descripcion}</div>}
               {modal.tela && <div className="mb-tela">Tela: {modal.tela}</div>}
+
+              {modal.disponible_produccion && modal.nota_produccion && (
+                <div style={{padding:'8px 12px', background:'rgba(59,130,246,.08)', borderLeft:'3px solid #3b82f6', fontFamily:"'Montserrat',sans-serif", fontSize:'11px', color:'#1e40af', lineHeight:1.5}}>
+                  <strong style={{display:'block', marginBottom:'2px', fontFamily:"'DM Mono',monospace", fontSize:'9px', letterSpacing:'.05em'}}>🏭 INFORMACIÓN DE PRODUCCIÓN</strong>
+                  {modal.nota_produccion}
+                </div>
+              )}
 
               <button className="mb-consult" onClick={e => consultarProducto(modal, e)}>
                 💬 Tengo una duda sobre esta prenda — Consultar por WhatsApp
@@ -966,7 +1135,7 @@ export default function CatalogoPage() {
               <div className="cd-empty">
                 <span style={{fontSize:'38px'}}>🛒</span>
                 <span style={{fontFamily:"'DM Mono',monospace",fontSize:'10px',color:'#bbb',textAlign:'center'}}>Tu pedido está vacío</span>
-                <button onClick={()=>setCartOpen(false)} style={{padding:'8px 18px',background:'#0a0a0a',color:'#fff',border:'none',cursor:'pointer',fontFamily:"'Poppins',sans-serif",fontSize:'11px',fontWeight:600,marginTop:'5px'}}>Ver catálogo</button>
+                <button onClick={()=>setCartOpen(false)} style={{padding:'8px 18px',background:'#0a0a0a',color:'#fff',border:'none',cursor:'pointer',fontFamily:"'Montserrat',sans-serif",fontSize:'11px',fontWeight:600,marginTop:'5px'}}>Ver catálogo</button>
               </div>
             ) : (
               <>
@@ -1076,6 +1245,14 @@ export default function CatalogoPage() {
       </div>
 
       <a href={`https://wa.me/${WA_NUMBER}`} target="_blank" rel="noreferrer" className="wf">💬</a>
+
+      {/* Botón volver arriba */}
+      <button
+        className={`top-btn${showTop ? ' vis' : ''}`}
+        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        title="Volver arriba"
+        aria-label="Volver arriba"
+      >↑</button>
     </div>
   );
 }

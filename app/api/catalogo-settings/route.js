@@ -32,6 +32,10 @@ export async function GET() {
       flash_texto:       cfg.flash_texto      || '',
       flash_hasta:       cfg.flash_hasta      || '',      // ISO datetime o ''
       flash_color:       cfg.flash_color      || '#ef4444',
+      flash_imagen:      cfg.flash_imagen     || '',
+      flash_marquee:     cfg.flash_marquee    || 'ALERTA OFERTA ESPECIAL',
+      // Publicidad Intercalada
+      grid_banners:      cfg.grid_banners ? JSON.parse(cfg.grid_banners) : [],
     }, { headers: HEADERS });
   } catch (err) {
     return NextResponse.json({ ok: false, error: err.message }, { status: 500, headers: HEADERS });
@@ -58,6 +62,10 @@ export async function PUT(request) {
     if (typeof body.flash_texto      === 'string')  add('flash_texto',      body.flash_texto);
     if (typeof body.flash_hasta      === 'string')  add('flash_hasta',      body.flash_hasta);
     if (typeof body.flash_color      === 'string')  add('flash_color',      body.flash_color);
+    if (typeof body.flash_imagen     === 'string')  add('flash_imagen',     body.flash_imagen);
+    if (typeof body.flash_marquee    === 'string')  add('flash_marquee',    body.flash_marquee);
+    
+    if (Array.isArray(body.grid_banners)) add('grid_banners', JSON.stringify(body.grid_banners));
 
     for (const update of updates) {
       const { error } = await supabase

@@ -7,7 +7,7 @@ export async function GET() {
   try {
     const { data, error } = await supabase
       .from('usuarios')
-      .select('email, nombre, rol, activo, ultimo_acceso')
+      .select('email, nombre, rol, activo, ultimo_acceso, avatar')
       .order('rol')
       .order('nombre');
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
@@ -20,7 +20,7 @@ export async function GET() {
 // Crear usuario — hashea el PIN automáticamente
 export async function POST(request) {
   try {
-    const { nombre, username, rol, pin, activo } = await request.json();
+    const { nombre, username, rol, pin, activo, avatar } = await request.json();
     if (!username || !pin || !rol) {
       return NextResponse.json({ ok: false, error: 'Usuario, PIN y rol son requeridos' }, { status: 400 });
     }
@@ -39,6 +39,7 @@ export async function POST(request) {
       rol,
       pin: pinHasheado,
       activo: activo !== false,
+      avatar: avatar || '1'
     }, { onConflict: 'email' });
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
@@ -51,7 +52,7 @@ export async function POST(request) {
 // Editar usuario — hashea el PIN solo si se envió uno nuevo
 export async function PUT(request) {
   try {
-    const { email, username_actual, nombre, nuevo_username, rol, pin, activo } = await request.json();
+    const { email, username_actual, nombre, nuevo_username, rol, pin, activo, avatar } = await request.json();
     const id = email || username_actual;
     if (!id) return NextResponse.json({ ok: false, error: 'Identificador requerido' }, { status: 400 });
 
@@ -59,6 +60,7 @@ export async function PUT(request) {
     if (nombre != null)   campos.nombre = nombre.trim();
     if (rol != null)      campos.rol    = rol;
     if (activo != null)   campos.activo = activo;
+    if (avatar != null)   campos.avatar = avatar;
 
     // Solo hashear si se envió un PIN nuevo (no vacío)
     if (pin != null && pin.toString().trim() !== '') {

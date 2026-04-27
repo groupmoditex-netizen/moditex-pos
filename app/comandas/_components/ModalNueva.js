@@ -1,10 +1,11 @@
-﻿'use client';
+'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import CatalogoExplorer from '@/components/CatalogoExplorer';
 import ScannerInput from '@/components/ScannerInput';
 import ModalPromo from '@/components/ModalPromo';
 import { colorHex } from '@/utils/colores';
 import { fmtNum } from '@/utils/formatters';
+import { calcularPreciosCarrito } from '@/lib/precioMayorista';
 
 const METODOS = [
   {id:'pago_movil',  label:'Pago Móvil',   icon:'📱', divisa:'BS'},
@@ -95,8 +96,8 @@ function ModalNueva({ clientes, productos, onClose, onSave, initialDraft = null,
   function addFromCatalog(p,qty,tv){
     setItems(prev=>{
       const ex=prev.find(x=>x.sku===p.sku);
-      if(ex) return prev.map(x=>x.sku===p.sku?{...x,qty:x.qty+qty,tipoVenta:tv}:x);
-      return[...prev,{...p,qty,tipoVenta:tv}];
+      if(ex) return prev.map(x=>x.sku===p.sku?{...x,qty:x.qty+qty,tipo_precio:tv}:x);
+      return[...prev,{...p,qty,tipo_precio:tv}];
     });
   }
 
@@ -131,7 +132,7 @@ function ModalNueva({ clientes, productos, onClose, onSave, initialDraft = null,
     setItems(prev => {
       const ex = prev.find(x => x.sku === prod.sku);
       if (ex) return prev.map(x => x.sku === prod.sku ? {...x, qty: x.qty + 1} : x);
-      return [...prev, {...prod, qty: 1, tipoVenta: 'MAYOR'}];
+      return [...prev, {...prod, qty: 1, tipo_precio: 'AUTO'}];
     });
     setSkuMsg({ t: 'ok', m: `✓ ${prod.modelo} — ${prod.color}` });
     setTimeout(() => setSkuMsg(null), 2500);
@@ -206,9 +207,19 @@ function ModalNueva({ clientes, productos, onClose, onSave, initialDraft = null,
 
   function changeQty(sku,d){setItems(prev=>prev.map(x=>x.sku===sku?{...x,qty:Math.max(1,x.qty+d)}:x));}
   function removeItem(sku){setItems(prev=>prev.filter(x=>x.sku!==sku));}
-  function setItemTV(sku,tv){setItems(prev=>prev.map(x=>x.sku===sku?{...x,tipoVenta:tv}:x));}
+  function setItemTV(sku,tv){setItems(prev=>prev.map(x=>x.sku===sku?{...x,tipo_precio:tv}:x));}
 
-  const totalCalc = items.reduce((a,it)=>a+precioItem(it)*it.qty,0);
+  // Integrar el motor de precios
+  const itemsEnriquecidos = calcularPreciosCarrito(items.map(it => ({
+    ...it,
+    precio_detal: it.precioDetal,
+    precio_mayor: it.precioMayor,
+    min_mayorista: it.minMayorista,
+    modelos_min_mayorista: it.modelosMinMayorista,
+    tipo_precio: it.tipo_precio || 'AUTO'
+  })));
+
+  const totalCalc = itemsEnriquecidos.reduce((a,it)=>a+(it.subtotal||0),0);
 
   async function guardar(){
     const nombre=cliQuery.trim();
@@ -234,8 +245,16 @@ function ModalNueva({ clientes, productos, onClose, onSave, initialDraft = null,
       const res=await fetch('/api/comandas',{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
           cliente:nombre, cliente_id:clienteId||'',
-          productos:items.map(it=>({sku:it.sku,modelo:`${it.modelo} — ${it.color}${it.talla&&it.talla!=='UNICA'?' '+it.talla:''}`,cant:it.qty,precio:precioItem(it),tipoVenta:it.tipoVenta})),
+          productos:itemsEnriquecidos.map(it=>({
+            sku:it.sku,
+            modelo:`${it.modelo} — ${it.color}${it.talla&&it.talla!=='UNICA'?' '+it.talla:''}`,
+            cant:it.qty,
+            precio:it.precio_aplicado,
+            tipoVenta:it.tipo_precio_resultado,
+            desde_produccion: (it.disponible || 0) <= 0
+          })),
           precio:totalCalc, monto_pagado:montoAbonoEUR,
+          tiene_items_produccion: itemsEnriquecidos.some(it => (it.disponible || 0) <= 0),
           fecha_entrega:fechaEnt||null, notas, status:'pendiente',
         })}).then(r=>r.json());
 
@@ -318,7 +337,7 @@ function ModalNueva({ clientes, productos, onClose, onSave, initialDraft = null,
 
   return (
     <>
-    {catalogo&&<CatalogoExplorer productos={productos} modo="entrada" tipoVenta="MAYOR" onAdd={addFromCatalog} onClose={()=>setCatalogo(false)}/>}
+    {catalogo&&<CatalogoExplorer productos={productos} modo="entrada" tipoVenta="AUTO" onAdd={addFromCatalog} onClose={()=>setCatalogo(false)}/>}
       {promoModal&&<ModalPromo productos={productos} isAdmin={true}
         onAdd={(promItems)=>{
           promItems.forEach(item=>{
@@ -476,74 +495,107 @@ function ModalNueva({ clientes, productos, onClose, onSave, initialDraft = null,
             <button onClick={()=>{setErr('');setPaso(1);}} style={{marginLeft:'auto',padding:'2px 8px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888'}}>✏️ cambiar</button>
           </div>
 
-          <div style={{padding:'16px 18px',overflowY:'auto',overflowX:'hidden',flex:1,minHeight:0,display:'flex',flexDirection:'column',gap:'10px'}}>
-            {/* Scanner con catálogo y promo integrados */}
-            <ScannerInput
-              productos={productos}
-              skipStockCheck={true}
-              onAdd={(prod, qty=1)=>{
-                setItems(prev=>{
-                  const ex=prev.find(x=>x.sku===prod.sku);
-                  if(ex) return prev.map(x=>x.sku===prod.sku?{...x,qty:x.qty+qty}:x);
-                  return [...prev,{...prod,qty,tipoVenta:'MAYOR'}];
-                });
-              }}
-              extraActions={[
-                { label:'⊞ Catálogo', onClick:()=>setCatalogo(true), bg:'#f59e0b', color:'#000' },
-                { label:'🎁 Promo', onClick:()=>setPromoModal(true), bg:'#7c3aed', color:'#fff' },
-              ]}
-            />
+          {/* ── Layout flex: scanner fijo arriba, items scrollable abajo ── */}
+          <div style={{flex:1,minHeight:0,overflow:'hidden',display:'flex',flexDirection:'column'}}>
 
+            {/* Scanner — siempre visible, no se va con el scroll */}
+            <div style={{flexShrink:0,padding:'10px 18px 6px'}}>
+              <ScannerInput
+                productos={productos}
+                skipStockCheck={true}
+                onAdd={(prod, qty=1)=>{
+                  setItems(prev=>{
+                    const ex=prev.find(x=>x.sku===prod.sku);
+                    if(ex) return prev.map(x=>x.sku===prod.sku?{...x,qty:x.qty+qty}:x);
+                    return [...prev,{...prod,qty,tipo_precio:'AUTO'}];
+                  });
+                }}
+                extraActions={[
+                  { label:'⊞ Catálogo', onClick:()=>setCatalogo(true), bg:'#f59e0b', color:'#000' },
+                  { label:'🎁 Promo', onClick:()=>setPromoModal(true), bg:'#7c3aed', color:'#fff' },
+                ]}
+              />
+            </div>
 
+            {/* Lista de items — ocupa todo el espacio restante y scrollea dentro */}
+            <div style={{flex:1,minHeight:0,overflowY:'auto',padding:'6px 18px 10px'}}>
+              {items.length===0 ? (
+                <div style={{padding:'32px',textAlign:'center',background:'var(--bg2)',border:'1px dashed var(--border-strong)',color:'#888',fontSize:'12px'}}>
+                  Escanea un código o abre el Catálogo para agregar prendas
+                </div>
+              ) : (
+                <div style={{background:'var(--surface)',border:'1px solid var(--border)',overflow:'hidden'}}>
+                  {/* Header contador */}
+                  <div style={{padding:'7px 13px',background:'var(--bg3)',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                    <span style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#555',textTransform:'uppercase',letterSpacing:'.12em'}}>
+                      {items.length} prenda{items.length!==1?'s':''} · {items.reduce((a,it)=>a+it.qty,0)} uds
+                    </span>
+                    <button onClick={()=>setItems([])} style={{padding:'2px 8px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#bbb'}}>
+                      ✕ limpiar
+                    </button>
+                  </div>
 
-            {/* Lista de items */}
-            {items.length===0 ? (
-              <div style={{padding:'32px',textAlign:'center',background:'var(--bg2)',border:'1px dashed var(--border-strong)',color:'#888',fontSize:'12px'}}>
-                Escanea un código o abre el Catálogo para agregar prendas
-              </div>
-            ) : (
-              <div style={{background:'var(--surface)',border:'1px solid var(--border)',overflow:'hidden',maxHeight:'min(46dvh,430px)',overflowY:'auto'}}>
-                {[...items].reverse().map(item=>{
-                  const precio=precioItem(item); const dot=colorHex(item.color);
-                  const dispItem = item.disponible ?? null;
-                  const sobreStock = dispItem !== null && item.qty > dispItem;
-                  return (
-                    <div key={item.sku} style={{display:'grid',gridTemplateColumns:'1fr auto auto auto auto',gap:'12px',padding:'11px 14px',borderBottom:'1px solid var(--border)',alignItems:'center',
-                      background: sobreStock ? 'rgba(245,158,11,.04)' : ''}}>
-                      <div>
-                        <div style={{display:'flex',alignItems:'center',gap:'6px',flexWrap:'wrap'}}>
-                          <span style={{width:'9px',height:'9px',borderRadius:'50%',background:dot,border:'1px solid rgba(0,0,0,.1)',flexShrink:0}}/>
-                          <span style={{fontSize:'13px',fontWeight:600}}>{item.modelo} — {item.color}</span>
-                          {sobreStock && (
-                            <span style={{fontFamily:'DM Mono,monospace',fontSize:'7.5px',background:'rgba(245,158,11,.15)',color:'#f59e0b',border:'1px solid rgba(245,158,11,.3)',padding:'1px 7px',fontWeight:700,letterSpacing:'.06em',flexShrink:0}}>
-                              ⚠ PIDE {item.qty} · HAY {dispItem}
-                            </span>
-                          )}
+                  {[...itemsEnriquecidos].reverse().map(item=>{
+                    const precio=item.precio_aplicado; const dot=colorHex(item.color);
+                    const dispItem = item.disponible ?? null;
+                    const sobreStock = dispItem !== null && item.qty > dispItem;
+                    const desdeProduccion = dispItem !== null && dispItem <= 0;
+                    return (
+                      <div key={item.sku} style={{display:'grid',gridTemplateColumns:'1fr auto auto auto auto',gap:'12px',padding:'11px 14px',borderBottom:'1px solid var(--border)',alignItems:'center',
+                        background: desdeProduccion ? 'rgba(59,130,246,.04)' : sobreStock ? 'rgba(245,158,11,.04)' : ''}}>
+                        <div>
+                          <div style={{display:'flex',alignItems:'center',gap:'6px',flexWrap:'wrap'}}>
+                            <span style={{width:'9px',height:'9px',borderRadius:'50%',background:dot,border:'1px solid rgba(0,0,0,.1)',flexShrink:0}}/>
+                            <span style={{fontSize:'13px',fontWeight:600}}>{item.modelo} — {item.color}</span>
+                            {desdeProduccion ? (
+                              <span style={{fontFamily:'DM Mono,monospace',fontSize:'7.5px',background:'rgba(59,130,246,.1)',color:'#3b82f6',border:'1px solid rgba(59,130,246,.3)',padding:'1px 7px',fontWeight:700,letterSpacing:'.06em',flexShrink:0}}>
+                                🏭 DESDE PRODUCCIÓN
+                              </span>
+                            ) : sobreStock ? (
+                              <span style={{fontFamily:'DM Mono,monospace',fontSize:'7.5px',background:'rgba(245,158,11,.15)',color:'#f59e0b',border:'1px solid rgba(245,158,11,.3)',padding:'1px 7px',fontWeight:700,letterSpacing:'.06em',flexShrink:0}}>
+                                ⚠ PIDE {item.qty} · HAY {dispItem}
+                              </span>
+                            ) : null}
+                          </div>
+                          <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888',marginTop:'3px'}}>
+                            {item.sku} · <strong style={{color:item.tipo_precio_resultado==='MAYOR'?'var(--warn)':'var(--blue)'}}>€{precio.toFixed(2)} × {item.qty} = €{(precio*item.qty).toFixed(2)}</strong>
+                            <span style={{marginLeft:'6px',color:'#aaa'}}>(Regla: ≥{item.min_mayorista} pzs total / ≥{item.modelos_min_mayorista} modelo)</span>
+                          </div>
                         </div>
-                        <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888',marginTop:'3px'}}>
-                          {item.sku} · <strong style={{color:item.tipoVenta==='PROMO'?'#7c3aed':item.tipoVenta==='MAYOR'?'var(--warn)':'var(--blue)'}}>€{precio.toFixed(2)} × {item.qty} = €{(precio*item.qty).toFixed(2)}</strong>{item.promoNombre&&<span style={{marginLeft:'6px',background:'#ede9fe',color:'#7c3aed',fontFamily:'DM Mono,monospace',fontSize:'8px',padding:'1px 5px',fontWeight:700}}>🎁 {item.promoNombre}</span>}
+                        <div style={{display:'flex',border:'1px solid var(--border)',overflow:'hidden',flexShrink:0}}>
+                          {['AUTO','DETAL_FORZADO','MAYOR_FORZADO'].map(tv=>{
+                            const lbl = tv==='AUTO'?'AUTO':tv==='DETAL_FORZADO'?'D':'M';
+                            const act = item.tipo_precio === tv;
+                            return (
+                              <button key={tv} onClick={()=>setItemTV(item.sku,tv)}
+                                style={{padding:'5px 8px',border:'none',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'9px',fontWeight:700,background:act?(tv==='MAYOR_FORZADO'?'var(--warn)':tv==='DETAL_FORZADO'?'var(--blue)':'#333'):'var(--bg3)',color:act?'#fff':'#777'}}
+                                title={tv}>
+                                {lbl}
+                              </button>
+                            );
+                          })}
                         </div>
+                        <div style={{display:'flex',alignItems:'center',border:'1px solid var(--border)',flexShrink:0}}>
+                          <button onClick={()=>changeQty(item.sku,-1)} style={{width:'26px',height:'26px',background:'var(--bg3)',border:'none',cursor:'pointer',fontSize:'14px'}}>−</button>
+                          <span style={{fontFamily:'DM Mono,monospace',fontSize:'13px',fontWeight:700,width:'30px',textAlign:'center',borderLeft:'1px solid var(--border)',borderRight:'1px solid var(--border)',lineHeight:'26px'}}>{item.qty}</span>
+                          <button onClick={()=>changeQty(item.sku,1)} style={{width:'26px',height:'26px',background:'var(--bg3)',border:'none',cursor:'pointer',fontSize:'14px'}}>+</button>
+                        </div>
+                        <div style={{fontFamily:'DM Mono,monospace',fontSize:'12px',fontWeight:700,minWidth:'58px',textAlign:'right',flexShrink:0}}>€{(precio*item.qty).toFixed(2)}</div>
+                        <button onClick={()=>removeItem(item.sku)} style={{width:'22px',height:'22px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontSize:'11px',color:'#888'}}>✕</button>
                       </div>
-                      <div style={{display:'flex',border:'1px solid var(--border)',overflow:'hidden',flexShrink:0}}>
-                        {['DETAL','MAYOR'].map(tv=>(
-                          <button key={tv} onClick={()=>setItemTV(item.sku,tv)}
-                            style={{padding:'5px 8px',border:'none',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'9px',fontWeight:700,background:item.tipoVenta===tv?(tv==='DETAL'?'var(--blue)':'var(--warn)'):'var(--bg3)',color:item.tipoVenta===tv?'#fff':'#777'}}>
-                            {tv[0]}
-                          </button>
-                        ))}
-                      </div>
-                      <div style={{display:'flex',alignItems:'center',border:'1px solid var(--border)',flexShrink:0}}>
-                        <button onClick={()=>changeQty(item.sku,-1)} style={{width:'26px',height:'26px',background:'var(--bg3)',border:'none',cursor:'pointer',fontSize:'14px'}}>−</button>
-                        <span style={{fontFamily:'DM Mono,monospace',fontSize:'13px',fontWeight:700,width:'30px',textAlign:'center',borderLeft:'1px solid var(--border)',borderRight:'1px solid var(--border)',lineHeight:'26px'}}>{item.qty}</span>
-                        <button onClick={()=>changeQty(item.sku,1)} style={{width:'26px',height:'26px',background:'var(--bg3)',border:'none',cursor:'pointer',fontSize:'14px'}}>+</button>
-                      </div>
-                      <div style={{fontFamily:'DM Mono,monospace',fontSize:'12px',fontWeight:700,minWidth:'58px',textAlign:'right',flexShrink:0}}>€{(precio*item.qty).toFixed(2)}</div>
-                      <button onClick={()=>removeItem(item.sku)} style={{width:'22px',height:'22px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontSize:'11px',color:'#888'}}>✕</button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    );
+                  })}
+
+                  {/* Total fijo al pie de la lista */}
+                  <div style={{padding:'9px 14px',background:'var(--bg3)',borderTop:'2px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                    <span style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#666',textTransform:'uppercase',letterSpacing:'.1em'}}>
+                      Total · {items.reduce((a,it)=>a+it.qty,0)} uds
+                    </span>
+                    <span style={{fontFamily:'Playfair Display,serif',fontSize:'17px',fontWeight:700,color:'var(--red)'}}>€ {totalCalc.toFixed(2)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="modal-footer-bar" style={{borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center',background:'var(--bg2)',flexShrink:0}}>

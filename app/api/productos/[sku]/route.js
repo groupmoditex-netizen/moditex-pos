@@ -6,7 +6,7 @@ import { NextResponse } from 'next/server';
 export async function PUT(request, { params }) {
   try {
     const sku = params.sku;
-    const { categoria, modelo, talla, color, tela, precioDetal, precioMayor, precioCosto } = await request.json();
+    const { categoria, modelo, talla, color, tela, precioDetal, precioMayor, precioCosto, minMayorista, modelosMinMayorista } = await request.json();
 
     if (!precioDetal || precioDetal <= 0)
       return NextResponse.json({ ok: false, error: 'Precio detal requerido' }, { status: 400 });
@@ -16,10 +16,12 @@ export async function PUT(request, { params }) {
     if (modelo)              campos.modelo       = modelo.trim().toUpperCase();
     if (talla)               campos.talla        = talla;
     if (color != null)       campos.color        = color.trim().toUpperCase();
-    if (tela  != null)       campos.tela         = tela.trim().toUpperCase();
-    if (precioDetal != null) campos.precio_detal = parseFloat(precioDetal);
-    if (precioMayor != null) campos.precio_mayor = parseFloat(precioMayor) || 0;
-    if (precioCosto != null) campos.precio_costo = parseFloat(precioCosto) || 0;
+    if (tela  != null)              campos.tela                  = tela.trim().toUpperCase();
+    if (precioDetal != null)         campos.precio_detal           = parseFloat(precioDetal);
+    if (precioMayor != null)         campos.precio_mayor           = parseFloat(precioMayor) || 0;
+    if (precioCosto != null)         campos.precio_costo           = parseFloat(precioCosto) || 0;
+    if (minMayorista != null)        campos.min_mayorista          = parseInt(minMayorista) || 6;
+    if (modelosMinMayorista != null) campos.modelos_min_mayorista  = parseInt(modelosMinMayorista) || 3;
 
     const { error } = await supabase.from('productos').update(campos).eq('sku', sku);
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });

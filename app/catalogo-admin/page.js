@@ -70,6 +70,9 @@ export default function CatalogoAdminPage() {
         flash_texto: res.flash_texto || '',
         flash_hasta: res.flash_hasta || '',
         flash_color: res.flash_color || '#ef4444',
+        flash_imagen: res.flash_imagen || '',
+        flash_marquee: res.flash_marquee || 'ALERTA OFERTA ESPECIAL',
+        grid_banners: res.grid_banners || [],
       }); })
       .catch(() => {});
     // Contar correos capturados
@@ -117,7 +120,9 @@ export default function CatalogoAdminPage() {
       const a    = document.createElement('a');
       a.href     = url;
       a.download = `correos-moditex-${new Date().toISOString().slice(0,10)}.csv`;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
       setMsg({ t:'ok', m:`✓ ${res.emails.length} correos exportados` });
       setTimeout(() => setMsg(null), 3000);
@@ -226,6 +231,8 @@ export default function CatalogoAdminPage() {
       fotos_extra: cfg.fotos_extra || '',
       descripcion: cfg.descripcion || '',
       orden:       cfg.orden !== undefined ? String(cfg.orden) : '999',
+      disponible_produccion: cfg.disponible_produccion || false,
+      nota_produccion: cfg.nota_produccion || '',
     });
     setEditKey(modelo.key);
   }
@@ -301,6 +308,32 @@ export default function CatalogoAdminPage() {
                   value={editData.orden}
                   onChange={e => setEditData(p => ({...p, orden:e.target.value}))}/>
               </div>
+
+              {/* 🏭 Configuración de Producción */}
+              <div style={{ padding:'12px', background:'rgba(59,130,246,.05)', border:'1px solid rgba(59,130,246,.3)', borderRadius:'4px' }}>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' }}>
+                  <div>
+                    <label style={{...lbl, marginBottom:0, color:'#1e40af'}}>🏭 Disponible desde Producción</label>
+                    <div style={{ fontFamily:'DM Mono,monospace', fontSize:'8px', color:'#3b82f6', marginTop:'2px' }}>
+                      Permite vender aunque el stock sea 0 (sale directo de producción).
+                    </div>
+                  </div>
+                  <button onClick={() => setEditData(p => ({...p, disponible_produccion: !p.disponible_produccion}))}
+                    style={{ width:'40px', height:'20px', borderRadius:'10px', border:'none', cursor:'pointer', background:editData.disponible_produccion?'#3b82f6':'var(--bg3)', position:'relative', transition:'background .2s', flexShrink:0 }}>
+                    <span style={{ position:'absolute', top:'2px', left:editData.disponible_produccion?'22px':'2px', width:'16px', height:'16px', borderRadius:'50%', background:'#fff', transition:'left .2s', boxShadow:'0 1px 3px rgba(0,0,0,.2)', display:'block' }}/>
+                  </button>
+                </div>
+                
+                {editData.disponible_produccion && (
+                  <div>
+                    <label style={{...lbl, color:'#1e40af'}}>📝 Nota para el cliente (aparece cuando no hay stock físico)</label>
+                    <input style={{...inp, borderColor:'rgba(59,130,246,.3)', background:'#fff'}} 
+                      value={editData.nota_produccion}
+                      onChange={e => setEditData(p => ({...p, nota_produccion:e.target.value}))}
+                      placeholder="ej: Producción en curso, tiempo de envío: 48h"/>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div style={{ display:'flex', gap:'10px', marginTop:'20px', justifyContent:'flex-end' }}>
@@ -365,6 +398,7 @@ export default function CatalogoAdminPage() {
         {[
           { key:'prendas', label:'👗 Prendas', count: enCatalogoCount },
           { key:'promos',  label:'✨ Sets & Combos', count: promos.filter(p=>p.activo).length },
+          { key:'publicidad', label:'📸 Publicidad', count: settings.grid_banners?.length || 0 },
           { key:'correos', label:'📧 Correos & Config', count: null },
         ].map(tab => (
           <button key={tab.key} onClick={() => setTabActivo(tab.key)}
@@ -641,6 +675,18 @@ export default function CatalogoAdminPage() {
               onChange={e => setSettings(s => ({...s, flash_texto: e.target.value}))}
               placeholder="ej: ⚡ 20% OFF en todos los conjuntos deportivos — Solo hoy"/>
           </div>
+          <div>
+            <label style={lbl}>URL Imagen de Fondo (Supabase Storage)</label>
+            <input style={inp} value={settings.flash_imagen}
+              onChange={e => setSettings(s => ({...s, flash_imagen: e.target.value}))}
+              placeholder="https://..."/>
+          </div>
+          <div>
+            <label style={lbl}>Texto en movimiento (Alerta Superior)</label>
+            <input style={inp} value={settings.flash_marquee}
+              onChange={e => setSettings(s => ({...s, flash_marquee: e.target.value}))}
+              placeholder="ej: ALERTA OFERTA ESPECIAL"/>
+          </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
             <div>
               <label style={lbl}>Válida hasta (fecha y hora)</label>
@@ -666,9 +712,21 @@ export default function CatalogoAdminPage() {
             </div>
           </div>
           {settings.flash_texto && (
-            <div style={{ padding:'10px 16px', background:settings.flash_color, color:'#fff', display:'flex', alignItems:'center', gap:'10px', borderRadius:'2px' }}>
-              <span style={{ fontFamily:'DM Mono,monospace', fontSize:'9px', letterSpacing:'.08em', flex:1 }}>{settings.flash_texto}</span>
-              <span style={{ fontFamily:'DM Mono,monospace', fontSize:'9px', opacity:.75 }}>⏱ PREVIEW</span>
+            <div style={{ position:'relative', overflow:'hidden', minHeight:'120px', display:'flex', alignItems:'center', justifyContent:'center', background:settings.flash_color, color:'#fff', borderRadius:'2px', backgroundImage: settings.flash_imagen ? `url(${settings.flash_imagen})` : 'none', backgroundSize:'cover', backgroundPosition:'center' }}>
+              <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,.4)' }}/>
+              <div style={{ position:'absolute', top:0, left:0, right:0, background:'repeating-linear-gradient(45deg, #ef4444, #ef4444 10px, #facc15 10px, #facc15 20px)', padding:'3px', opacity:0.8 }}>
+                 <div style={{ background:'#000', color:'#fff', textAlign:'center', fontFamily:'DM Mono,monospace', fontSize:'8px', fontWeight:700, letterSpacing:'.2em' }}>{settings.flash_marquee}</div>
+              </div>
+              
+              {/* Contenedor central (diagonal design in preview is simplified) */}
+              <div style={{ position:'relative', zIndex:2, background:'rgba(0,0,0,.7)', padding:'15px 30px', transform:'skew(-10deg)', transition:'background .3s', border:`2px solid ${settings.flash_color}` }}>
+                <span style={{ fontFamily:'Poppins,sans-serif', fontSize:'16px', fontWeight:800, transform:'skew(10deg)', display:'block', textAlign:'center', letterSpacing:'.05em' }}>
+                  {settings.flash_texto}
+                </span>
+                {settings.flash_hasta && (
+                  <span style={{ display:'block', textAlign:'center', marginTop:'4px', fontFamily:'DM Mono,monospace', fontSize:'9px', transform:'skew(10deg)', color:settings.flash_color }}>⏱ PREVIEW COUNTDOWN</span>
+                )}
+              </div>
             </div>
           )}
           <div style={{ display:'flex', justifyContent:'flex-end' }}>
@@ -683,6 +741,76 @@ export default function CatalogoAdminPage() {
 
       </div>
       )} {/* end TAB correos */}
+
+      {/* ══ TAB: PUBLICIDAD INTERCALADA ══ */}
+      {tabActivo === 'publicidad' && (
+      <div>
+        <div style={{ padding:'12px 16px', background:'#f0fdf4', border:'1px solid #bbf7d0', borderLeft:'3px solid #22c55e', marginBottom:'16px', fontFamily:'DM Mono,monospace', fontSize:'9px', color:'#166534', lineHeight:1.8 }}>
+          <strong>Cómo funciona:</strong> Agrega banners publicitarios que aparecerán mezclados con las prendas en el catálogo. Define en qué <strong>posición</strong> quieres que aparezca cada foto (ej: 4, 12, etc). Estas imágenes ocupan el ancho completo en móviles (doble columna en PC) creando un efecto visual espectacular tipo Zara.
+        </div>
+        
+        <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:'16px' }}>
+          <button onClick={() => setSettings(s => ({...s, grid_banners: [...(s.grid_banners||[]), {id:Date.now(), imagen_url:'', posicion:4, enlace:''}]}))}
+            style={{ padding:'8px 16px', background:'#22c55e', color:'#fff', border:'none', cursor:'pointer', fontFamily:'Poppins,sans-serif', fontSize:'11px', fontWeight:700 }}>
+            + Añadir Nuevo Banner
+          </button>
+        </div>
+
+        {(!settings.grid_banners || settings.grid_banners.length === 0) ? (
+          <div style={{ padding:'40px 20px', textAlign:'center', border:'1px dashed var(--border)', color:'#888', fontFamily:'DM Mono,monospace', fontSize:'10px' }}>
+            No hay banners publicitarios configurados.
+          </div>
+        ) : (
+          <div style={{ display:'flex', flexDirection:'column', gap:'16px' }}>
+            {settings.grid_banners.map((b, i) => (
+              <div key={b.id || i} style={{ background:'var(--surface)', border:'1px solid var(--border)', borderLeft:'4px solid #22c55e', padding:'16px' }}>
+                <div style={{ display:'grid', gridTemplateColumns:'80px 1fr auto', gap:'16px' }}>
+                  {/* Preview */}
+                  <div style={{ width:'80px', height:'100px', background:'var(--bg3)', border:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden' }}>
+                    {b.imagen_url ? <img src={b.imagen_url} alt="" style={{width:'100%', height:'100%', objectFit:'cover'}} onError={e=>e.target.style.display='none'}/> : '📸'}
+                  </div>
+                  {/* Configs */}
+                  <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
+                    <div>
+                      <label style={lbl}>URL de la Imagen (Supabase Storage)</label>
+                      <input style={inp} value={b.imagen_url} placeholder="https://..."
+                        onChange={e => setSettings(s => ({...s, grid_banners: s.grid_banners.map(x => x===b ? {...x, imagen_url: e.target.value} : x)}))}/>
+                    </div>
+                    <div style={{ display:'flex', gap:'16px' }}>
+                      <div style={{ width:'120px' }}>
+                        <label style={lbl}>Posición</label>
+                        <input type="number" min="1" style={inp} value={b.posicion}
+                          onChange={e => setSettings(s => ({...s, grid_banners: s.grid_banners.map(x => x===b ? {...x, posicion: parseInt(e.target.value)||1} : x)}))}/>
+                        <div style={{ fontSize:'8px', color:'#aaa', marginTop:'4px', fontFamily:'DM Mono,monospace' }}>Después de la prenda N°</div>
+                      </div>
+                      <div style={{ flex:1 }}>
+                        <label style={lbl}>Enlace al hacer clic (Opcional)</label>
+                        <input style={inp} value={b.enlace || ''} placeholder="ej: https://wa.me/..."
+                          onChange={e => setSettings(s => ({...s, grid_banners: s.grid_banners.map(x => x===b ? {...x, enlace: e.target.value} : x)}))}/>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Actions */}
+                  <div>
+                    <button onClick={() => setSettings(s => ({...s, grid_banners: s.grid_banners.filter(x => x!==b)}))}
+                      style={{ background:'none', border:'none', color:'var(--red)', cursor:'pointer', fontSize:'16px' }} title="Eliminar banner">
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+            
+            <div style={{ display:'flex', justifyContent:'flex-end', marginTop:'8px' }}>
+              <button onClick={guardarSettings} disabled={savingCfg}
+                style={{ padding:'10px 24px', background:'#22c55e', color:'#fff', border:'none', cursor:'pointer', fontFamily:'Poppins,sans-serif', fontSize:'12px', fontWeight:700, opacity:savingCfg?.6:1 }}>
+                {savingCfg ? '⏳ Guardando...' : '✓ Guardar Cambios de Publicidad'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+      )} {/* end TAB publicidad */}
 
       {/* ══ TAB: PRENDAS ══ */}
       {tabActivo === 'prendas' && (
@@ -752,6 +880,7 @@ export default function CatalogoAdminPage() {
                     }
                     {!tienesFoto && activo && <span style={{ fontFamily:'DM Mono,monospace', fontSize:'7.5px', background:'#fff8e1', color:'#f59e0b', padding:'1px 6px', fontWeight:700 }}>⚠ SIN FOTO</span>}
                     {!tieneDesc && activo && <span style={{ fontFamily:'DM Mono,monospace', fontSize:'7.5px', background:'#fff8e1', color:'#f59e0b', padding:'1px 6px', fontWeight:700 }}>⚠ SIN DESC.</span>}
+                    {cfg.disponible_produccion && <span style={{ fontFamily:'DM Mono,monospace', fontSize:'7.5px', background:'#eff6ff', color:'#3b82f6', padding:'1px 6px', fontWeight:700, border:'1px solid #bfdbfe' }}>🏭 PRODUCCIÓN</span>}
                   </div>
                   <div style={{ fontFamily:'DM Mono,monospace', fontSize:'8.5px', color:'#888', marginTop:'2px' }}>
                     {modelo.categoria} {modelo.tela ? `· ${modelo.tela}` : ''}
@@ -787,7 +916,7 @@ export default function CatalogoAdminPage() {
       </div>
 
       <div style={{ marginTop:'16px', fontFamily:'DM Mono,monospace', fontSize:'9px', color:'#aaa', lineHeight:2 }}>
-        📌 URL del catálogo para compartir con clientes: <strong style={{ color:'#7c3aed' }}>{typeof window !== 'undefined' ? window.location.origin : 'tu-dominio.vercel.app'}/catalogo</strong>
+        📌 URL del catálogo para compartir con clientes: <strong style={{ color:'#7c3aed' }}>/catalogo</strong>
       </div>
       </div>
       )} {/* end TAB prendas */}

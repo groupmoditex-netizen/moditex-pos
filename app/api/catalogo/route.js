@@ -11,26 +11,20 @@ export async function GET() {
     const [
       { data: cfg,   error: eCfg   },
       { data: prods, error: eProds },
-      { data: movs                  },
+      { data: inv                   },
     ] = await Promise.all([
       supabase.from('catalogo_config').select('*').eq('en_catalogo', true),
       supabase.from('productos').select('sku,categoria,modelo,talla,color,precio_detal,precio_mayor,stock_inicial').order('categoria').order('modelo'),
-      supabase.from('movimientos').select('sku,tipo,cantidad').in('tipo', ['ENTRADA','SALIDA','RESERVA']),
+      supabase.from('inventario').select('sku,stock_total'),
     ]);
 
     if (eCfg)   return NextResponse.json({ ok: false, error: 'catalogo_config: ' + eCfg.message,   step: 'cfg'   }, { status: 500, headers: HEADERS });
     if (eProds) return NextResponse.json({ ok: false, error: 'productos: '       + eProds.message, step: 'prods' }, { status: 500, headers: HEADERS });
     if (!cfg || cfg.length === 0) return NextResponse.json({ ok: true, modelos: [], debug: 'No items configured' }, { headers: HEADERS });
 
-    // Mismo criterio que /api/dashboard:
-    // disponible = stock_inicial + entradas - salidas  (calculado desde movimientos)
-    const entMap = {}, salMap = {}, resMap = {};
-    (movs || []).forEach(m => {
-      if (m.tipo === 'ENTRADA')       entMap[m.sku] = (entMap[m.sku] || 0) + m.cantidad;
-      else if (m.tipo === 'SALIDA')   salMap[m.sku] = (salMap[m.sku] || 0) + m.cantidad;
-      else if (m.tipo === 'RESERVA')  resMap[m.sku] = (resMap[m.sku] || 0) + m.cantidad;
-    });
-    const stockMap = {};
+    // Stock real desde inventario — fuente única de verdad, consistente con dashboard
+    const invMap = {};
+    (inv || []).forEach(r => { invMap[r.sku] = r.stock_total; });
 
     const cfgMap = {};
     cfg.forEach(c => { cfgMap[c.modelo_key] = c; });
@@ -53,18 +47,20 @@ export async function GET() {
           descripcion: c.descripcion || '',
           fotos_extra: c.fotos_extra || '',
           orden:       c.orden ?? 999,
+          disponible_produccion: c.disponible_produccion || false,
+          nota_produccion: c.nota_produccion || '',
           variantes:   [],
         };
       }
 
-      // Misma lógica que /api/productos — inventario primero, stock_inicial como respaldo
-      const disp = Math.max(0, (p.stock_inicial || 0) + (entMap[p.sku] || 0) - (salMap[p.sku] || 0) - (resMap[p.sku] || 0));
+      // Stock desde inventario (O(1) por SKU), consistente con el POS
+      const disp = Math.max(0, invMap[p.sku] ?? (p.stock_inicial || 0));
       modelos[key].variantes.push({
         sku:        p.sku,
         color:      p.color,
         talla:      p.talla,
         disponible: disp,
-        nivel:      disp <= 0 ? 'agotado' : disp <= 3 ? 'pocas' : 'disponible',
+        nivel:      disp <= 0 ? (cfgMap[key]?.disponible_produccion ? 'produccion' : 'agotado') : disp <= 3 ? 'pocas' : 'disponible',
       });
     });
 
@@ -85,7 +81,7 @@ export async function PUT(request) {
   noStore();
   try {
     const body = await request.json();
-    const { modelo_key, en_catalogo, foto_url, descripcion, fotos_extra, orden } = body;
+    const { modelo_key, en_catalogo, foto_url, descripcion, fotos_extra, orden, disponible_produccion, nota_produccion } = body;
     if (!modelo_key) return NextResponse.json({ ok: false, error: 'modelo_key requerido' }, { status: 400 });
 
     const { data: existing, error: selectError } = await supabase
@@ -104,6 +100,8 @@ export async function PUT(request) {
     if (descripcion  !== undefined) campos.descripcion  = descripcion;
     if (fotos_extra  !== undefined) campos.fotos_extra  = fotos_extra;
     if (orden        !== undefined) campos.orden        = parseInt(orden) || 0;
+    if (disponible_produccion !== undefined) campos.disponible_produccion = disponible_produccion;
+    if (nota_produccion !== undefined)       campos.nota_produccion       = nota_produccion;
     campos.updated_at = new Date().toISOString();
 
     let resultId, action;

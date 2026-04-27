@@ -1,14 +1,15 @@
 export const dynamic = 'force-dynamic';
 import { supabase } from '@/lib/supabase-server';
+import { registrarMovimiento } from '@/lib/stockRpc';
 import { NextResponse } from 'next/server';
 
-function generarId() {
+function generarIdExh() {
   const fecha = new Date().toISOString().split('T')[0].replace(/-/g, '');
   const rand  = Math.random().toString(36).substring(2, 8).toUpperCase();
   return `EXH-${fecha}-${rand}`;
 }
 
-// ── GET — listar piezas en exhibición ─────────────────────────────────
+// ── GET — listar piezas en exhibición ─────────────────────────────────────────
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -25,87 +26,86 @@ export async function GET(request) {
   }
 }
 
-// ── POST — agregar piezas a exhibición ────────────────────────────────
-// Body: [{ sku, modelo, color, talla, cantidad, notas }]
-// La pieza pasa de almacén a mostrador (se descuenta del almacén)
+// ── POST — enviar piezas al mostrador ─────────────────────────────────────────
+// Descuenta del almacén (SALIDA atómica) y registra en tabla exhibicion
 export async function POST(request) {
   try {
-    const body = await request.json();
+    const body  = await request.json();
     const items = Array.isArray(body) ? body : [body];
     if (!items.length) return NextResponse.json({ ok: false, error: 'Sin items' }, { status: 400 });
 
-    const filas = [];
-    const movimientos = [];
-    const fecha = new Date().toISOString().split('T')[0];
+    const filas      = [];
+    const erroresStock = [];
 
     for (const item of items) {
       const { sku, modelo, color, talla, cantidad = 1, notas = '' } = item;
       if (!sku) continue;
 
-      filas.push({
-        id: generarId(),
-        sku: sku.toUpperCase(),
-        modelo: modelo || '',
-        color: color || '',
-        talla: talla || '',
-        cantidad: parseInt(cantidad) || 1,
-        estado: 'activo',
-        fecha_entrada: fecha,
-        notas,
+      const skuUp = sku.toUpperCase();
+      const qty   = parseInt(cantidad) || 1;
+
+      // ✅ Descontar del almacén atómicamente (FOR UPDATE en Postgres)
+      const res = await registrarMovimiento({
+        sku:       skuUp,
+        tipo:      'SALIDA',
+        cantidad:  qty,
+        concepto:  `Exhibición mostrador${notas ? ' — ' + notas : ''}`,
+        contacto:  'MOSTRADOR',
+        tipo_venta: 'EXHIBICION',
+        usuario:   'sistema',
       });
 
-      // Registrar como salida del almacén (tipo EXHIBICION)
-      movimientos.push({
-        id: `MOV-${fecha.replace(/-/g,'')}-${Math.random().toString(36).substring(2,8).toUpperCase()}`,
-        fecha,
-        sku: sku.toUpperCase(),
-        tipo: 'SALIDA',
-        cantidad: parseInt(cantidad) || 1,
-        concepto: `Exhibición mostrador${notas ? ' — ' + notas : ''}`,
-        contacto: 'MOSTRADOR',
-        tipo_venta: 'EXHIBICION',
-        precio_venta: 0,
+      if (!res.ok) {
+        erroresStock.push({ sku: skuUp, error: res.error });
+        continue; // Saltar este item — stock insuficiente
+      }
+
+      filas.push({
+        id:           generarIdExh(),
+        sku:          skuUp,
+        modelo:       modelo || '',
+        color:        color  || '',
+        talla:        talla  || '',
+        cantidad:     qty,
+        estado:       'activo',
+        fecha_entrada: new Date().toISOString().split('T')[0],
+        notas,
       });
     }
 
-    if (!filas.length) return NextResponse.json({ ok: false, error: 'Sin datos válidos' }, { status: 400 });
+    if (filas.length === 0) {
+      return NextResponse.json({
+        ok:     false,
+        error:  'Sin items válidos (posible stock insuficiente)',
+        erroresStock,
+      }, { status: 400 });
+    }
 
-    // Insertar en exhibición
+    // Registrar en tabla exhibicion
     const { error: errExh } = await supabase.from('exhibicion').insert(filas);
     if (errExh) return NextResponse.json({ ok: false, error: errExh.message }, { status: 500 });
 
-    // Registrar salida del almacén
-    if (movimientos.length) {
-      await supabase.from('movimientos').insert(movimientos).catch(() => {});
-      // Actualizar inventario
-      for (const mov of movimientos) {
-        const { data: prod } = await supabase.from('productos').select('sku,stock_inicial').eq('sku', mov.sku).single();
-        const { data: movs } = await supabase.from('movimientos').select('tipo,cantidad').eq('sku', mov.sku);
-        let stock = prod?.stock_inicial || 0;
-        (movs || []).forEach(m => {
-          if (m.tipo === 'ENTRADA') stock += m.cantidad;
-          else if (m.tipo === 'SALIDA') stock -= m.cantidad;
-        });
-        stock = Math.max(0, stock);
-        const { error: eInv } = await supabase.from('inventario').update({ stock, updated_at: new Date().toISOString() }).eq('sku', mov.sku);
-        if (eInv) await supabase.from('inventario').insert({ sku: mov.sku, stock });
-      }
-    }
+    try {
+      await supabase.from('logs').insert({
+        usuario: 'sistema', accion: 'ENVIAR_EXHIBICION',
+        detalle: `${filas.length} SKU(s) → Mostrador`,
+        resultado: 'OK',
+      });
+    } catch (_) {}
 
-    await supabase.from('logs').insert({
-      usuario: 'sistema', accion: 'ENVIAR_EXHIBICION',
-      detalle: `${filas.length} SKU(s) → Mostrador`,
-      resultado: 'OK'
-    }).catch(() => {});
+    return NextResponse.json({
+      ok:    true,
+      ids:   filas.map(f => f.id),
+      count: filas.length,
+      ...(erroresStock.length > 0 && { erroresStock }),
+    });
 
-    return NextResponse.json({ ok: true, ids: filas.map(f => f.id), count: filas.length });
   } catch (err) {
     return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
   }
 }
 
-// ── PUT — actualizar estado de una pieza ──────────────────────────────
-// Body: { id, estado, precio_venta?, notas? }
+// ── PUT — actualizar estado de una pieza ──────────────────────────────────────
 // estados: 'vendido' | 'devuelto' | 'activo'
 export async function PUT(request) {
   try {
@@ -113,47 +113,48 @@ export async function PUT(request) {
     const { id, estado, precio_venta, notas } = body;
     if (!id) return NextResponse.json({ ok: false, error: 'ID requerido' }, { status: 400 });
 
+    // Leer la pieza actual para conocer sku y cantidad
+    const { data: item, error: errItem } = await supabase
+      .from('exhibicion').select('*').eq('id', id).single();
+    if (errItem || !item)
+      return NextResponse.json({ ok: false, error: 'Pieza no encontrada' }, { status: 404 });
+
+    // ── devuelto → ENTRADA al almacén ─────────────────────────────────────
+    if (estado === 'devuelto' && item.estado === 'activo') {
+      const res = await registrarMovimiento({
+        sku:      item.sku,
+        tipo:     'ENTRADA',
+        cantidad: item.cantidad,
+        concepto: 'Devolución desde mostrador / exhibición',
+        contacto: 'MOSTRADOR',
+        usuario:  'sistema',
+      });
+      if (!res.ok) {
+        return NextResponse.json({ ok: false, error: res.error }, { status: 500 });
+      }
+    }
+
+    // ── vendido desde mostrador → no mueve almacén (ya salió en POST) ─────
+    // Solo actualizamos el estado del registro
+
     const campos = { updated_at: new Date().toISOString() };
-    if (estado        !== undefined) campos.estado        = estado;
-    if (precio_venta  !== undefined) campos.precio_venta  = parseFloat(precio_venta) || 0;
-    if (notas         !== undefined) campos.notas         = notas;
+    if (estado       !== undefined) campos.estado       = estado;
+    if (precio_venta !== undefined) campos.precio_venta = parseFloat(precio_venta) || 0;
+    if (notas        !== undefined) campos.notas        = notas;
     if (estado === 'vendido' || estado === 'devuelto') {
       campos.fecha_salida = new Date().toISOString().split('T')[0];
     }
 
-    const { data: item } = await supabase.from('exhibicion').select('*').eq('id', id).single();
-
     const { error } = await supabase.from('exhibicion').update(campos).eq('id', id);
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
-    // Si se devuelve al almacén → registrar ENTRADA
-    if (estado === 'devuelto' && item) {
-      const fecha = new Date().toISOString().split('T')[0];
-      const movId = `MOV-${fecha.replace(/-/g,'')}-${Math.random().toString(36).substring(2,8).toUpperCase()}`;
-      await supabase.from('movimientos').insert({
-        id: movId, fecha, sku: item.sku, tipo: 'ENTRADA',
-        cantidad: item.cantidad,
-        concepto: 'Devolución desde mostrador / exhibición',
-        contacto: 'MOSTRADOR',
-      }).catch(() => {});
-      // Actualizar inventario
-      const { data: prod } = await supabase.from('productos').select('sku,stock_inicial').eq('sku', item.sku).single();
-      const { data: movs } = await supabase.from('movimientos').select('tipo,cantidad').eq('sku', item.sku);
-      let stock = prod?.stock_inicial || 0;
-      (movs || []).forEach(m => {
-        if (m.tipo === 'ENTRADA') stock += m.cantidad;
-        else if (m.tipo === 'SALIDA') stock -= m.cantidad;
+    try {
+      await supabase.from('logs').insert({
+        usuario: 'sistema', accion: 'ACTUALIZAR_EXHIBICION',
+        detalle: `ID:${id} SKU:${item.sku} → ${estado}`,
+        resultado: 'OK',
       });
-      stock = Math.max(0, stock);
-      const { error: eInv } = await supabase.from('inventario').update({ stock, updated_at: new Date().toISOString() }).eq('sku', item.sku);
-      if (eInv) await supabase.from('inventario').insert({ sku: item.sku, stock });
-    }
-
-    await supabase.from('logs').insert({
-      usuario: 'sistema', accion: 'ACTUALIZAR_EXHIBICION',
-      detalle: `ID:${id} → ${estado}`,
-      resultado: 'OK'
-    }).catch(() => {});
+    } catch (_) {}
 
     return NextResponse.json({ ok: true, id });
   } catch (err) {
@@ -161,12 +162,13 @@ export async function PUT(request) {
   }
 }
 
-// ── DELETE — eliminar registro de exhibición ──────────────────────────
+// ── DELETE — eliminar registro de exhibición ──────────────────────────────────
 export async function DELETE(request) {
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     if (!id) return NextResponse.json({ ok: false, error: 'ID requerido' }, { status: 400 });
+
     const { error } = await supabase.from('exhibicion').delete().eq('id', id);
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });

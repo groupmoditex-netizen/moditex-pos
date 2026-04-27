@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState, useRef } from 'react';
 import { useAppData } from '@/lib/AppContext';
 import { useAuth, NAV_POR_ROL } from '@/lib/AuthContext';
@@ -45,7 +45,9 @@ const MENU_GRUPOS = {
       label: 'Herramientas',
       items: [
         { href:'/etiquetas',  label:'Etiquetas',      desc:'Impresión de códigos' },
+        { href:'/ajustes',    label:'Ajustes',        desc:'Atajos y personalización' },
         { href:'/plan-tela',  label:'Plan de Tela',   desc:'Consumo de materiales' },
+        { href:'/tasa',       label:'Tasa Cambiaria', desc:'Bs/€ — historial auditado' },
         { href:'/usuarios',   label:'Usuarios',       desc:'Gestión de accesos' },
         { href:'/logs',       label:'Logs del Sistema', desc:'Auditoría de acciones' },
         { href:'/catalogo-admin', label:'Catálogo Web', desc:'Gestionar tienda online' },
@@ -123,6 +125,7 @@ export default function Shell({ children, title }) {
   const path = usePathname();
   const { data, cargando, recargar } = useAppData() || {};
   const { usuario, logout } = useAuth() || {};
+  const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeGroup, setActiveGroup] = useState(null);
   const [fecha, setFecha] = useState('');
@@ -150,6 +153,42 @@ export default function Shell({ children, title }) {
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
+  
+  // ⌨️ ATAJOS DE TECLADO GLOBALES
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (!usuario) return;
+      
+      // Ignorar si se está escribiendo en un input o similar
+      const active = document.activeElement;
+      const isInput = active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable;
+      if (isInput) return;
+
+      // Obtener preferencias del usuario (o usar defaults por si está vacío)
+      const hasPrefs = usuario.preferencias && Object.keys(usuario.preferencias).length > 0;
+      const prefs = hasPrefs ? usuario.preferencias : {
+        c: '/comandas?nueva=t',
+        p: '/productos',
+        i: '/inventario',
+        v: '/venta-directa',
+        d: '/dashboard',
+        e: '/entrada',
+        s: '/salida'
+      };
+
+      if (!e.key) return;
+      if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
+
+      const key = e.key.toLowerCase();
+      if (prefs[key]) {
+        e.preventDefault();
+        router.push(prefs[key]);
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [usuario, router]);
 
   const alertCount = data ? data.productos.filter(p => p.disponible <= 0).length : 0;
   const grupos = MENU_GRUPOS[usuario?.rol] || MENU_GRUPOS.viewer;
@@ -173,19 +212,28 @@ export default function Shell({ children, title }) {
 
   return (
     <div className="shell-root">
-      <style>{`
+      <style dangerouslySetInnerHTML={{__html:`
         /* ══ SHELL v2 — Fashion Navbar ══════════════════════════════ */
 
         /* Top navbar */
         .sh-navbar {
-          position: sticky; top: 0; z-index: 500;
+          position: fixed; top: 0; left: 0; right: 0; z-index: 500;
           background: #0a0a0a;
-          border-bottom: 1px solid #1f1f1f;
+          border-bottom: 1px solid #c9a84c;
           height: 60px;
           display: flex; align-items: center;
           padding: 0 28px;
           gap: 0;
+          transform: translateY(-57px); /* Leave 3px visible as trigger */
+          transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), background 0.3s;
         }
+        .sh-navbar:hover {
+          transform: translateY(0);
+          background: #000;
+        }
+        /* Ensure dropdowns stay below when visible */
+        .sh-navbar:hover .sh-dropdown { top: 60px; }
+
 
         /* Logo */
         .sh-mobile-logo-img { display: none; }
@@ -314,7 +362,8 @@ export default function Shell({ children, title }) {
         /* Page title bar */
         .sh-page-bar {
           background: #fff; border-bottom: 1px solid var(--border);
-          padding: 10px 28px;
+          padding: 12px 28px;
+          margin-top: 0; /* Content starts at the top now */
           display: flex; align-items: center; justify-content: space-between;
         }
         .sh-page-title {
@@ -450,7 +499,7 @@ export default function Shell({ children, title }) {
         }
 
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:.2}}
-      `}</style>
+      `}}/>
 
       {/* ── OVERLAY DRAWER ── */}
       <div className={`sh-overlay${drawerOpen ? ' open' : ''}`} onClick={() => setDrawerOpen(false)}/>
@@ -477,9 +526,12 @@ export default function Shell({ children, title }) {
         ))}
         <div className="sh-drawer-footer">
           {usuario && (
-            <div style={{ marginBottom:'10px' }}>
-              <div style={{ fontFamily:"'Poppins',sans-serif", fontSize:'12px', fontWeight:600, color:'#ddd' }}>{usuario.nombre}</div>
-              <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'8px', color:'#c9a84c', textTransform:'uppercase', letterSpacing:'.08em', marginTop:'2px' }}>{usuario.rol}</div>
+            <div style={{ marginBottom:'10px', display:'flex', alignItems:'center', gap:'10px' }}>
+              <img src={`https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/avatars/${usuario.avatar || '1'}.png`} alt="avatar" style={{width:'32px',height:'32px',borderRadius:'50%',objectFit:'cover',border:'1px solid #333'}}/>
+              <div>
+                <div style={{ fontFamily:"'Poppins',sans-serif", fontSize:'12px', fontWeight:600, color:'#ddd' }}>{usuario.nombre}</div>
+                <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'8px', color:'#c9a84c', textTransform:'uppercase', letterSpacing:'.08em', marginTop:'2px' }}>{usuario.rol}</div>
+              </div>
             </div>
           )}
           <button onClick={logout} style={{ width:'100%', padding:'9px', background:'none', border:'1px solid #333', cursor:'pointer', fontFamily:"'DM Mono',monospace", fontSize:'10px', color:'#666', letterSpacing:'.08em' }}>
@@ -558,6 +610,7 @@ export default function Shell({ children, title }) {
             <span className="sh-date">{fecha}</span>
             {usuario && (
               <div className="sh-user-chip">
+                <img src={`https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/avatars/${usuario.avatar || '1'}.png`} alt="avatar" style={{width:'22px',height:'22px',borderRadius:'50%',objectFit:'cover'}}/>
                 <div>
                   <div className="sh-user-name">{usuario.nombre}</div>
                   <div className="sh-user-rol">{usuario.rol}</div>

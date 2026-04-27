@@ -26,6 +26,7 @@ function ModalUsuario({ modo, usuario_edit, onClose, onSave, usuarioActual }) {
   const [pin,      setPin]     = useState('');
   const [rol,      setRol]     = useState(esEditar ? usuario_edit.rol : 'vendedor');
   const [activo,   setActivo]  = useState(esEditar ? usuario_edit.activo : true);
+  const [avatar,   setAvatar]  = useState(esEditar ? (usuario_edit.avatar || '1') : '1');
   const [autoUser, setAutoUser]= useState(!esEditar);
   const [saving,   setSaving]  = useState(false);
   const [err,      setErr]     = useState('');
@@ -48,13 +49,13 @@ function ModalUsuario({ modo, usuario_edit, onClose, onSave, usuarioActual }) {
           body: JSON.stringify({
             email: usuario_edit.email,
             nombre, nuevo_username: username !== usuario_edit.email ? username : undefined,
-            rol, pin: pin||undefined, activo,
+            rol, pin: pin||undefined, activo, avatar,
           }),
         }).then(r=>r.json());
       } else {
         res = await fetch('/api/usuarios', {
           method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ nombre, username, rol, pin, activo }),
+          body: JSON.stringify({ nombre, username, rol, pin, activo, avatar }),
         }).then(r=>r.json());
       }
       if (res.ok) onSave(esEditar ? '✓ Usuario actualizado' : '✓ Usuario creado');
@@ -110,6 +111,22 @@ function ModalUsuario({ modo, usuario_edit, onClose, onSave, usuarioActual }) {
               <div style={{width:'14px',height:'14px',background:'#fff',borderRadius:'50%',position:'absolute',top:'3px',left:activo?'17px':'3px',transition:'left .2s'}}/>
             </div>
             <span style={{fontFamily:'DM Mono,monospace',fontSize:'10px',color:activo?'var(--green)':'#888'}}>{activo?'✓ Activo':'✗ Inactivo'}</span>
+          </div>
+
+          {/* Avatar Selector */}
+          <div>
+            <label style={lbl}>Avatar del Operador</label>
+            <div style={{display:'flex',gap:'8px',overflowX:'auto',paddingBottom:'8px'}}>
+              {Array.from({length:18}).map((_,i)=>{
+                const num = (i+1).toString();
+                const sel = avatar === num;
+                return (
+                  <img key={num} src={`https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/avatars/${num}.png`}
+                    onClick={()=>setAvatar(num)} alt={`Avatar ${num}`}
+                    style={{width:'40px',height:'40px',borderRadius:'50%',objectFit:'cover',cursor:'pointer',border:`2px solid ${sel?'var(--ink)':'transparent'}`,opacity:sel?1:0.5,transition:'all .2s',flexShrink:0}}/>
+                );
+              })}
+            </div>
           </div>
 
           {/* Rol */}
@@ -210,7 +227,10 @@ export default function UsuariosPage() {
             <tbody>
               {usuarios.map(u=>(
                 <tr key={u.email} style={{borderBottom:'1px solid var(--border)'}}>
-                  <td style={{padding:'10px 13px',fontSize:'13px',fontWeight:600}}>{u.nombre||u.email}</td>
+                  <td style={{padding:'10px 13px',fontSize:'13px',fontWeight:600,display:'flex',alignItems:'center',gap:'10px'}}>
+                    <img src={`https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/avatars/${u.avatar||'1'}.png`} alt="avatar" style={{width:'24px',height:'24px',borderRadius:'50%',objectFit:'cover',flexShrink:0}}/>
+                    {u.nombre||u.email}
+                  </td>
                   <td style={{padding:'10px 13px',fontFamily:'DM Mono,monospace',fontSize:'11px',color:'var(--blue)',fontWeight:700}}>{u.email}</td>
                   <td style={{padding:'10px 13px'}}>
                     <span style={{background:'var(--bg3)',color:rolColor[u.rol]||'#333',fontFamily:'DM Mono,monospace',fontSize:'9px',padding:'2px 9px',fontWeight:700,border:`1px solid ${rolColor[u.rol]||'var(--border)'}44`}}>
