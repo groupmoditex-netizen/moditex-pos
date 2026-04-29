@@ -14,13 +14,16 @@ function fmtNum(n){return Number(n||0).toLocaleString('es-VE',{minimumFractionDi
 function parseProd(cmd){let p=cmd.productos;if(typeof p==='string')try{p=JSON.parse(p);}catch{p=[];}return Array.isArray(p)?p:[];}
 
 const fmtSmartDate = (iso) => {
-  if (!iso) return '';
-  const d = new Date(iso);
-  const now = new Date();
-  const isToday = d.toDateString() === now.toDateString();
-  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  if (isToday) return time;
-  return `${d.getDate()}/${d.getMonth() + 1} ${time}`;
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '—';
+    const now = new Date();
+    const isToday = d.toDateString() === now.toDateString();
+    const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (isToday) return time;
+    return `${d.getDate()}/${d.getMonth() + 1} ${time}`;
+  } catch (e) { return '—'; }
 };
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -208,7 +211,7 @@ const ComandaCard = memo(({
         
         <div className="col-client" style={{flex:'1 1 200px', display:'flex', alignItems:'center', gap:'12px'}}>
           <div style={{width:'32px', height:'32px', borderRadius:'50%', background:vencida?'var(--red-soft)':cfg.bg, color:vencida?'var(--red)':cfg.color, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'13px', fontWeight:700, border:`1px solid ${vencida?'var(--red)':cfg.border}`}}>
-            {cmd.cliente.slice(0,1).toUpperCase()}
+            {(cmd.cliente || 'C').slice(0,1).toUpperCase()}
           </div>
           <div>
             <div style={{fontFamily:'Playfair Display,serif', fontSize:'15px', fontWeight:700, color:'var(--ink)', lineHeight:1.2, display:'flex', alignItems:'center', gap:'6px'}}>
@@ -597,8 +600,16 @@ const ComandaCard = memo(({
                </div>
             </div>
           </div>
-        </div>
-      )}
+        <style dangerouslySetInnerHTML={{__html:`
+          @media (max-width: 800px) {
+            .comanda-expanded-grid-responsive {
+              grid-template-columns: 1fr !important;
+              gap: 15px !important;
+              padding: 10px !important;
+            }
+          }
+        `}}/>
+      </div>
     </div>
   );
 });

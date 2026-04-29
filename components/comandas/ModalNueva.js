@@ -700,7 +700,7 @@ export default function ModalNueva({ onClose, onSave, clientes=[], productos=[],
                   <label style={lbl}>Administrador</label>
                   <select value={authEmail} onChange={e=>setAuthEmail(e.target.value)} style={{...inp,height:'40px',borderRadius:'8px'}}>
                     <option value="">Seleccione Admin...</option>
-                    {usuariosDB.filter(u=>u.rol==='admin'&&u.activo).map(u=>(
+                    { (Array.isArray(usuariosDB) ? usuariosDB : []).filter(u => u && u.rol === 'admin' && u.activo).map(u => (
                       <option key={u.email} value={u.email}>{u.nombre || u.email}</option>
                     ))}
                   </select>
@@ -795,6 +795,18 @@ export default function ModalNueva({ onClose, onSave, clientes=[], productos=[],
             .footer-final-btns-responsive { width: 100% !important; }
             .footer-btn-empacar-responsive { flex: 1 !important; padding: 12px 5px !important; font-size: 11px !important; }
             .footer-btn-finalizar-responsive { flex: 1.5 !important; padding: 12px 5px !important; font-size: 11px !important; }
+          }
+        `}}/>
+        <style dangerouslySetInnerHTML={{__html:`
+          @media (max-width: 800px) {
+            .comanda-expanded-grid-responsive {
+              grid-template-columns: 1fr !important;
+              gap: 15px !important;
+              padding: 10px !important;
+            }
+            .chat-container-responsive {
+              height: 380px !important;
+            }
           }
         `}}/>
       </div>
