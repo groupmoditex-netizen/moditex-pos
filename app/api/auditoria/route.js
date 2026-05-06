@@ -1,16 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
-
+// Instanciación movida dentro de los handlers para evitar errores de build
+export const dynamic = 'force-dynamic';
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const desde = searchParams.get('desde');
   const hasta = searchParams.get('hasta');
 
-  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
     let query = supabase.from('auditoria_stock').select('*').order('fecha', { ascending: false });
     
     if (desde) query = query.gte('fecha', desde);
