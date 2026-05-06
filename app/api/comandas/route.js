@@ -2,7 +2,6 @@ export const dynamic = 'force-dynamic';
 import { supabase } from '@/lib/supabase-server';
 import { generarId } from '@/utils/generarId';
 import { getUsuarioCookie } from '@/utils/getUsuarioCookie';
-import { registrarMovimiento, despacharComanda, cancelarComanda, getStockMultiple } from '@/lib/stockRpc';
 import { NextResponse } from 'next/server';
 
 // ── GET ───────────────────────────────────────────────────────────────────────
@@ -211,279 +210,103 @@ export async function POST(request) {
 }
 
 // ── PUT — Actualizar comanda ──────────────────────────────────────────────────
+// ── PUT — Actualizar comanda (ATÓMICO RPC) ──────────────────────────────────
 export async function PUT(request) {
   try {
     const usuario = getUsuarioCookie(request);
     const body = await request.json();
-    const { id, status, monto_pagado, notas, fecha_entrega, productos, precio, agencia_envio, guia_envio } = body;
+    const { id } = body;
     if (!id) return NextResponse.json({ ok: false, error: 'ID requerido' }, { status: 400 });
 
-    // ── Si cambia a ENVIADO → despachar atomicamente ──────────────────────
-    if (status === 'enviado' || status === 'ENVIADO' || status === 'DESPACHADO') {
+    // 1. Obtener estado actual de la comanda para completar el payload si es necesario
+    const { data: cmdActual, error: errFetch } = await supabase
+      .from('comandas').select('*').eq('id', id).single();
+    if (errFetch || !cmdActual) 
+      return NextResponse.json({ ok: false, error: 'Comanda no encontrada' }, { status: 404 });
 
-      const { data: cmdActual } = await supabase
-        .from('comandas').select('status, cliente').eq('id', id).single();
+    // 2. Preparar Datos de Comanda (Merge)
+    const payloadComanda = {
+      cliente:       (body.cliente_nombre || body.cliente || cmdActual.cliente || '').trim(),
+      cliente_id:    body.cliente_id    !== undefined ? body.cliente_id    : cmdActual.cliente_id,
+      productos:     body.productos     !== undefined ? body.productos     : cmdActual.productos,
+      precio:        body.precio        !== undefined ? parseFloat(body.precio) : cmdActual.precio,
+      monto_pagado:  body.monto_pagado  !== undefined ? parseFloat(body.monto_pagado) : cmdActual.monto_pagado,
+      status:        body.status        !== undefined ? body.status        : cmdActual.status,
+      notas:         body.notas         !== undefined ? body.notas         : cmdActual.notas,
+      agencia_envio: body.agencia_envio !== undefined ? body.agencia_envio : cmdActual.agencia_envio,
+      guia_envio:    body.guia_envio    !== undefined ? body.guia_envio    : cmdActual.guia_envio,
+      fecha_entrega: body.fecha_entrega !== undefined ? body.fecha_entrega : cmdActual.fecha_entrega,
+    };
 
-      const yaEnviado = ['enviado','ENVIADO','DESPACHADO'].includes(cmdActual?.status);
-      if (cmdActual && !yaEnviado) {
-
-        // Verificar si hay items en comandas_items (requerido por RPC)
-        const { data: items } = await supabase
-          .from('comandas_items')
-          .select('id, sku, cantidad, despachado, desde_produccion')
-          .eq('comanda_id', id)
-          .gt('cantidad', 0);
-
-        if (items && items.length > 0) {
-          const sinStock = [];
-          for (const it of items) {
-            const falta = it.cantidad - (it.despachado || 0);
-            if (falta > 0) {
-              // 🏭 Lógica Atómica: Producción Directa
-              if (it.desde_produccion) {
-                // Inyectamos stock físico antes de sacarlo
-                await registrarMovimiento({
-                  sku: it.sku,
-                  tipo: 'ENTRADA',
-                  cantidad: falta,
-                  concepto: `Entrada producción rápida (Cmd ${id})`,
-                  referencia: id,
-                  usuario: usuario?.email || 'sistema'
-                });
-              }
-
-              // Deducción del resto
-              const resSalida = await registrarMovimiento({
-                sku: it.sku,
-                tipo: 'SALIDA',
-                cantidad: falta,
-                concepto: `Despacho final comanda ${id}`,
-                referencia: id,
-                usuario: usuario?.email || 'sistema'
-              });
-
-              if (!resSalida.ok) {
-                sinStock.push({ sku: it.sku, error: resSalida.error });
-                continue;
-              }
-
-              // Sincronizar item
-              await supabase.from('comandas_items').update({ despachado: it.cantidad }).eq('id', it.id);
-            }
-          }
-
-          if (sinStock.length > 0) {
-             return NextResponse.json({
-              ok: false,
-              errorTipo: 'SIN_STOCK',
-              error: `Stock insuficiente para completar envío en ${sinStock.length} items.`,
-            }, { status: 400 });
-          }
-
-          // La comanda se marca como enviada
-          await supabase.from('comandas')
-            .update({ 
-              status: 'enviado', 
-              fecha_envio: new Date().toISOString(),
-              updated_at: new Date().toISOString() 
-            })
-            .eq('id', id);
-
-        } else {
-          // ⚠️ Ruta de compatibilidad: comanda sin items en comandas_items
-          // Leer productos del JSONB y usar la RPC de movimiento individual
-          const { data: cmdFull } = await supabase
-            .from('comandas').select('productos, cliente').eq('id', id).single();
-
-          let prods = cmdFull?.productos || [];
-          while (typeof prods === 'string') {
-            try { prods = JSON.parse(prods); } catch { prods = []; break; }
-          }
-
-          if (Array.isArray(prods) && prods.length > 0) {
-            // Prevenir doble descuento
-            const { data: movsExist } = await supabase
-              .from('movimientos').select('id')
-              .eq('referencia', id).eq('tipo', 'SALIDA').limit(1);
-
-            if (!movsExist || movsExist.length === 0) {
-              const sinStock = [];
-
-              for (const p of prods) {
-                const sku = (p.sku || '').trim().toUpperCase();
-                const qty = parseInt(p.cant || p.cantidad || 1);
-                if (!sku || qty <= 0) continue;
-
-                const res = await registrarMovimiento({
-                  sku,
-                  tipo:        'SALIDA',
-                  cantidad:    qty,
-                  concepto:    `Comanda ${id}`,
-                  contacto:    cmdFull?.cliente || '',
-                  referencia:  id,
-                  tipo_venta:  p.tipoVenta || 'MAYOR',
-                  precio_venta: parseFloat(p.precio || 0),
-                  usuario:     usuario?.email || 'sistema',
-                });
-
-                if (!res.ok) {
-                  sinStock.push({ sku, error: res.error });
-                }
-              }
-
-              if (sinStock.length > 0) {
-                return NextResponse.json({
-                  ok: false, errorTipo: 'SIN_STOCK',
-                  error: `Stock insuficiente en ${sinStock.length} producto(s)`,
-                  sinStock,
-                }, { status: 400 });
-              }
-            }
-          }
-
-          await supabase.from('comandas')
-            .update({ 
-               status: 'enviado', 
-               fecha_envio: new Date().toISOString(),
-               updated_at: new Date().toISOString() 
-            })
-            .eq('id', id);
-        }
-      }
+    // Asegurar que productos sea array
+    let prodsArr = payloadComanda.productos || [];
+    while (typeof prodsArr === 'string') {
+      try { prodsArr = JSON.parse(prodsArr); } catch { prodsArr = []; break; }
     }
 
-    // ── Si se cancela → No se requiere liberar stock (modelo físico directo) ──
-    if (status === 'cancelado' || status === 'CANCELADO') {
-      await supabase.from('comandas')
-        .update({ status: 'cancelado', updated_at: new Date().toISOString() })
-        .eq('id', id);
-    }
-
-    // ── Sincronización Completa de Items y Stock (NUEVO) ──────────────────
-    let parsedProds = productos;
-    while (typeof parsedProds === 'string') {
-      try { parsedProds = JSON.parse(parsedProds); } catch { parsedProds = undefined; break; }
-    }
-
-    if (parsedProds !== undefined && Array.isArray(parsedProds)) {
+    // 3. Preparar Datos de Items
+    let payloadItems = [];
+    if (body.productos !== undefined) {
+      payloadItems = prodsArr.map(p => ({
+        sku: (p.sku || '').trim().toUpperCase(),
+        cantidad: parseInt(p.cant || p.cantidad || 0),
+        precio: parseFloat(p.precio || 0),
+        talla: p.talla || null, 
+        color: p.color || null, 
+        modelo: p.modelo || null,
+        tipo_precio: p.tipoVenta || p.tipo_precio || 'detal',
+        desde_produccion: p.desde_produccion || false
+      })).filter(it => it.sku && it.cantidad >= 0);
+    } else {
       const { data: dbItems } = await supabase.from('comandas_items').select('*').eq('comanda_id', id);
-      const dbItemsMap = (dbItems || []).reduce((acc, it) => { acc[it.sku.toUpperCase()] = it; return acc; }, {});
-      const processedSkus = new Set();
-
-      // 1. Procesar productos del JSONB (Nuevos o Existentes)
-      for (const p of parsedProds) {
-        const skuUpper = (p.sku || '').toUpperCase();
-        if (!skuUpper) continue;
-        const oldIt = dbItemsMap[skuUpper];
-        const newQty = parseInt(p.cant || p.cantidad || 0);
-        processedSkus.add(skuUpper);
-
-        if (oldIt) {
-          // EXISTENTE: Reconciliar cantidad y stock
-          const empacado = oldIt.cant_empacada !== undefined ? oldIt.cant_empacada : (oldIt.despachado || 0);
-          
-          if (newQty < oldIt.cantidad && empacado > newQty) {
-            // Devolver stock si lo que se pide ahora es menor a lo que ya se empacó
-            const aDevolver = empacado - newQty;
-            await registrarMovimiento({
-              sku: oldIt.sku,
-              tipo: 'ENTRADA',
-              cantidad: aDevolver,
-              concepto: `Reconciliación: Reducción en comanda ${id}`,
-              referencia: id,
-              usuario: usuario?.email || 'sistema'
-            });
-            await supabase.from('comandas_items').update({ 
-               cantidad: newQty, 
-               cant_empacada: newQty, 
-               despachado: Math.min(oldIt.despachado || 0, newQty) 
-            }).eq('id', oldIt.id);
-          } else {
-            // Actualización normal (incluye subidas de cantidad)
-            await supabase.from('comandas_items').update({ 
-              cantidad: newQty,
-              precio: parseFloat(p.precio || 0),
-              talla: p.talla || null, color: p.color || null, modelo: p.modelo || null
-            }).eq('id', oldIt.id);
-          }
-        } else {
-          // NUEVO: No estaba en la tabla, insertar
-          await supabase.from('comandas_items').insert({
-            comanda_id: id,
-            sku: skuUpper,
-            cantidad: newQty,
-            precio: parseFloat(p.precio || 0),
-            talla: p.talla || null, color: p.color || null, modelo: p.modelo || null,
-            tipo_precio: p.tipoVenta || p.tipo_precio || 'detal',
-            cant_empacada: 0,
-            despachado: 0
-          });
-        }
-      }
-
-      // 2. Procesar items de la BD que ya NO están en el JSONB (Borrados)
-      if (dbItems) {
-        for (const oldIt of dbItems) {
-          const skuUpper = oldIt.sku.toUpperCase();
-          if (!processedSkus.has(skuUpper) && oldIt.cantidad > 0) {
-            const empacado = oldIt.cant_empacada !== undefined ? oldIt.cant_empacada : (oldIt.despachado || 0);
-            if (empacado > 0) {
-              await registrarMovimiento({
-                sku: oldIt.sku,
-                tipo: 'ENTRADA',
-                cantidad: empacado,
-                concepto: `Reconciliación: Eliminación SKU ${skuUpper} en comanda ${id}`,
-                referencia: id,
-                usuario: usuario?.email || 'sistema'
-              });
-            }
-            await supabase.from('comandas_items').update({ cantidad: 0, cant_empacada: 0, despachado: 0 }).eq('id', oldIt.id);
-          }
-        }
-      }
+      payloadItems = (dbItems || []).map(it => ({
+        sku: it.sku, cantidad: it.cantidad, precio: it.precio, talla: it.talla,
+        color: it.color, modelo: it.modelo, tipo_precio: it.tipo_precio,
+        desde_produccion: it.desde_produccion
+      }));
     }
 
-    // ── Actualizar campos de la comanda ───────────────────────────────────
-    const campos = { updated_at: new Date().toISOString() };
-    if (status        !== undefined) {
-      campos.status = status;
-      if (status === 'empacado' || status === 'EMPACADO') {
-        campos.fecha_empaque = new Date().toISOString();
-      }
-      if (status === 'enviado' || status === 'ENVIADO') {
-        campos.fecha_envio = new Date().toISOString();
-      }
-    }
-    if (monto_pagado  !== undefined) campos.monto_pagado  = parseFloat(monto_pagado) || 0;
-    if (notas         !== undefined) campos.notas         = notas;
-    if (fecha_entrega !== undefined) campos.fecha_entrega = fecha_entrega || null;
-    if (productos     !== undefined) {
-      let pToSave = productos;
-      while (typeof pToSave === 'string') {
-         try { pToSave = JSON.parse(pToSave); } catch { break; }
-      }
-      campos.productos = pToSave;
-    }
-    if (precio        !== undefined) campos.precio        = parseFloat(precio) || 0;
-    if (agencia_envio !== undefined) campos.agencia_envio = agencia_envio;
-    if (guia_envio    !== undefined) campos.guia_envio    = guia_envio;
-
-    let { error } = await supabase.from('comandas').update(campos).eq('id', id);
-    if (error?.message?.includes('column') || error?.message?.includes('schema cache')) {
-      const base = { updated_at: new Date().toISOString() };
-      if (status       !== undefined) base.status       = status;
-      if (monto_pagado !== undefined) base.monto_pagado = parseFloat(monto_pagado) || 0;
-      const r2 = await supabase.from('comandas').update(base).eq('id', id);
-      if (r2.error) return NextResponse.json({ ok: false, error: r2.error.message }, { status: 500 });
-    } else if (error) {
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    // 4. Preparar Datos de Pagos
+    let payloadPagos = [];
+    if (body.pagos !== undefined) {
+      payloadPagos = (Array.isArray(body.pagos) ? body.pagos : []).map(p => prepararFilaPago(p, id));
+    } else {
+      const { data: dbPagos } = await supabase.from('pagos').select('*').eq('comanda_id', id);
+      payloadPagos = (dbPagos || []).map(p => ({
+        metodo: p.metodo, moneda: p.moneda, divisa: p.divisa, monto: p.monto,
+        monto_pagado: p.monto_pagado, monto_bs: p.monto_bs, monto_divisa: p.monto_divisa,
+        tasa_bs: p.tasa_bs, referencia: p.referencia, notas: p.notas
+      }));
     }
 
-    // Log
+    // ── MAGIA: Ejecutar el Súper Procedimiento RPC ────────────────────────────
+    const { data: resRpc, error: errRpc } = await supabase.rpc('editar_comanda_maestra', {
+      p_id: id,
+      p_payload: {
+        comanda: payloadComanda,
+        items: payloadItems,
+        pagos: payloadPagos
+      },
+      p_usuario: usuario?.email || 'sistema'
+    });
+
+    if (errRpc) {
+      return NextResponse.json({ ok: false, error: errRpc.message || 'Error en BD (RPC)' }, { status: 500 });
+    }
+
+    if (!resRpc || !resRpc.ok) {
+      return NextResponse.json({ 
+        ok: false, 
+        error: resRpc?.error || 'Error al actualizar comanda', 
+        detalles: resRpc?.detalles || []
+      }, { status: 400 });
+    }
+
+    // Log en background
     supabase.from('logs').insert({
       usuario:   usuario?.email || 'sistema',
-      accion:    'ACTUALIZAR_COMANDA',
-      detalle:   `ID:${id} status:${status || '—'} | por:${usuario?.nombre || '?'}`,
+      accion:    'ACTUALIZAR_COMANDA_RPC',
+      detalle:   `ID:${id} | Status:${payloadComanda.status} | por:${usuario?.nombre || '?'}`,
       resultado: 'OK',
     }).then(() => {});
 
@@ -494,6 +317,7 @@ export async function PUT(request) {
   }
 }
 
+
 // ── DELETE ────────────────────────────────────────────────────────────────────
 export async function DELETE(req) {
   try {
@@ -501,19 +325,36 @@ export async function DELETE(req) {
     const { id } = await req.json();
     if (!id) return NextResponse.json({ ok: false, error: 'ID requerido' }, { status: 400 });
 
-    // Borrar pagos e items relacionados
+    // 1. Obtener la comanda actual
+    const { data: cmdActual } = await supabase.from('comandas').select('status').eq('id', id).single();
 
-    // Borrar pagos e items relacionados
+    // 2. Si la comanda ya descontó stock (empacada/enviada/despachada/entregada),
+    // primero forzamos una edición atómica pasando status CANCELADO e items vacíos
+    // para que la base de datos devuelva todo el stock físico reservado.
+    if (cmdActual && ['empacado', 'enviado', 'despachado', 'entregado'].includes((cmdActual.status || '').toLowerCase())) {
+      await supabase.rpc('editar_comanda_maestra', {
+        p_id: id,
+        p_payload: {
+          comanda: { status: 'CANCELADO' },
+          items: [], // Enviar items vacíos obliga al RPC a devolver el stock de todo
+          pagos: []
+        },
+        p_usuario: usuario?.email || 'sistema'
+      });
+    }
+
+    // 3. Borrar pagos e items relacionados
     await supabase.from('pagos').delete().eq('comanda_id', id);
     await supabase.from('comandas_items').delete().eq('comanda_id', id);
 
+    // 4. Borrar comanda principal
     const { error } = await supabase.from('comandas').delete().eq('id', id);
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
     supabase.from('logs').insert({
       usuario:   usuario?.email || 'admin',
       accion:    'ELIMINAR_COMANDA',
-      detalle:   `ID:${id} | por:${usuario?.nombre || '?'}`,
+      detalle:   `ID:${id} | por:${usuario?.nombre || '?'} | Stock recuperado si aplicaba`,
       resultado: 'OK',
     }).then(() => {});
 

@@ -5,54 +5,54 @@ import { useEffect, useState, useRef } from 'react';
 import { useAppData } from '@/lib/AppContext';
 import { useAuth, NAV_POR_ROL } from '@/lib/AuthContext';
 
-/* ── Grupos del menú top ───────────────────────────────────────────── */
+/* ── Grupos del menú ───────────────────────────────────────────── */
 const MENU_GRUPOS = {
   admin: [
     {
       label: 'Principal',
       items: [
-        { href:'/dashboard',  label:'Dashboard',  desc:'Resumen general' },
-        { href:'/inventario', label:'Inventario',  desc:'Stock en tiempo real' },
-        { href:'/productos',  label:'Productos',   desc:'Catálogo de prendas' },
+        { href:'/dashboard',  label:'Dashboard',  icon:'◈', desc:'Resumen general' },
+        { href:'/inventario', label:'Inventario',  icon:'◧', desc:'Stock en tiempo real' },
+        { href:'/productos',  label:'Productos',   icon:'🏷️', desc:'Catálogo de prendas' },
       ],
     },
     {
       label: 'Movimientos',
       items: [
-        { href:'/entrada',   label:'Nueva Entrada',  desc:'Registro de compras/producción' },
-        { href:'/salida',    label:'Nueva Salida',   desc:'Descartes y ajustes' },
-        { href:'/historial', label:'Historial',      desc:'Todos los movimientos' },
+        { href:'/entrada',   label:'Nueva Entrada',  icon:'📥', desc:'Registro de compras/producción' },
+        { href:'/salida',    label:'Nueva Salida',   icon:'📤', desc:'Descartes y ajustes' },
+        { href:'/historial', label:'Historial',      icon:'📋', desc:'Todos los movimientos' },
       ],
     },
     {
       label: 'Ventas',
       items: [
-        { href:'/venta-directa', label:'Venta Directa',  desc:'Venta con cobro inmediato' },
-        { href:'/envio-rapido',  label:'Envío Rápido',   desc:'Despacho sin seguimiento' },
-        { href:'/comandas',      label:'Comandas',       desc:'Pedidos y producción' },
-        { href:'/exhibicion',    label:'Mostrador',      desc:'Vista de exhibición' },
+        { href:'/venta-directa', label:'Venta Directa',  icon:'⚡', desc:'Venta con cobro inmediato' },
+        { href:'/envio-rapido',  label:'Envío Rápido',   icon:'🚚', desc:'Despacho sin seguimiento' },
+        { href:'/comandas',      label:'Comandas',       icon:'◻', desc:'Pedidos y producción' },
+        { href:'/exhibicion',    label:'Mostrador',      icon:'🖥️', desc:'Vista de exhibición' },
       ],
     },
     {
       label: 'Reportes',
       items: [
-        { href:'/alertas',  label:'Alertas de Stock',  desc:'Prendas sin disponibilidad', badge:true },
-        { href:'/reportes', label:'Reportes',          desc:'Ventas y estadísticas' },
-        { href:'/clientes', label:'Clientes',          desc:'CRM y base de clientes' },
+        { href:'/alertas',  label:'Alertas de Stock',  icon:'⚠', desc:'Prendas sin disponibilidad', badge:true },
+        { href:'/reportes', label:'Reportes',          icon:'📊', desc:'Ventas y estadísticas' },
+        { href:'/clientes', label:'Clientes',          icon:'👥', desc:'CRM y base de clientes' },
       ],
     },
     {
       label: 'Herramientas',
       items: [
-        { href:'/etiquetas',  label:'Etiquetas',      desc:'Impresión de códigos' },
-        { href:'/ajustes',    label:'Ajustes',        desc:'Atajos y personalización' },
-        { href:'/plan-tela',  label:'Plan de Tela',   desc:'Consumo de materiales' },
-        { href:'/tasa',       label:'Tasa Cambiaria', desc:'Bs/€ — historial auditado' },
-        { href:'/usuarios',   label:'Usuarios',       desc:'Gestión de accesos' },
-        { href:'/logs',       label:'Logs del Sistema', desc:'Auditoría de acciones' },
-        { href:'/catalogo-admin', label:'Catálogo Web', desc:'Gestionar tienda online' },
-        { href:'/promos',         label:'Sets & Combos', desc:'Promos y combos del catálogo' },
-        { href:'/catalogo',       label:'Ver Catálogo', desc:'Vista del cliente (nueva pestaña)' },
+        { href:'/etiquetas',  label:'Etiquetas',      icon:'🖨️', desc:'Impresión de códigos' },
+        { href:'/ajustes',    label:'Ajustes',        icon:'⚙️', desc:'Atajos y personalización' },
+        { href:'/plan-tela',  label:'Plan de Tela',   icon:'🧵', desc:'Consumo de materiales' },
+        { href:'/tasa',       label:'Tasa Cambiaria', icon:'💱', desc:'Bs/€ — historial auditado' },
+        { href:'/usuarios',   label:'Usuarios',       icon:'👤', desc:'Gestión de accesos' },
+        { href:'/logs',       label:'Logs del Sistema', icon:'📝', desc:'Auditoría de acciones' },
+        { href:'/catalogo-admin', label:'Catálogo Web', icon:'🌐', desc:'Gestionar tienda online' },
+        { href:'/promos',         label:'Sets & Combos', icon:'🎁', desc:'Promos y combos del catálogo' },
+        { href:'/catalogo',       label:'Ver Catálogo', icon:'👁️', desc:'Vista del cliente' },
       ],
     },
   ],
@@ -60,26 +60,26 @@ const MENU_GRUPOS = {
     {
       label: 'Principal',
       items: [
-        { href:'/dashboard',  label:'Dashboard',  desc:'Resumen general' },
-        { href:'/inventario', label:'Inventario',  desc:'Stock en tiempo real' },
-        { href:'/historial',  label:'Historial',   desc:'Movimientos' },
+        { href:'/dashboard',  label:'Dashboard',  icon:'◈', desc:'Resumen general' },
+        { href:'/inventario', label:'Inventario',  icon:'◧', desc:'Stock en tiempo real' },
+        { href:'/historial',  label:'Historial',   icon:'📋', desc:'Movimientos' },
       ],
     },
     {
       label: 'Ventas',
       items: [
-        { href:'/venta-directa', label:'Venta Directa',  desc:'Venta con cobro inmediato' },
-        { href:'/envio-rapido',  label:'Envío Rápido',   desc:'Despacho sin seguimiento' },
-        { href:'/comandas',      label:'Comandas',       desc:'Pedidos y producción' },
-        { href:'/exhibicion',    label:'Mostrador',      desc:'Vista de exhibición' },
+        { href:'/venta-directa', label:'Venta Directa',  icon:'⚡', desc:'Venta con cobro inmediato' },
+        { href:'/envio-rapido',  label:'Envío Rápido',   icon:'🚚', desc:'Despacho sin seguimiento' },
+        { href:'/comandas',      label:'Comandas',       icon:'◻', desc:'Pedidos y producción' },
+        { href:'/exhibicion',    label:'Mostrador',      icon:'🖥️', desc:'Vista de exhibición' },
       ],
     },
     {
       label: 'Reportes',
       items: [
-        { href:'/alertas',  label:'Alertas',   desc:'Prendas sin stock', badge:true },
-        { href:'/reportes', label:'Reportes',  desc:'Estadísticas' },
-        { href:'/clientes', label:'Clientes',  desc:'CRM' },
+        { href:'/alertas',  label:'Alertas',   icon:'⚠', desc:'Prendas sin stock', badge:true },
+        { href:'/reportes', label:'Reportes',  icon:'📊', desc:'Estadísticas' },
+        { href:'/clientes', label:'Clientes',  icon:'👥', desc:'CRM' },
       ],
     },
   ],
@@ -87,10 +87,10 @@ const MENU_GRUPOS = {
     {
       label: 'Principal',
       items: [
-        { href:'/dashboard',  label:'Dashboard',  desc:'Resumen' },
-        { href:'/inventario', label:'Inventario',  desc:'Stock' },
-        { href:'/historial',  label:'Historial',   desc:'Movimientos' },
-        { href:'/alertas',    label:'Alertas',     desc:'Stock crítico', badge:true },
+        { href:'/dashboard',  label:'Dashboard',  icon:'◈', desc:'Resumen' },
+        { href:'/inventario', label:'Inventario',  icon:'◧', desc:'Stock' },
+        { href:'/historial',  label:'Historial',   icon:'📋', desc:'Movimientos' },
+        { href:'/alertas',    label:'Alertas',     icon:'⚠', desc:'Stock crítico', badge:true },
       ],
     },
   ],
@@ -127,44 +127,28 @@ export default function Shell({ children, title }) {
   const { usuario, logout } = useAuth() || {};
   const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [activeGroup, setActiveGroup] = useState(null);
+  const [sidebarHover, setSidebarHover] = useState(false);
   const [fecha, setFecha] = useState('');
-  const dropdownRef = useRef(null);
-  const closeTimer = useRef(null);
 
   useEffect(() => {
     setFecha(new Date().toLocaleDateString('es-ES', { weekday:'short', day:'numeric', month:'short', year:'numeric' }));
   }, []);
 
-  useEffect(() => { setDrawerOpen(false); setActiveGroup(null); }, [path]);
+  useEffect(() => { setDrawerOpen(false); }, [path]);
 
   useEffect(() => {
     document.body.style.overflow = drawerOpen ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };
   }, [drawerOpen]);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    function handleClick(e) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        setActiveGroup(null);
-      }
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
   
   // ⌨️ ATAJOS DE TECLADO GLOBALES
   useEffect(() => {
     function handleKeyDown(e) {
       if (!usuario) return;
-      
-      // Ignorar si se está escribiendo en un input o similar
       const active = document.activeElement;
       const isInput = active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable;
       if (isInput) return;
 
-      // Obtener preferencias del usuario (o usar defaults por si está vacío)
       const hasPrefs = usuario.preferencias && Object.keys(usuario.preferencias).length > 0;
       const prefs = hasPrefs ? usuario.preferencias : {
         c: '/comandas?nueva=t',
@@ -194,219 +178,202 @@ export default function Shell({ children, title }) {
   const grupos = MENU_GRUPOS[usuario?.rol] || MENU_GRUPOS.viewer;
   const bottomNav = BOTTOM_NAV[usuario?.rol] || BOTTOM_NAV.viewer;
 
-  // Flat nav for mobile drawer
-  const allItems = grupos.flatMap(g => g.items);
-
-  function handleGroupEnter(label) {
-    if (closeTimer.current) clearTimeout(closeTimer.current);
-    setActiveGroup(label);
-  }
-  function handleGroupLeave() {
-    closeTimer.current = setTimeout(() => setActiveGroup(null), 150);
-  }
-  function handleDropdownEnter() {
-    if (closeTimer.current) clearTimeout(closeTimer.current);
-  }
-
-  const activeLabel = grupos.find(g => g.items.some(i => i.href === path))?.label;
+  const activeLabel = grupos.flatMap(g => g.items).find(i => i.href === path)?.label || '';
 
   return (
     <div className="shell-root">
       <style dangerouslySetInnerHTML={{__html:`
-        /* ══ SHELL v2 — Fashion Navbar ══════════════════════════════ */
+        /* ══ SHELL v3 — Collapsible Sidebar ══════════════════════════════ */
+        
+        .shell-root {
+          display: flex;
+          min-height: 100vh;
+          background: #fdfdfd;
+        }
 
-        /* Top navbar */
-        .sh-navbar {
-          position: fixed; top: 0; left: 0; right: 0; z-index: 500;
+        /* SIDEBAR (Desktop) */
+        .sh-sidebar {
+          position: fixed;
+          top: 0; left: 0; bottom: 0;
+          width: 68px; /* Collapsed width */
           background: #0a0a0a;
-          border-bottom: 1px solid #c9a84c;
-          height: 60px;
-          display: flex; align-items: center;
-          padding: 0 28px;
-          gap: 0;
-          transform: translateY(-57px); /* Leave 3px visible as trigger */
-          transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), background 0.3s;
+          border-right: 1px solid #1a1a1a;
+          z-index: 500;
+          display: flex;
+          flex-direction: column;
+          transition: width 0.3s cubic-bezier(0.2, 0, 0, 1);
+          overflow: hidden;
         }
-        .sh-navbar:hover {
-          transform: translateY(0);
-          background: #000;
+        .sh-sidebar:hover {
+          width: 260px; /* Expanded width */
+          box-shadow: 4px 0 24px rgba(0,0,0,0.5);
         }
-        /* Ensure dropdowns stay below when visible */
-        .sh-navbar:hover .sh-dropdown { top: 60px; }
 
-
-        /* Logo */
-        .sh-mobile-logo-img { display: none; }
-        .sh-logo {
-          display: flex; align-items: center; gap: 0;
-          text-decoration: none; flex-shrink: 0;
-          margin-right: 36px;
+        /* Sidebar Logo */
+        .sh-sb-logo-area {
+          height: 64px;
+          display: flex;
+          align-items: center;
+          padding: 0 14px;
+          border-bottom: 1px solid #1a1a1a;
+          flex-shrink: 0;
+          min-width: 260px; /* Keep layout steady during transition */
         }
-        .sh-logo-text {
+        .sh-sb-logo-icon {
+          width: 40px; height: 40px; object-fit: contain; flex-shrink: 0;
+        }
+        .sh-sb-logo-text {
+          margin-left: 12px;
           display: flex; flex-direction: column; line-height: 1.1;
+          opacity: 0; transition: opacity 0.2s; white-space: nowrap;
         }
-        .sh-logo-moditex {
-          font-family: 'Playfair Display', serif;
-          font-size: 18px; font-weight: 900;
-          color: #fff; letter-spacing: .06em;
-        }
-        .sh-logo-group {
-          font-family: 'DM Mono', monospace;
-          font-size: 7px; letter-spacing: .38em;
-          color: #c9a84c; text-transform: uppercase;
-          margin-top: 1px;
-        }
+        .sh-sidebar:hover .sh-sb-logo-text { opacity: 1; transition-delay: 0.1s; }
+        .sh-sb-moditex { font-family: 'Playfair Display', serif; font-size: 16px; font-weight: 900; color: #fff; letter-spacing: .05em; }
+        .sh-sb-group { font-family: 'DM Mono', monospace; font-size: 7px; color: #c9a84c; letter-spacing: .35em; text-transform: uppercase; margin-top: 2px; }
 
-        /* Nav groups */
-        .sh-nav-groups {
-          display: flex; align-items: stretch; height: 60px; flex: 1;
+        /* Sidebar Content Scroll */
+        .sh-sb-content {
+          flex: 1;
+          overflow-y: auto;
+          overflow-x: hidden;
+          padding: 16px 0;
+          min-width: 260px;
         }
-        .sh-nav-group {
+        /* Scrollbar styles for sidebar */
+        .sh-sb-content::-webkit-scrollbar { width: 8px; }
+        .sh-sb-content::-webkit-scrollbar-track { background: transparent; }
+        .sh-sb-content::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 8px; border: 2px solid #0a0a0a; }
+        .sh-sb-content::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
+
+        /* Sidebar Sections */
+        .sh-sb-section { margin-bottom: 16px; }
+        .sh-sb-section-title {
+          font-family: 'DM Mono', monospace; font-size: 8px; font-weight: 600;
+          color: #555; letter-spacing: .15em; text-transform: uppercase;
+          padding: 0 24px; margin-bottom: 8px;
+          opacity: 0; transition: opacity 0.2s; white-space: nowrap;
+        }
+        .sh-sidebar:hover .sh-sb-section-title { opacity: 1; }
+        
+        /* Sidebar Divider for collapsed state */
+        .sh-sb-divider {
+          height: 1px; background: #1a1a1a; margin: 8px 20px 16px;
+          opacity: 1; transition: opacity 0.2s;
+        }
+        .sh-sidebar:hover .sh-sb-divider { opacity: 0; display: none; }
+
+        /* Sidebar Links */
+        .sh-sb-link {
+          display: flex; align-items: center;
+          height: 44px; padding: 0 22px;
+          text-decoration: none; color: #888;
+          transition: all 0.2s;
           position: relative;
         }
-        .sh-nav-group-btn {
-          height: 60px; padding: 0 18px;
-          background: none; border: none; cursor: pointer;
-          font-family: 'Poppins', sans-serif; font-size: 11px;
-          font-weight: 500; letter-spacing: .08em; text-transform: uppercase;
-          color: #aaa; transition: color .15s;
-          display: flex; align-items: center; gap: 5px;
-          white-space: nowrap;
-          border-bottom: 2px solid transparent;
-          position: relative;
+        .sh-sb-link:hover { color: #fff; background: rgba(255,255,255,0.03); }
+        .sh-sb-link.active { color: #c9a84c; background: rgba(201,168,76,0.05); }
+        .sh-sb-link.active::before {
+          content: ''; position: absolute; left: 0; top: 8px; bottom: 8px;
+          width: 3px; background: #c9a84c; border-radius: 0 4px 4px 0;
         }
-        .sh-nav-group-btn:hover,
-        .sh-nav-group-btn.active { color: #fff; }
-        .sh-nav-group-btn.active { border-bottom-color: #c9a84c; }
-        .sh-nav-group-btn .arrow {
-          font-size: 8px; opacity: .5; transition: transform .15s;
+        
+        .sh-sb-icon {
+          font-size: 18px; width: 24px; text-align: center; flex-shrink: 0;
+          filter: grayscale(1) opacity(0.8); transition: filter 0.2s;
         }
-        .sh-nav-group-btn.open .arrow { transform: rotate(180deg); opacity: 1; }
+        .sh-sb-link:hover .sh-sb-icon { filter: grayscale(0) opacity(1); }
+        .sh-sb-link.active .sh-sb-icon { filter: grayscale(0) opacity(1); }
 
-        /* Dropdown */
-        .sh-dropdown {
-          position: absolute; top: 60px; left: 0;
-          min-width: 240px;
-          background: #0a0a0a;
-          border: 1px solid #2a2a2a;
-          border-top: 2px solid #c9a84c;
-          box-shadow: 0 16px 40px rgba(0,0,0,.5);
-          z-index: 600;
-          animation: sh-fadein .15s ease;
+        .sh-sb-label-area {
+          margin-left: 16px; display: flex; align-items: center; justify-content: space-between; flex: 1;
+          opacity: 0; transition: opacity 0.2s; white-space: nowrap; overflow: hidden;
         }
-        @keyframes sh-fadein { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:none; } }
-        .sh-dropdown-item {
-          display: flex; flex-direction: column;
-          padding: 12px 18px;
-          text-decoration: none;
-          border-bottom: 1px solid #161616;
-          transition: background .12s;
-          cursor: pointer;
+        .sh-sidebar:hover .sh-sb-label-area { opacity: 1; transition-delay: 0.05s; }
+        .sh-sb-label { font-family: 'Poppins', sans-serif; font-size: 13px; font-weight: 500; }
+        .sh-sb-badge { background: #c9a84c; color: #000; font-family: 'DM Mono', monospace; font-size: 9px; padding: 2px 6px; font-weight: 800; border-radius: 10px; }
+        
+        /* Collapsed Badge Indicator */
+        .sh-sb-dot {
+          position: absolute; left: 38px; top: 12px;
+          width: 6px; height: 6px; background: #c9a84c; border-radius: 50%;
+          opacity: 1; transition: opacity 0.2s;
         }
-        .sh-dropdown-item:hover { background: #161616; }
-        .sh-dropdown-item.active { background: #1a1a0e; border-left: 2px solid #c9a84c; }
-        .sh-dropdown-label {
-          font-family: 'Poppins', sans-serif; font-size: 12px;
-          font-weight: 600; color: #fff; letter-spacing: .02em;
-          display: flex; align-items: center; gap: 8px;
+        .sh-sidebar:hover .sh-sb-dot { opacity: 0; }
+
+        /* Sidebar Footer (User info) */
+        .sh-sb-footer {
+          border-top: 1px solid #1a1a1a;
+          padding: 16px;
+          min-width: 260px;
+          display: flex; align-items: center; justify-content: space-between;
         }
-        .sh-dropdown-desc {
-          font-family: 'DM Mono', monospace; font-size: 9px;
-          color: #555; margin-top: 2px; letter-spacing: .04em;
+        .sh-sb-user { display: flex; align-items: center; gap: 12px; opacity: 0; transition: opacity 0.2s; white-space: nowrap; overflow: hidden; }
+        .sh-sidebar:hover .sh-sb-user { opacity: 1; transition-delay: 0.1s; }
+        .sh-sb-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid #333; flex-shrink: 0; }
+        .sh-sb-user-info { display: flex; flex-direction: column; }
+        .sh-sb-user-name { font-family: 'Poppins', sans-serif; font-size: 12px; font-weight: 600; color: #ddd; }
+        .sh-sb-user-rol { font-family: 'DM Mono', monospace; font-size: 8px; color: #c9a84c; text-transform: uppercase; letter-spacing: .08em; }
+        .sh-sb-logout {
+          background: none; border: none; color: #666; cursor: pointer; padding: 8px; font-size: 14px;
+          opacity: 0; transition: opacity 0.2s, color 0.2s;
         }
-        .sh-dd-badge {
-          background: #c9a84c; color: #000;
-          font-family: 'DM Mono', monospace; font-size: 8px;
-          padding: 1px 6px; font-weight: 700;
+        .sh-sb-logout:hover { color: #fff; }
+        .sh-sidebar:hover .sh-sb-logout { opacity: 1; transition-delay: 0.1s; }
+
+        /* MAIN WRAPPER */
+        .sh-main-wrapper {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          margin-left: 68px; /* Offset for collapsed sidebar */
+          min-width: 0; /* Prevent horizontal overflow */
+          transition: margin-left 0.3s cubic-bezier(0.2, 0, 0, 1);
+        }
+
+        /* Top navbar (Slimmer, contextual) */
+        .sh-navbar {
+          position: sticky; top: 0; z-index: 400;
+          background: rgba(253, 253, 253, 0.9);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          border-bottom: 1px solid rgba(0,0,0,0.06);
+          height: 64px;
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 0 32px;
+        }
+
+        /* Left side of navbar (Title) */
+        .sh-nav-left { display: flex; align-items: center; gap: 16px; }
+        .sh-hamburger { display: none; background: none; border: 1px solid #ddd; width: 36px; height: 36px; border-radius: 8px; font-size: 18px; cursor: pointer; align-items: center; justify-content: center; }
+        .sh-page-title {
+          font-family: 'Poppins', sans-serif;
+          font-size: 18px; font-weight: 900; color: #111;
+          display: flex; align-items: center; gap: 12px;
+        }
+        .sh-page-breadcrumb {
+          font-family: 'DM Mono', monospace; font-size: 10px;
+          color: #888; letter-spacing: .15em; text-transform: uppercase;
+          font-weight: 600; padding-left: 12px; border-left: 1px solid #eee;
         }
 
         /* Right side of navbar */
-        .sh-navbar-right {
-          display: flex; align-items: center; gap: 12px;
-          margin-left: auto; flex-shrink: 0;
-        }
-        .sh-date {
-          font-family: 'DM Mono', monospace; font-size: 9px;
-          color: #555; letter-spacing: .06em; white-space: nowrap;
-        }
-        .sh-user-chip {
-          display: flex; align-items: center; gap: 10px;
-          padding: 6px 12px;
-          border: 1px solid #2a2a2a;
-          background: #111;
-        }
-        .sh-user-name {
-          font-family: 'Poppins', sans-serif; font-size: 11px;
-          font-weight: 600; color: #ddd;
-        }
-        .sh-user-rol {
-          font-family: 'DM Mono', monospace; font-size: 8px;
-          color: #c9a84c; letter-spacing: .08em; text-transform: uppercase;
-        }
-        .sh-logout {
-          padding: 6px 12px;
-          background: none; border: 1px solid #333; cursor: pointer;
-          font-family: 'DM Mono', monospace; font-size: 9px;
-          color: #666; transition: all .15s; white-space: nowrap;
-        }
-        .sh-logout:hover { border-color: #c9a84c; color: #c9a84c; }
+        .sh-nav-right { display: flex; align-items: center; gap: 16px; }
+        .sh-date { font-family: 'DM Mono', monospace; font-size: 10px; color: #777; letter-spacing: .05em; font-weight: 600; }
         .sh-reload {
-          padding: 6px 10px; background: none;
-          border: 1px solid #2a2a2a; cursor: pointer;
-          font-family: 'DM Mono', monospace; font-size: 11px;
-          color: #666; transition: all .15s;
-          display: flex; align-items: center; gap: 3px;
+          padding: 8px 12px; background: #fff;
+          border: 1px solid #ddd; border-radius: 8px; cursor: pointer;
+          font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 600;
+          color: #444; transition: all .15s;
+          display: flex; align-items: center; gap: 6px;
         }
-        .sh-reload:hover { border-color: #555; color: #fff; }
-
-        /* Page title bar */
-        .sh-page-bar {
-          background: #fff; border-bottom: 1px solid var(--border);
-          padding: 12px 28px;
-          margin-top: 0; /* Content starts at the top now */
-          display: flex; align-items: center; justify-content: space-between;
-        }
-        .sh-page-title {
-          font-family: 'Playfair Display', serif;
-          font-size: 16px; font-weight: 700; color: #111;
-        }
-        .sh-page-breadcrumb {
-          font-family: 'DM Mono', monospace; font-size: 9px;
-          color: #aaa; letter-spacing: .1em; text-transform: uppercase;
-        }
+        .sh-reload:hover { border-color: #aaa; color: #111; }
 
         /* Content */
-        .sh-content { padding: 24px 28px; flex: 1; }
-
-        /* Main layout */
-        .sh-main { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+        .sh-content { padding: 24px 32px; flex: 1; }
 
         /* ══ MOBILE DRAWER ══════════════════════════════════════════ */
-        .sh-hamburger {
-          display: none;
-          width: 38px; height: 38px;
-          background: none; border: 1px solid #333;
-          cursor: pointer; font-size: 16px; color: #fff;
-          align-items: center; justify-content: center;
-          flex-shrink: 0;
-        }
-        .sh-mobile-logo {
-          display: none;
-          font-family: 'Playfair Display', serif;
-          font-size: 16px; font-weight: 900;
-          color: #fff; letter-spacing: .06em;
-        }
-        .sh-mobile-logo span {
-          font-family: 'DM Mono', monospace;
-          font-size: 8px; letter-spacing: .3em;
-          color: #c9a84c;
-        }
-
         /* Drawer overlay */
-        .sh-overlay {
-          display: none; position: fixed; inset: 0;
-          background: rgba(0,0,0,.65); z-index: 400;
-        }
+        .sh-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 600; }
         .sh-overlay.open { display: block; }
 
         /* Drawer panel */
@@ -415,7 +382,7 @@ export default function Shell({ children, title }) {
           width: min(80vw, 300px);
           background: #0a0a0a;
           border-right: 1px solid #1f1f1f;
-          z-index: 450;
+          z-index: 650;
           display: flex; flex-direction: column;
           transform: translateX(-110%);
           transition: transform .25s cubic-bezier(.4,0,.2,1);
@@ -423,223 +390,158 @@ export default function Shell({ children, title }) {
         }
         .sh-drawer.open { transform: translateX(0); box-shadow: 4px 0 32px rgba(0,0,0,.6); }
 
-        .sh-drawer-header {
-          padding: 20px 18px 16px;
-          border-bottom: 1px solid #1f1f1f;
-          display: flex; align-items: center; justify-content: space-between;
-        }
-        .sh-drawer-close {
-          width: 30px; height: 30px; background: none;
-          border: 1px solid #333; cursor: pointer;
-          color: #666; font-size: 12px;
-          display: flex; align-items: center; justify-content: center;
-        }
-        .sh-drawer-section {
-          font-family: 'DM Mono', monospace; font-size: 7.5px;
-          color: #444; letter-spacing: .24em; text-transform: uppercase;
-          padding: 14px 18px 5px;
-        }
+        .sh-drawer-header { padding: 20px 18px 16px; border-bottom: 1px solid #1f1f1f; display: flex; align-items: center; justify-content: space-between; }
+        .sh-drawer-close { width: 30px; height: 30px; background: none; border: 1px solid #333; cursor: pointer; color: #666; font-size: 12px; display: flex; align-items: center; justify-content: center; border-radius: 6px; }
+        .sh-drawer-section { font-family: 'DM Mono', monospace; font-size: 8px; color: #555; letter-spacing: .2em; text-transform: uppercase; padding: 16px 18px 8px; }
         .sh-drawer-link {
-          display: flex; align-items: center; gap: 10px;
-          padding: 10px 18px;
-          text-decoration: none;
-          font-family: 'Poppins', sans-serif; font-size: 12px;
-          font-weight: 500; color: #777;
-          border-left: 2px solid transparent;
-          transition: all .12s;
+          display: flex; align-items: center; gap: 12px; padding: 12px 18px; text-decoration: none;
+          font-family: 'Poppins', sans-serif; font-size: 13px; font-weight: 500; color: #888;
+          border-left: 2px solid transparent; transition: all .12s;
         }
-        .sh-drawer-link:hover { color: #fff; background: #111; }
-        .sh-drawer-link.active { color: #c9a84c; border-left-color: #c9a84c; background: #0e0e08; }
-        .sh-drawer-footer {
-          margin-top: auto; padding: 16px 18px;
-          border-top: 1px solid #1f1f1f;
-        }
+        .sh-drawer-link:hover { color: #fff; background: rgba(255,255,255,0.03); }
+        .sh-drawer-link.active { color: #c9a84c; border-left-color: #c9a84c; background: rgba(201,168,76,0.05); }
+        .sh-drawer-footer { margin-top: auto; padding: 20px 18px; border-top: 1px solid #1f1f1f; }
 
         /* Bottom nav */
         .sh-bottom-nav { display: none; }
         .sh-bnav-item {
-          flex: 1; display: flex; flex-direction: column;
-          align-items: center; justify-content: center;
-          gap: 2px; padding: 6px 0 4px;
-          background: none; border: none; cursor: pointer;
-          text-decoration: none; color: inherit;
-          position: relative;
+          flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+          padding: 8px 0 6px; background: none; border: none; cursor: pointer; text-decoration: none; color: inherit; position: relative;
         }
-        .sh-bnav-icon { font-size: 18px; line-height: 1; opacity: .5; }
-        .sh-bnav-label { font-family: 'DM Mono', monospace; font-size: 8px; color: #888; letter-spacing:.04em; }
-        .sh-bnav-item.active .sh-bnav-icon { opacity: 1; }
+        .sh-bnav-icon { font-size: 20px; line-height: 1; opacity: .65; transition: opacity 0.2s; }
+        .sh-bnav-label { font-family: 'DM Mono', monospace; font-size: 9px; color: #888; letter-spacing:.04em; transition: color 0.2s; }
+        .sh-bnav-item.active .sh-bnav-icon { opacity: 1; color: #c9a84c; }
         .sh-bnav-item.active .sh-bnav-label { color: #c9a84c; font-weight: 700; }
-        .sh-bnav-item.active::before {
-          content: ''; position: absolute; top: 0; left: 20%; right: 20%;
-          height: 2px; background: #c9a84c;
-        }
+        .sh-bnav-item.active::before { content: ''; position: absolute; top: 0; left: 20%; right: 20%; height: 3px; background: #c9a84c; border-radius: 0 0 4px 4px; }
 
         /* ══ RESPONSIVE ═════════════════════════════════════════════ */
         @media (max-width: 900px) {
-          .sh-navbar { padding: 0 14px; }
-          .sh-nav-groups { display: none; }
+          .sh-sidebar { display: none; }
+          .sh-main-wrapper { margin-left: 0; }
+          .sh-navbar { padding: 0 16px; }
           .sh-hamburger { display: flex; }
-          .sh-mobile-logo { display: none; }
-          .sh-mobile-logo-img { display: block; margin-left: 10px; }
+          .sh-page-breadcrumb { display: none; }
           .sh-date { display: none; }
-          .sh-user-chip .sh-user-rol { display: none; }
-          .sh-user-chip { padding: 5px 8px; }
           .sh-reload .sh-reload-label { display: none; }
-          .sh-page-bar { padding: 8px 14px; }
-          .sh-content { padding: 12px 14px 80px; }
-          .sh-bottom-nav {
-            display: flex; position: fixed; bottom: 0; left: 0; right: 0;
-            height: 60px; background: #0a0a0a;
-            border-top: 1px solid #1f1f1f; z-index: 200;
-          }
+          .sh-content { padding: 16px 16px 24px; }
+          .sh-bottom-nav { display: none !important; }
         }
-        @media (max-width: 480px) {
-          .sh-user-chip { display: none; }
-          .sh-logout { display: none; }
-        }
-
-        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.2}}
       `}}/>
 
-      {/* ── OVERLAY DRAWER ── */}
-      <div className={`sh-overlay${drawerOpen ? ' open' : ''}`} onClick={() => setDrawerOpen(false)}/>
-
-      {/* ── DRAWER MOBILE ── */}
-      <div className={`sh-drawer${drawerOpen ? ' open' : ''}`} ref={dropdownRef}>
-        <div className="sh-drawer-header">
-          <img src="https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/ISOTIPO%20PNG.png" alt="Moditex Group" style={{ height:'40px', width:'40px', objectFit:'contain' }} />
-          <button className="sh-drawer-close" onClick={() => setDrawerOpen(false)}>✕</button>
-        </div>
-        {grupos.map(g => (
-          <div key={g.label}>
-            <div className="sh-drawer-section">{g.label}</div>
-            {g.items.map(item => (
-              <Link key={item.href} href={item.href}
-                className={`sh-drawer-link${path === item.href ? ' active' : ''}`}>
-                {item.label}
-                {item.badge && alertCount > 0 && (
-                  <span style={{ marginLeft:'auto', background:'#c9a84c', color:'#000', fontFamily:"'DM Mono',monospace", fontSize:'8px', padding:'1px 6px', fontWeight:700 }}>{alertCount}</span>
-                )}
-              </Link>
-            ))}
+      {/* ── SIDEBAR DESKTOP ── */}
+      <nav className="sh-sidebar" onMouseEnter={() => setSidebarHover(true)} onMouseLeave={() => setSidebarHover(false)}>
+        <div className="sh-sb-logo-area">
+          <img src="https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/ISOTIPO%20PNG.png" alt="Moditex" className="sh-sb-logo-icon"/>
+          <div className="sh-sb-logo-text">
+            <div className="sh-sb-moditex">MODITEX</div>
+            <div className="sh-sb-group">GROUP</div>
           </div>
-        ))}
-        <div className="sh-drawer-footer">
-          {usuario && (
-            <div style={{ marginBottom:'10px', display:'flex', alignItems:'center', gap:'10px' }}>
-              <img src={`https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/avatars/${usuario.avatar || '1'}.png`} alt="avatar" style={{width:'32px',height:'32px',borderRadius:'50%',objectFit:'cover',border:'1px solid #333'}}/>
-              <div>
-                <div style={{ fontFamily:"'Poppins',sans-serif", fontSize:'12px', fontWeight:600, color:'#ddd' }}>{usuario.nombre}</div>
-                <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'8px', color:'#c9a84c', textTransform:'uppercase', letterSpacing:'.08em', marginTop:'2px' }}>{usuario.rol}</div>
-              </div>
-            </div>
-          )}
-          <button onClick={logout} style={{ width:'100%', padding:'9px', background:'none', border:'1px solid #333', cursor:'pointer', fontFamily:"'DM Mono',monospace", fontSize:'10px', color:'#666', letterSpacing:'.08em' }}>
-            Cerrar sesión
-          </button>
-          <a href="https://wa.me/584120363131" target="_blank" rel="noreferrer"
-            style={{ display:'flex', alignItems:'center', gap:'7px', marginTop:'10px', padding:'7px 9px', background:'rgba(37,211,102,0.06)', border:'1px solid rgba(37,211,102,0.2)', textDecoration:'none' }}>
-            <span style={{ fontSize:'14px' }}>📱</span>
-            <span style={{ fontFamily:"'DM Mono',monospace", fontSize:'8px', color:'#1a9e4e', lineHeight:1.5 }}>04120363131<br/>04127534435</span>
-          </a>
-          <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'7.5px', color:'#333', letterSpacing:'.12em', marginTop:'12px' }}>MODITEX POS v1.0</div>
         </div>
-      </div>
 
-      {/* ── MAIN ── */}
-      <div className="sh-main">
-
-        {/* TOP NAVBAR */}
-        <nav className="sh-navbar" ref={dropdownRef}>
-          {/* Hamburger mobile */}
-          <button className="sh-hamburger" onClick={() => setDrawerOpen(o => !o)}>☰</button>
-
-          {/* Logo */}
-          <Link href="/dashboard" className="sh-logo">
-            <img src="https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/ISOTIPO%20PNG.png" alt="Moditex" style={{ height:'38px', width:'38px', objectFit:'contain', flexShrink:0 }}/>
-            <div style={{ marginLeft:'10px' }}>
-              <div style={{ fontFamily:"'Playfair Display',serif", fontSize:'16px', fontWeight:900, color:'#fff', letterSpacing:'.05em', lineHeight:1 }}>MODITEX</div>
-              <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'7px', color:'#c9a84c', letterSpacing:'.35em', textTransform:'uppercase', marginTop:'2px' }}>GROUP</div>
-            </div>
-          </Link>
-
-          {/* Mobile logo */}
-          <img src="https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/ISOTIPO%20PNG.png" alt="Moditex Group" className="sh-mobile-logo-img"
-            style={{ height:'36px', width:'36px', objectFit:'contain' }} />
-
-          {/* Nav groups — desktop */}
-          <div className="sh-nav-groups">
-            {grupos.map(g => {
-              const isOpen = activeGroup === g.label;
-              const isActive = activeLabel === g.label;
-              const hasBadge = g.items.some(i => i.badge) && alertCount > 0;
-              return (
-                <div key={g.label} className="sh-nav-group"
-                  onMouseEnter={() => handleGroupEnter(g.label)}
-                  onMouseLeave={handleGroupLeave}>
-                  <button className={`sh-nav-group-btn${isOpen ? ' open' : ''}${isActive ? ' active' : ''}`}>
-                    {g.label}
-                    {hasBadge && <span style={{ width:'6px', height:'6px', borderRadius:'50%', background:'#c9a84c', display:'inline-block', marginLeft:'2px' }}/>}
-                    <span className="arrow">▾</span>
-                  </button>
-                  {isOpen && (
-                    <div className="sh-dropdown"
-                      onMouseEnter={handleDropdownEnter}
-                      onMouseLeave={handleGroupLeave}>
-                      {g.items.map(item => (
-                        <Link key={item.href} href={item.href}
-                          className={`sh-dropdown-item${path === item.href ? ' active' : ''}`}>
-                          <span className="sh-dropdown-label">
-                            {item.label}
-                            {item.badge && alertCount > 0 && (
-                              <span className="sh-dd-badge">{alertCount}</span>
-                            )}
-                          </span>
-                          <span className="sh-dropdown-desc">{item.desc}</span>
-                        </Link>
-                      ))}
+        <div className="sh-sb-content">
+          {grupos.map((g, gi) => (
+            <div key={g.label} className="sh-sb-section">
+              <div className="sh-sb-section-title">{g.label}</div>
+              {gi > 0 && <div className="sh-sb-divider" />}
+              {g.items.map(item => {
+                const isActive = path === item.href;
+                const hasAlert = item.badge && alertCount > 0;
+                return (
+                  <Link key={item.href} href={item.href} className={`sh-sb-link${isActive ? ' active' : ''}`} title={!sidebarHover ? item.label : ''}>
+                    <span className="sh-sb-icon">{item.icon}</span>
+                    {hasAlert && <span className="sh-sb-dot" />}
+                    <div className="sh-sb-label-area">
+                      <span className="sh-sb-label">{item.label}</span>
+                      {hasAlert && <span className="sh-sb-badge">{alertCount}</span>}
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
+        </div>
 
-          {/* Right side */}
-          <div className="sh-navbar-right">
-            <span className="sh-date">{fecha}</span>
-            {usuario && (
-              <div className="sh-user-chip">
-                <img src={`https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/avatars/${usuario.avatar || '1'}.png`} alt="avatar" style={{width:'22px',height:'22px',borderRadius:'50%',objectFit:'cover'}}/>
-                <div>
-                  <div className="sh-user-name">{usuario.nombre}</div>
-                  <div className="sh-user-rol">{usuario.rol}</div>
-                </div>
+        {usuario && (
+          <div className="sh-sb-footer">
+            <img src={`https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/avatars/${usuario.avatar || '1'}.png`} alt="Avatar" className="sh-sb-avatar"/>
+            <div className="sh-sb-user">
+              <div className="sh-sb-user-info">
+                <span className="sh-sb-user-name">{usuario.nombre}</span>
+                <span className="sh-sb-user-rol">{usuario.rol}</span>
               </div>
-            )}
-            <button onClick={logout} className="sh-logout">Salir</button>
+              <button onClick={logout} className="sh-sb-logout" title="Cerrar sesión">🚪</button>
+            </div>
+          </div>
+        )}
+      </nav>
+
+      {/* ── MAIN WRAPPER ── */}
+      <div className="sh-main-wrapper">
+        {/* TOP NAVBAR */}
+        <header className="sh-navbar">
+          <div className="sh-nav-left">
+            <button className="sh-hamburger" onClick={() => setDrawerOpen(true)}>☰</button>
+            <div className="sh-page-title">
+              {title}
+              {activeLabel && <span className="sh-page-breadcrumb">{activeLabel}</span>}
+            </div>
+          </div>
+          
+          <div className="sh-nav-right">
+            <span className="sh-date">{fecha}</span>
             <button onClick={recargar} disabled={cargando} className="sh-reload">
               {cargando ? '⏳' : '↺'}
               <span className="sh-reload-label"> Recargar</span>
             </button>
           </div>
-        </nav>
-
-        {/* PAGE TITLE BAR */}
-        <div className="sh-page-bar">
-          <div className="sh-page-title">{title}</div>
-          <div className="sh-page-breadcrumb">
-            Moditex POS {activeLabel ? `· ${activeLabel}` : ''}
-          </div>
-        </div>
+        </header>
 
         {/* CONTENT */}
-        <div className="sh-content">
+        <main className="sh-content">
           {children}
+        </main>
+      </div>
+
+      {/* ── OVERLAY DRAWER (Mobile) ── */}
+      <div className={`sh-overlay${drawerOpen ? ' open' : ''}`} onClick={() => setDrawerOpen(false)}/>
+      <div className={`sh-drawer${drawerOpen ? ' open' : ''}`}>
+        <div className="sh-drawer-header">
+          <img src="https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/MODITEX%20GROUP/ISOTIPO%20PNG.png" alt="Moditex Group" style={{ height:'36px', width:'36px', objectFit:'contain' }} />
+          <button className="sh-drawer-close" onClick={() => setDrawerOpen(false)}>✕</button>
+        </div>
+        {grupos.map(g => (
+          <div key={g.label}>
+            <div className="sh-drawer-section">{g.label}</div>
+            {g.items.map(item => {
+              const isActive = path === item.href;
+              const hasAlert = item.badge && alertCount > 0;
+              return (
+                <Link key={item.href} href={item.href} onClick={() => setDrawerOpen(false)} className={`sh-drawer-link${isActive ? ' active' : ''}`}>
+                  <span style={{ fontSize:'18px', filter:'grayscale(1)', opacity:0.8 }}>{item.icon}</span>
+                  {item.label}
+                  {hasAlert && <span style={{ marginLeft:'auto', background:'#c9a84c', color:'#000', fontFamily:"'DM Mono',monospace", fontSize:'10px', padding:'2px 6px', fontWeight:800, borderRadius:'8px' }}>{alertCount}</span>}
+                </Link>
+              );
+            })}
+          </div>
+        ))}
+        <div className="sh-drawer-footer">
+          {usuario && (
+            <div style={{ marginBottom:'16px', display:'flex', alignItems:'center', gap:'12px' }}>
+              <img src={`https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/avatars/${usuario.avatar || '1'}.png`} alt="avatar" style={{width:'36px',height:'36px',borderRadius:'50%',objectFit:'cover',border:'1px solid #333'}}/>
+              <div>
+                <div style={{ fontFamily:"'Poppins',sans-serif", fontSize:'14px', fontWeight:600, color:'#ddd' }}>{usuario.nombre}</div>
+                <div style={{ fontFamily:"'DM Mono',monospace", fontSize:'9px', color:'#c9a84c', textTransform:'uppercase', letterSpacing:'.1em', marginTop:'2px' }}>{usuario.rol}</div>
+              </div>
+            </div>
+          )}
+          <button onClick={logout} style={{ width:'100%', padding:'12px', background:'rgba(255,255,255,0.05)', border:'1px solid #333', borderRadius:'8px', cursor:'pointer', fontFamily:"'DM Mono',monospace", fontSize:'11px', color:'#aaa', letterSpacing:'.05em' }}>
+            Cerrar sesión
+          </button>
         </div>
       </div>
 
-      {/* ── BOTTOM NAV MOBILE ── */}
+      {/* ── BOTTOM NAV (Mobile) ── */}
       <nav className="sh-bottom-nav">
         {bottomNav.map(item => {
           const isMenu   = item.href === '#menu';

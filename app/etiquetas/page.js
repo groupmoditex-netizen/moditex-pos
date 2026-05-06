@@ -3,80 +3,92 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import Shell from '@/components/Shell';
 import { useAppData } from '@/lib/AppContext';
 import { colorHex } from '@/utils/colores';
+import { useRouter } from 'next/navigation';
 
 function fmt(n) { return '€ ' + Number(n||0).toFixed(2); }
 
 // ── Layouts ──
 const PAGE_W = 202, PAGE_H = 290;
 const LAYOUTS = {
-  hexa10: { cols:6, rows:10, label:'6×10', sub:'60/pág 🚀', rec:true,  cw:PAGE_W/6,  ch:PAGE_H/10, bcH:11, bcScale:3, fontSize:3.8 },
-  pent10: { cols:5, rows:10, label:'5×10', sub:'50/pág ⭐', rec:false, cw:PAGE_W/5,  ch:PAGE_H/10, bcH:12, bcScale:3, fontSize:4.2 },
-  quad8:  { cols:4, rows:8,  label:'4×8',  sub:'32/pág',   rec:false, cw:PAGE_W/4,  ch:PAGE_H/8,  bcH:16, bcScale:3, fontSize:5   },
-  tri6:   { cols:3, rows:6,  label:'3×6',  sub:'18/pág',   rec:false, cw:PAGE_W/3,  ch:PAGE_H/6,  bcH:20, bcScale:4, fontSize:6.5 },
-  duo5:   { cols:2, rows:5,  label:'2×5',  sub:'10/pág',   rec:false, cw:PAGE_W/2,  ch:PAGE_H/5,  bcH:26, bcScale:4, fontSize:8   },
-  strip2: { cols:1, rows:2,  label:'1×2',  sub:'2/pág',    rec:false, cw:PAGE_W,    ch:PAGE_H/2,  bcH:55, bcScale:5, fontSize:12  },
+  hexa10: { cols:6, rows:10, label:'6×10', sub:'60 por página', cw:PAGE_W/6,  ch:PAGE_H/10, bcH:11, bcScale:3, fontSize:3.8, icon: '📋' },
+  pent10: { cols:5, rows:10, label:'5×10', sub:'50 por página', cw:PAGE_W/5,  ch:PAGE_H/10, bcH:12, bcScale:3, fontSize:4.2, icon: '⭐' },
+  quad8:  { cols:4, rows:8,  label:'4×8',  sub:'32 por página', cw:PAGE_W/4,  ch:PAGE_H/8,  bcH:16, bcScale:3, fontSize:5,   icon: '📄' },
+  tri6:   { cols:3, rows:6,  label:'3×6',  sub:'18 por página', cw:PAGE_W/3,  ch:PAGE_H/6,  bcH:20, bcScale:4, fontSize:6.5, icon: '🖨️' },
+  vretti4x6: { cols:1, rows:1, label:'Vretti 4×6', sub:'Térmico Envío', isThermal:true, cw:101.6, ch:152.4, bcH:100, bcScale:3, fontSize:15, icon: '🚚' },
+  thermal2x1: { cols:1, rows:1, label:'Térmico 2×1"', sub:'Ropa/Estándar', isThermal:true, cw:50.8, ch:25.4, bcH:12, bcScale:4, fontSize:8, icon: '🏷️' },
+  thermal40x30: { cols:1, rows:1, label:'Térmico 40×30', sub:'Mediano', isThermal:true, cw:40, ch:30, bcH:14, bcScale:3, fontSize:8, icon: '📦' },
+  thermal30x20: { cols:1, rows:1, label:'Térmico 30×20', sub:'Pequeño', isThermal:true, cw:30, ch:20, bcH:10, bcScale:3, fontSize:6, icon: '💎' },
 };
+
 function barcodeURL(sku, lay) {
-  const h = Math.round(lay.bcH * 2.5);
-  return `https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(sku)}&scale=${lay.bcScale}&height=${h}&paddingwidth=1&paddingheight=0&includetext=false`;
+  const h = Math.round(lay.bcH * 2);
+  return `https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(sku)}&scale=2&height=${h}&includetext=false&monochrome=true`;
 }
 
-// ── Etiqueta individual (para vista previa e impresión) ──
 function Etiqueta({ p, lay, precio, forPrint = false }) {
   if (!p) return <div />;
   const priceVal = precio === 'detal' ? p.precioDetal : precio === 'mayor' ? p.precioMayor : null;
   const dot = colorHex(p.color);
   const nombre = `${p.modelo}${p.talla && p.talla !== 'UNICA' ? ' ' + p.talla : ''}`;
   const fs = lay.fontSize;
+  
   const cellStyle = forPrint ? {
     width:`${lay.cw}mm`, height:`${lay.ch}mm`,
     border:'0.3px solid rgba(0,0,0,.2)', background:'#fff',
     display:'flex', flexDirection:'column', overflow:'hidden', boxSizing:'border-box', pageBreakInside:'avoid',
   } : {
-    border:'0.4px solid rgba(0,0,0,.18)', background:'#fff',
-    display:'flex', flexDirection:'column', overflow:'hidden', aspectRatio:`${lay.cw}/${lay.ch}`,
+    border:'1px solid rgba(0,0,0,.1)', background:'#fff',
+    display:'flex', flexDirection:'column', overflow:'hidden', 
+    aspectRatio:`${lay.cw}/${lay.ch}`,
+    maxWidth: lay.isThermal ? '280px' : 'none',
+    margin: lay.isThermal ? '10px auto' : '0',
+    borderRadius: '4px',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
   };
+
   return (
     <div style={cellStyle}>
       <div style={{display:'flex',flex:1,minHeight:0,overflow:'hidden'}}>
-        <div style={{width:forPrint?`${Math.max(3,lay.cw*0.07)}mm`:'7px',background:'#111',
+        <div style={{width:forPrint?`${Math.max(3,lay.cw*0.07)}mm`:'10px',background:'#111',
           display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
           flexShrink:0,gap:'1px',padding:0}}>
           <span style={{writingMode:'vertical-rl',transform:'rotate(180deg)',fontFamily:'serif',
-            fontSize:forPrint?`${Math.max(3,fs-1)}pt`:'5px',
+            fontSize:forPrint?`${Math.max(3,fs-1)}pt`:'6px',
             fontWeight:900,color:'#fff',letterSpacing:'.02em',lineHeight:1}}>MTX</span>
-          <span style={{width:'2px',height:'2px',background:'#d91e1e',borderRadius:'50%',flexShrink:0}}/>
         </div>
         <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',
-          padding:forPrint?'0 1.5mm':'0 1px',overflow:'hidden'}}>
+          padding:forPrint?'2mm':'6px',overflow:'hidden'}}>
           <img src={barcodeURL(p.sku, lay)} alt={p.sku}
-            style={{width:'100%',height:forPrint?`${lay.bcH}mm`:'100%',objectFit:'fill',display:'block'}} />
+            style={{
+              width: '100%',
+              height: forPrint ? `${lay.bcH}mm` : '100%',
+              objectFit:lay.isThermal ? 'fill' : 'contain',
+              display:'block', 
+              imageRendering:'pixelated'
+            }} />
         </div>
       </div>
-      <div style={{fontFamily:'DM Mono,monospace',fontSize:forPrint?`${fs*0.85}pt`:`${fs}px`,
-        textAlign:'center',padding:forPrint?'0.3mm 1mm':'1px 2px',
-        borderTop:'0.3px solid rgba(0,0,0,.12)',color:'#444',letterSpacing:'.03em',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+      <div style={{fontFamily:'DM Mono,monospace',fontSize:forPrint?`${fs*0.85}pt`:`${fs+1}px`,
+        textAlign:'center',padding:'2px', background: '#fafafa',
+        borderTop:'1px solid rgba(0,0,0,.05)',color:'#666',letterSpacing:'.03em'}}>
         {p.sku}
       </div>
-      <div style={{fontFamily:'Poppins,sans-serif',fontWeight:700,
-        fontSize:forPrint?`${fs}pt`:`${fs+0.5}px`,textAlign:'center',
-        padding:forPrint?'0.3mm 1mm':'1px 2px',borderTop:'0.3px solid rgba(0,0,0,.06)',
-        overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+      <div style={{fontFamily:'Poppins,sans-serif',fontWeight:800,
+        fontSize:forPrint?`${fs}pt`:`${fs+2}px`,textAlign:'center',
+        padding:'2px', textTransform: 'uppercase', color: '#111'}}>
         {nombre}
       </div>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'2px',
-        padding:forPrint?'0.3mm 1mm':'1px 2px',borderTop:'0.3px solid rgba(0,0,0,.04)'}}>
-        <span style={{width:forPrint?`${fs*0.6}mm`:'4px',height:forPrint?`${fs*0.6}mm`:'4px',
-          borderRadius:'50%',background:dot,border:'0.3px solid rgba(0,0,0,.12)',display:'inline-block',flexShrink:0}}/>
-        <span style={{fontFamily:'DM Mono,monospace',fontSize:forPrint?`${fs*0.85}pt`:`${fs*0.9}px`,
-          textTransform:'uppercase',letterSpacing:'.04em',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'4px', padding:'2px'}}>
+        {!lay.isThermal && (
+          <span style={{width:'6px',height:'6px',borderRadius:'50%',background:dot,border:'1px solid rgba(0,0,0,.1)'}}/>
+        )}
+        <span style={{fontFamily:'Poppins,sans-serif',fontSize:forPrint?`${fs*0.8}pt`:`${fs}px`, fontWeight: 600, color: '#888', textTransform: 'uppercase'}}>
           {p.color}
         </span>
       </div>
       {priceVal > 0 && (
-        <div style={{fontFamily:'DM Mono,monospace',fontWeight:700,color:'#d91e1e',textAlign:'center',
-          fontSize:forPrint?`${fs}pt`:`${fs+0.5}px`,padding:forPrint?'0.3mm 1mm':'1px 2px',
-          borderTop:'0.3px solid rgba(0,0,0,.04)'}}>
+        <div style={{fontFamily:'Poppins,sans-serif',fontWeight:900,color:'#d91e1e',textAlign:'center',
+          fontSize:forPrint?`${fs+1}pt`:`${fs+3}px`,padding:'4px 0', borderTop: '1px dashed #eee'}}>
           {fmt(priceVal)}
         </div>
       )}
@@ -85,71 +97,30 @@ function Etiqueta({ p, lay, precio, forPrint = false }) {
 }
 
 export default function EtiquetasPage() {
+  const router = useRouter();
   const { data, cargando } = useAppData() || {};
   const { productos = [] } = data || {};
 
-  // ── Estado ──
-  const [buscar, setBuscar]       = useState('');
-  const [cat, setCat]             = useState('');
-  const [carrito, setCarrito]     = useState({}); // { sku: cantidad }
-  const [layout, setLayout]       = useState('pent10');
-  const [precio, setPrecio]       = useState('detal');
-  const [vista, setVista]         = useState(false);
-  const [importando, setImport]   = useState(false);
-  const [importMsg, setImportMsg] = useState(null);
-  const [concepto, setConcepto]   = useState('');
-  const searchRef = useRef(null);
+  const [buscar, setBuscar] = useState('');
+  const [cat, setCat] = useState('');
+  const [carrito, setCarrito] = useState({});
+  const [layout, setLayout] = useState('hexa10');
+  const [precio, setPrecio] = useState('detal');
+  const [vista, setVista] = useState(false);
 
-  // ── Persistencia del carrito ──
   useEffect(() => {
-    try {
-      const guardado = localStorage.getItem('moditex_carrito_etiquetas');
-      if (guardado) {
-        const parsed = JSON.parse(guardado);
-        if (typeof parsed === 'object') setCarrito(parsed);
-      }
-    } catch (e) { console.warn('Error recuperando carrito:', e); }
+    const guardado = localStorage.getItem('moditex_carrito_etiquetas');
+    if (guardado) try { setCarrito(JSON.parse(guardado)); } catch(e){}
   }, []);
 
   useEffect(() => {
     localStorage.setItem('moditex_carrito_etiquetas', JSON.stringify(carrito));
   }, [carrito]);
 
-  async function importarAEntradas() {
-    const skus = Object.keys(carrito);
-    if (!skus.length) return;
-    if (!confirm(`¿Registrar ${totalEtiquetas} unidades como entrada al almacén?`)) return;
-    setImport(true);
-    try {
-      const fecha = new Date().toISOString().split('T')[0];
-      const lote = skus.map(sku => ({
-        sku, tipo: 'ENTRADA', cantidad: carrito[sku],
-        fecha, concepto: concepto.trim() || 'Importado desde etiquetas',
-      }));
-      const res = await fetch('/api/movimientos', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(lote),
-      }).then(r => r.json());
-      if (res.ok) {
-        setImportMsg({ t: 'ok', m: `✓ ${totalEtiquetas} uds registradas en el almacén` });
-        setConcepto(''); // Limpiar nota tras éxito
-      } else {
-        setImportMsg({ t: 'error', m: res.error || 'Error al registrar' });
-      }
-    } catch {
-      setImportMsg({ t: 'error', m: 'Error de conexión' });
-    }
-    setImport(false);
-    setTimeout(() => setImportMsg(null), 5000);
-  }
+  const lay = LAYOUTS[layout] || LAYOUTS.hexa10;
 
-  const lay = LAYOUTS[layout] || LAYOUTS.pent10;
+  const categorias = useMemo(() => [...new Set(productos.map(p => p.categoria))].sort(), [productos]);
 
-  // ── Categorías ──
-  const categorias = useMemo(() =>
-    [...new Set(productos.map(p => p.categoria))].sort(), [productos]);
-
-  // ── Productos filtrados para búsqueda ──
   const filtrados = useMemo(() => {
     const q = buscar.toLowerCase().trim();
     return productos.filter(p => {
@@ -159,7 +130,6 @@ export default function EtiquetasPage() {
     });
   }, [productos, buscar, cat]);
 
-  // ── Modelos agrupados para búsqueda rápida ──
   const modelosAgrupados = useMemo(() => {
     const map = {};
     filtrados.forEach(p => {
@@ -167,35 +137,9 @@ export default function EtiquetasPage() {
       if (!map[key]) map[key] = { categoria: p.categoria, modelo: p.modelo, variantes: [] };
       map[key].variantes.push(p);
     });
-    return Object.values(map).slice(0, 80); // max 80 grupos visibles
+    return Object.values(map).slice(0, 50);
   }, [filtrados]);
 
-  // ── Acciones carrito ──
-  function addSku(sku, delta = 1) {
-    setCarrito(prev => {
-      const actual = prev[sku] || 0;
-      const nuevo = Math.max(0, actual + delta);
-      if (nuevo === 0) { const n = {...prev}; delete n[sku]; return n; }
-      return { ...prev, [sku]: nuevo };
-    });
-  }
-  function setSku(sku, n) {
-    const v = Math.max(0, parseInt(n) || 0);
-    setCarrito(prev => {
-      if (v === 0) { const nx = {...prev}; delete nx[sku]; return nx; }
-      return { ...prev, [sku]: v };
-    });
-  }
-  function addVariantes(variantes) {
-    setCarrito(prev => {
-      const n = {...prev};
-      variantes.forEach(p => { n[p.sku] = (n[p.sku] || 0) + 1; });
-      return n;
-    });
-  }
-  function removeAll() { setCarrito({}); }
-
-  // ── Carrito como lista de productos ──
   const carritoItems = useMemo(() =>
     Object.entries(carrito).map(([sku, cant]) => {
       const p = productos.find(x => x.sku === sku);
@@ -204,7 +148,6 @@ export default function EtiquetasPage() {
 
   const totalEtiquetas = carritoItems.reduce((a, x) => a + x.cant, 0);
 
-  // ── Items expandidos para impresión ──
   const items = useMemo(() => {
     const arr = [];
     carritoItems.forEach(p => { for (let i = 0; i < p.cant; i++) arr.push(p); });
@@ -218,8 +161,331 @@ export default function EtiquetasPage() {
     return ps;
   }, [items, perPage]);
 
+  function addSku(sku, delta = 1) {
+    setCarrito(prev => {
+      const v = (prev[sku] || 0) + delta;
+      if (v <= 0) { const n = {...prev}; delete n[sku]; return n; }
+      return { ...prev, [sku]: v };
+    });
+  }
+
+  function printBlankLabels() {
+    // Formato fijo: 7 columnas × 17 filas = 119 etiquetas por hoja A4
+    const COLS = 7;
+    const ROWS = 17;
+    const TOTAL = COLS * ROWS; // 119
+
+    // Dimensiones de cada celda (A4 210×297mm, sin márgenes)
+    const CW = (210 / COLS).toFixed(4); // ≈ 30mm
+    const CH = (297 / ROWS).toFixed(4); // ≈ 17.47mm
+    // Margen superior = 1/3 de la altura de 1 ticket
+    const MT = (parseFloat(CH) / 3).toFixed(4);  // ≈ 5.82mm
+
+    const cell = `
+      <div class="etiq">
+        <div class="marca">MODITEX</div>
+        <div class="fila">
+          <span class="lbl">REF</span>
+          <span class="linea"></span>
+        </div>
+        <div class="fila">
+          <span class="lbl">COL</span>
+          <span class="linea"></span>
+        </div>
+        <div class="cc">CONTROL DE CALIDAD</div>
+      </div>`;
+
+    const cells = Array(TOTAL).fill(cell).join('');
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+      @page { size: A4 portrait; margin: 0; }
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; margin: 0; padding: 0; }
+      body, html { margin: 0; padding: 0; background: #fff; }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(${COLS}, ${CW}mm);
+        grid-template-rows: repeat(${ROWS}, ${CH}mm);
+        width: 210mm;
+        height: 297mm;
+        gap: 0;
+        margin-top: ${MT}mm;
+      }
+      .etiq {
+        border: 0.5px dashed #999;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 1.2mm;
+        padding: 0.8mm 1.5mm 1mm 1.5mm;
+        overflow: hidden;
+        position: relative;
+      }
+      .marca {
+        font-family: 'Arial', sans-serif;
+        font-size: 4pt;
+        font-weight: 400;
+        color: #000;
+        letter-spacing: 0.25em;
+        text-transform: uppercase;
+        text-align: center;
+        line-height: 1;
+        margin-bottom: 0.5mm;
+        opacity: 1;
+      }
+      .fila {
+        display: flex;
+        align-items: flex-end;
+        gap: 1mm;
+        height: 2.8mm;
+      }
+      .lbl {
+        font-family: 'Arial', sans-serif;
+        font-size: 4pt;
+        font-weight: 700;
+        color: #444;
+        line-height: 1;
+        flex-shrink: 0;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .linea {
+        flex: 1;
+        border-bottom: 0.4px solid #bbb;
+        height: 100%;
+      }
+      .cc {
+        position: absolute;
+        bottom: 0.5mm;
+        left: 0;
+        right: 0;
+        text-align: center;
+        font-family: 'Arial', sans-serif;
+        font-size: 2.5pt;
+        font-weight: 400;
+        color: #aaa;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        line-height: 1;
+      }
+    </style></head><body>
+      <div class="grid">${cells}</div>
+    </body></html>`;
+
+    const win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); win.close(); }, 500);
+  }
+
+  function sendToEntrada() {
+    if (!totalEtiquetas) return;
+    const pending = JSON.parse(localStorage.getItem('moditex_add_to_cart') || '[]');
+    Object.entries(carrito).forEach(([sku, qty]) => {
+      const ex = pending.find(x => x.sku === sku);
+      if (ex) ex.qty += qty; else pending.push({ sku, qty });
+    });
+    localStorage.setItem('moditex_add_to_cart', JSON.stringify(pending));
+    setCarrito({});
+    router.push('/entrada');
+  }
+
   return (
-    <Shell title="Etiquetas de Código de Barras">
+    <Shell title="Generador de Etiquetas">
+      <div style={{ maxWidth: '1400px', margin: '0 auto', animation: 'fadeIn 0.5s ease' }}>
+        
+        {/* Header Visual */}
+        <div style={{
+          background: 'linear-gradient(135deg, #111 0%, #333 100%)',
+          borderRadius: '32px',
+          padding: '30px 40px',
+          color: '#fff',
+          marginBottom: '30px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          boxShadow: '0 20px 40px rgba(0,0,0,0.1)'
+        }} className="no-print">
+          <div>
+            <h1 style={{ fontFamily: 'Poppins, sans-serif', fontSize: '22px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '1px' }}>Control de Etiquetado</h1>
+            <p style={{ opacity: 0.6, fontSize: '13px' }}>Prepara tus productos para la venta y el almacén.</p>
+          </div>
+          <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+             <button onClick={() => setVista(!vista)} style={{
+                padding: '12px 24px', background: 'rgba(255,255,255,0.1)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '16px', fontWeight: 800, fontSize: '12px', cursor: 'pointer'
+             }}>
+                {vista ? 'OCULTAR PREVIEW' : 'VER PREVIEW'}
+             </button>
+             <button onClick={() => printBlankLabels()} style={{
+                padding: '12px 24px', background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '16px', fontWeight: 800, fontSize: '12px', cursor: 'pointer'
+             }}>
+                🏷️ ETIQUETAS EN BLANCO
+             </button>
+             <button onClick={() => window.print()} disabled={!totalEtiquetas} style={{
+                padding: '12px 24px', background: 'var(--red)', color: '#fff', border: 'none', borderRadius: '16px', fontWeight: 800, fontSize: '12px', cursor: 'pointer'
+             }}>
+                🖨️ IMPRIMIR ({totalEtiquetas})
+             </button>
+          </div>
+        </div>
+
+        <div className="no-print" style={{ display: 'grid', gridTemplateColumns: '1fr 380px 280px', gap: '30px', alignItems: 'start' }}>
+          
+          {/* COL 1: Catálogo */}
+          <div style={{ background: '#fff', borderRadius: '32px', padding: '24px', border: '1px solid rgba(0,0,0,0.05)' }}>
+            <div style={{ position: 'relative', marginBottom: '24px' }}>
+              <input 
+                value={buscar} 
+                onChange={e => setBuscar(e.target.value)}
+                placeholder="Busca por modelo, SKU o color..."
+                style={{ width: '100%', padding: '16px 24px', borderRadius: '20px', border: '1px solid #eee', outline: 'none', fontSize: '14px', fontFamily: 'Poppins, sans-serif', background: '#f9f9f9' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '24px' }}>
+              <button onClick={() => setCat('')} style={{ padding: '8px 16px', borderRadius: '12px', border: 'none', background: !cat ? '#111' : '#f0f0f0', color: !cat ? '#fff' : '#666', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>TODAS</button>
+              {categorias.map(c => (
+                <button key={c} onClick={() => setCat(c)} style={{ padding: '8px 16px', borderRadius: '12px', border: 'none', background: cat === c ? '#111' : '#f0f0f0', color: cat === c ? '#fff' : '#666', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>{c}</button>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '600px', overflowY: 'auto', paddingRight: '10px' }}>
+              {modelosAgrupados.map(m => (
+                <div key={m.modelo} style={{ background: '#fcfcfc', borderRadius: '24px', border: '1px solid #f0f0f0', padding: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <div style={{ fontFamily: 'Poppins, sans-serif', fontSize: '14px', fontWeight: 800, textTransform: 'uppercase' }}>{m.modelo} <span style={{ opacity: 0.4, fontWeight: 400, fontSize: '10px' }}>({m.categoria})</span></div>
+                    <button onClick={() => { m.variantes.forEach(v => addSku(v.sku, 1)) }} style={{ padding: '6px 12px', borderRadius: '10px', background: '#111', color: '#fff', border: 'none', fontSize: '10px', fontWeight: 800, cursor: 'pointer' }}>+ TODAS</button>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '8px' }}>
+                    {m.variantes.map(v => (
+                      <div key={v.sku} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px', background: '#fff', borderRadius: '16px', border: '1px solid #eee' }}>
+                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: colorHex(v.color), flexShrink: 0 }} />
+                            <div style={{ fontSize: '11px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>{v.color}</div>
+                         </div>
+                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {carrito[v.sku] && <span style={{ fontSize: '11px', fontWeight: 900, color: 'var(--green)' }}>{carrito[v.sku]}</span>}
+                            <button onClick={() => addSku(v.sku, 1)} style={{ width: '24px', height: '24px', borderRadius: '8px', background: '#eee', border: 'none', cursor: 'pointer', fontWeight: 900 }}>+</button>
+                         </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* COL 2: Carrito */}
+          <div style={{ background: '#fff', borderRadius: '32px', padding: '24px', border: '1px solid rgba(0,0,0,0.05)', position: 'sticky', top: '100px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ fontSize: '12px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '1px' }}>🏷️ Selección</h3>
+              {totalEtiquetas > 0 && <button onClick={() => setCarrito({})} style={{ background: 'none', border: 'none', color: '#999', fontSize: '10px', fontWeight: 800, cursor: 'pointer' }}>VACIAR</button>}
+            </div>
+
+            <div style={{ maxHeight: '400px', overflowY: 'auto', marginBottom: '20px' }}>
+              {carritoItems.length === 0 ? (
+                <div style={{ padding: '40px 20px', textAlign: 'center', opacity: 0.3 }}>
+                  <div style={{ fontSize: '30px' }}>📦</div>
+                  <p style={{ fontSize: '11px', fontWeight: 700 }}>Carrito vacío</p>
+                </div>
+              ) : (
+                carritoItems.map(p => (
+                  <div key={p.sku} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', borderBottom: '1px solid #f9f9f9' }}>
+                    <div style={{ width: '40px', height: '24px', background: '#fff', border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden' }}>
+                      <img src={barcodeURL(p.sku, LAYOUTS.pent10)} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase' }}>{p.modelo}</div>
+                      <div style={{ fontSize: '9px', color: '#999' }}>{p.color} · {p.sku}</div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#f0f0f0', borderRadius: '10px', padding: '2px' }}>
+                      <button onClick={() => addSku(p.sku, -1)} style={{ width: '24px', height: '24px', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 900 }}>-</button>
+                      <span style={{ minWidth: '20px', textAlign: 'center', fontSize: '11px', fontWeight: 900 }}>{p.cant}</span>
+                      <button onClick={() => addSku(p.sku, 1)} style={{ width: '24px', height: '24px', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 900 }}>+</button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {totalEtiquetas > 0 && (
+              <div style={{ borderTop: '2px solid #f9f9f9', paddingTop: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: '#666' }}>TOTAL ETIQUETAS:</span>
+                  <span style={{ fontSize: '16px', fontWeight: 900 }}>{totalEtiquetas}</span>
+                </div>
+                <button onClick={sendToEntrada} style={{ width: '100%', padding: '16px', borderRadius: '20px', background: 'var(--green)', color: '#fff', border: 'none', fontSize: '11px', fontWeight: 900, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+                  📤 ENVIAR A ENTRADAS STOCK
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* COL 3: Opciones */}
+          <div style={{ background: '#fff', borderRadius: '32px', padding: '24px', border: '1px solid rgba(0,0,0,0.05)', position: 'sticky', top: '100px' }}>
+             <h3 style={{ fontSize: '11px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '20px' }}>⚙️ Configuración</h3>
+             
+             <label style={{ fontSize: '10px', fontWeight: 900, color: '#999', display: 'block', marginBottom: '8px' }}>PRECIO A MOSTRAR</label>
+             <select value={precio} onChange={e => setPrecio(e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid #eee', marginBottom: '24px', fontFamily: 'Poppins, sans-serif', fontSize: '12px' }}>
+                <option value="ninguno">SIN PRECIO</option>
+                <option value="detal">PRECIO DETAL</option>
+                <option value="mayor">PRECIO MAYOR</option>
+             </select>
+
+             <label style={{ fontSize: '10px', fontWeight: 900, color: '#999', display: 'block', marginBottom: '8px' }}>DISEÑO DE IMPRESIÓN</label>
+             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
+                {Object.entries(LAYOUTS).map(([k, v]) => (
+                  <button key={k} onClick={() => setLayout(k)} style={{
+                    padding: '12px', borderRadius: '16px', border: '1px solid #eee', background: layout === k ? '#111' : '#fff', color: layout === k ? '#fff' : '#111',
+                    display: 'flex', alignItems: 'center', gap: '12px', textAlign: 'left', cursor: 'pointer', transition: 'all 0.2s'
+                  }}>
+                    <span style={{ fontSize: '18px' }}>{v.icon}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '11px', fontWeight: 800 }}>{v.label}</div>
+                      <div style={{ fontSize: '9px', opacity: 0.6 }}>{v.sub}</div>
+                    </div>
+                  </button>
+                ))}
+             </div>
+          </div>
+
+        </div>
+
+        {/* Vista Previa */}
+        {vista && items.length > 0 && (
+          <div className="no-print" style={{ marginTop: '40px', padding: '40px', background: '#f5f5f5', borderRadius: '40px' }}>
+             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+                <h3 style={{ fontSize: '14px', fontWeight: 900, textTransform: 'uppercase' }}>VISTA PREVIA DEL PLIEGO</h3>
+                <span style={{ fontSize: '11px', fontWeight: 700, opacity: 0.5 }}>{pages.length} HOJA(S)</span>
+             </div>
+             {pages.map((page, pi) => (
+                <div key={pi} style={{
+                  background:'#fff', marginBottom:'30px', padding:'3mm', boxSizing:'border-box', display:'grid',
+                  gridTemplateColumns:`repeat(${lay.cols},1fr)`,
+                  gridTemplateRows:`repeat(${lay.rows},1fr)`,
+                  width:'100%', aspectRatio: lay.isThermal ? `${lay.cw}/${lay.ch}` : `${210/297}`, boxShadow:'0 20px 60px rgba(0,0,0,0.1)', borderRadius: '8px', overflow: 'hidden'
+                }}>
+                  {page.map((p, i) => <Etiqueta key={i} p={p} lay={lay} precio={precio}/>)}
+                </div>
+             ))}
+          </div>
+        )}
+
+        {/* Área de Impresión Real */}
+        <div className="print-area">
+          {pages.map((page, pi) => (
+            <div key={pi} className="sheet-page" style={{
+              gridTemplateColumns:`repeat(${lay.cols},${lay.cw}mm)`,
+              gridTemplateRows:`repeat(${lay.rows},${lay.ch}mm)`,
+              gap:0,
+            }}>
+              {page.map((p, i) => <Etiqueta key={i} p={p} lay={lay} precio={precio} forPrint={true}/>)}
+            </div>
+          ))}
+        </div>
+
+      </div>
+
       <style dangerouslySetInnerHTML={{ __html: `
         @media print {
           * { -webkit-print-color-adjust:exact!important; print-color-adjust:exact!important; }
@@ -228,365 +494,16 @@ export default function EtiquetasPage() {
           body,html { margin:0; padding:0; background:#fff!important; }
           .sheet-page {
             display:grid; page-break-after:always; break-after:page;
-            margin:0!important; padding:4mm; box-sizing:border-box;
-            width:210mm; height:297mm;
+            margin:0!important; padding:${lay.isThermal ? '0' : '4mm'}; box-sizing:border-box;
+            width:${lay.isThermal ? `${lay.cw}mm` : '210mm'};
+            height:${lay.isThermal ? `${lay.ch}mm` : '297mm'};
           }
           .sheet-page:last-child { page-break-after:avoid; break-after:avoid; }
-          @page { size:A4 portrait; margin:0; }
+          @page { size: ${lay.isThermal ? `${lay.cw}mm ${lay.ch}mm` : 'A4 portrait'}; margin:0; }
         }
         .print-area { display:none; }
-
-        .prod-row { display:flex; align-items:center; gap:8px; padding:7px 10px;
-          border-bottom:1px solid var(--border); cursor:pointer; transition:background .1s; }
-        .prod-row:hover { background:var(--bg2); }
-        .prod-row:last-child { border-bottom:none; }
-        .add-btn { display:flex; align-items:center; justify-content:center;
-          width:26px; height:26px; border-radius:50%; background:var(--ink);
-          color:#fff; border:none; cursor:pointer; font-size:16px; line-height:1;
-          flex-shrink:0; transition:transform .1s; }
-        .add-btn:hover { transform:scale(1.12); }
-        .add-all-btn { padding:4px 10px; background:none; border:1px solid var(--border);
-          cursor:pointer; font-size:10px; font-family:'DM Mono',monospace;
-          border-radius:3px; transition:background .1s; white-space:nowrap; }
-        .add-all-btn:hover { background:var(--bg3); }
-        .qty-ctrl { display:flex; align-items:center; gap:0; border:1px solid var(--border); border-radius:4px; overflow:hidden; }
-        .qty-btn { width:26px; height:26px; border:none; background:var(--bg3); cursor:pointer;
-          font-size:15px; display:flex; align-items:center; justify-content:center; transition:background .1s; }
-        .qty-btn:hover { background:var(--border); }
-        .qty-input { width:36px; height:26px; border:none; border-left:1px solid var(--border);
-          border-right:1px solid var(--border); text-align:center; font-family:'DM Mono',monospace;
-          font-size:12px; background:var(--bg2); outline:none; }
-        .cat-chip { padding:5px 12px; border:1px solid var(--border); border-radius:20px;
-          font-size:10px; font-family:'DM Mono',monospace; cursor:pointer;
-          background:var(--bg2); white-space:nowrap; transition:all .12s; }
-        .cat-chip.active { background:var(--ink); color:#fff; border-color:var(--ink); }
-        .carrito-item { display:flex; align-items:center; gap:8px; padding:8px 10px;
-          border-bottom:1px solid var(--border); }
-        .carrito-item:last-child { border-bottom:none; }
-        .layout-btn { display:flex; align-items:center; justify-content:space-between;
-          padding:7px 12px; border:1px solid var(--border); cursor:pointer;
-          background:var(--bg2); transition:all .12s; border-radius:3px; }
-        .layout-btn.active { background:var(--ink); color:#fff; border-color:var(--ink); }
-        .modelo-group { border-bottom:1px solid var(--border); }
-        .modelo-header { display:flex; align-items:center; justify-content:space-between;
-          padding:7px 10px; background:var(--bg2); cursor:pointer; }
-        .modelo-header:hover { background:var(--bg3); }
-      `}} />
-
-      {/* ── Info banner ── */}
-      <div className="no-print" style={{padding:'9px 14px',background:'var(--blue-soft)',
-        border:'1px solid rgba(20,64,176,.2)',marginBottom:'14px',
-        fontFamily:'DM Mono,monospace',fontSize:'10px',color:'var(--blue)',lineHeight:1.7}}>
-        📄 <strong>Papel A4 vertical</strong> — 210 × 297 mm · Márgenes 3mm ·
-        Busca un producto y haz clic en <strong>+</strong> para añadirlo al carrito · Ajusta las copias y pulsa Imprimir
-      </div>
-
-      {/* Mensaje importar a entradas */}
-      {importMsg && (
-        <div className="no-print" style={{padding:'10px 14px',marginBottom:'12px',borderRadius:'3px',
-          background: importMsg.t === 'ok' ? 'var(--green-soft)' : 'var(--red-soft)',
-          border: `1px solid ${importMsg.t === 'ok' ? 'rgba(26,122,60,.3)' : 'rgba(217,30,30,.3)'}`,
-          color: importMsg.t === 'ok' ? 'var(--green)' : 'var(--red)',
-          fontFamily:'DM Mono,monospace',fontSize:'11px'}}>
-          {importMsg.m}
-        </div>
-      )}
-
-      {/* ── Layout principal: 3 columnas ── */}
-      <div className="no-print" style={{display:'grid',gridTemplateColumns:'1fr 1fr auto',gap:'12px',alignItems:'start'}}>
-
-        {/* ── COL 1: Búsqueda y lista de productos ── */}
-        <div style={{border:'1px solid var(--border)',background:'var(--surface)',overflow:'hidden',borderRadius:'3px'}}>
-          <div style={{padding:'10px 12px',borderBottom:'1px solid var(--border)',background:'var(--bg2)'}}>
-            <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#555',
-              letterSpacing:'.14em',textTransform:'uppercase',marginBottom:'8px'}}>
-              Buscar producto
-            </div>
-            <input
-              ref={searchRef}
-              value={buscar}
-              onChange={e => setBuscar(e.target.value)}
-              placeholder="Modelo, SKU, color..."
-              autoFocus
-              style={{width:'100%',padding:'8px 10px',border:'1px solid var(--border)',
-                fontFamily:'Poppins,sans-serif',fontSize:'12px',background:'var(--bg)',
-                outline:'none',boxSizing:'border-box',borderRadius:'3px'}}
-            />
-            {/* Chips de categorías */}
-            <div style={{display:'flex',gap:'6px',flexWrap:'wrap',marginTop:'8px'}}>
-              <button className={`cat-chip${!cat?' active':''}`} onClick={() => setCat('')}>Todas</button>
-              {categorias.map(c => (
-                <button key={c} className={`cat-chip${cat===c?' active':''}`} onClick={() => setCat(c === cat ? '' : c)}>
-                  {c}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Lista de modelos agrupados */}
-          <div style={{maxHeight:'60vh',overflowY:'auto'}}>
-            {cargando ? (
-              <div style={{padding:'40px',textAlign:'center',color:'#888',fontFamily:'DM Mono,monospace',fontSize:'11px'}}>
-                Cargando...
-              </div>
-            ) : modelosAgrupados.length === 0 ? (
-              <div style={{padding:'40px',textAlign:'center',color:'#888',fontFamily:'DM Mono,monospace',fontSize:'11px'}}>
-                Sin resultados
-              </div>
-            ) : (
-              modelosAgrupados.map(({ categoria, modelo, variantes }) => (
-                <div key={`${categoria}_${modelo}`} className="modelo-group">
-                  {/* Cabecera del modelo */}
-                  <div className="modelo-header">
-                    <div>
-                      <span style={{fontFamily:'Poppins,sans-serif',fontSize:'12px',fontWeight:600}}>{modelo}</span>
-                      <span style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888',marginLeft:'8px'}}>{categoria}</span>
-                    </div>
-                    <button className="add-all-btn" onClick={() => addVariantes(variantes)}>
-                      + {variantes.length} var.
-                    </button>
-                  </div>
-                  {/* Variantes del modelo */}
-                  {variantes.map(p => {
-                    const inCart = carrito[p.sku] || 0;
-                    const dot = colorHex(p.color);
-                    return (
-                      <div key={p.sku} className="prod-row">
-                        <div style={{display:'flex',alignItems:'center',gap:'6px',flex:1,minWidth:0}}>
-                          <span style={{width:'10px',height:'10px',borderRadius:'50%',background:dot,
-                            border:'1px solid rgba(0,0,0,.12)',flexShrink:0}}/>
-                          <div style={{minWidth:0}}>
-                            <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'var(--blue)',
-                              overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.sku}</div>
-                            <div style={{fontSize:'11px',color:'#555',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-                              {p.color}{p.talla && p.talla !== 'UNICA' ? ` · ${p.talla}` : ''}
-                              {' '}<span style={{color:'var(--red)',fontFamily:'DM Mono,monospace',fontSize:'10px'}}>{fmt(p.precioDetal)}</span>
-                            </div>
-                          </div>
-                        </div>
-                        {inCart > 0 ? (
-                          <div style={{display:'flex',alignItems:'center',gap:'4px'}}>
-                            <span style={{fontFamily:'DM Mono,monospace',fontSize:'10px',
-                              color:'var(--green)',fontWeight:700}}>×{inCart}</span>
-                            <button className="add-btn" onClick={() => addSku(p.sku, 1)}
-                              style={{width:'24px',height:'24px',fontSize:'14px'}}>+</button>
-                          </div>
-                        ) : (
-                          <button className="add-btn" onClick={() => addSku(p.sku, 1)}>+</button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              ))
-            )}
-          </div>
-          <div style={{padding:'8px 12px',borderTop:'1px solid var(--border)',background:'var(--bg2)',
-            fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888'}}>
-            {filtrados.length} productos · {modelosAgrupados.length} modelos
-          </div>
-        </div>
-
-        {/* ── COL 2: Carrito de etiquetas ── */}
-        <div style={{border:'1px solid var(--border)',background:'var(--surface)',overflow:'hidden',borderRadius:'3px'}}>
-          <div style={{padding:'10px 12px',borderBottom:'1px solid var(--border)',background:'var(--bg2)',
-            display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-            <div>
-              <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#555',
-                letterSpacing:'.14em',textTransform:'uppercase',marginBottom:'2px'}}>
-                Carrito de etiquetas
-              </div>
-              <div style={{fontFamily:'DM Mono,monospace',fontSize:'11px',color:'var(--red)',fontWeight:700}}>
-                {carritoItems.length} productos · {totalEtiquetas} etiquetas
-              </div>
-            </div>
-            {carritoItems.length > 0 && (
-              <button onClick={removeAll}
-                style={{padding:'4px 10px',background:'none',border:'1px solid var(--border)',
-                  cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'10px',
-                  color:'var(--ink-muted)',borderRadius:'3px'}}>
-                ✕ Vaciar
-              </button>
-            )}
-          </div>
-
-          <div style={{maxHeight:'60vh',overflowY:'auto'}}>
-            {carritoItems.length === 0 ? (
-              <div style={{padding:'40px 20px',textAlign:'center'}}>
-                <div style={{fontSize:'32px',marginBottom:'8px'}}>🏷️</div>
-                <div style={{fontFamily:'DM Mono,monospace',fontSize:'11px',color:'#888'}}>
-                  Haz clic en + en un producto<br/>para añadirlo aquí
-                </div>
-              </div>
-            ) : (
-              carritoItems.map(p => {
-                const dot = colorHex(p.color);
-                return (
-                  <div key={p.sku} className="carrito-item">
-                    {/* Mini preview de etiqueta */}
-                    <div style={{width:'32px',height:'20px',flexShrink:0,overflow:'hidden',
-                      border:'0.5px solid rgba(0,0,0,.15)',background:'#fff',borderRadius:'2px'}}>
-                      <img src={barcodeURL(p.sku, LAYOUTS.pent10)} alt="" loading="lazy"
-                        style={{width:'100%',height:'100%',objectFit:'contain'}}/>
-                    </div>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:600,
-                        overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.modelo}</div>
-                      <div style={{display:'flex',alignItems:'center',gap:'4px',marginTop:'1px'}}>
-                        <span style={{width:'7px',height:'7px',borderRadius:'50%',background:dot,
-                          border:'0.5px solid rgba(0,0,0,.12)',flexShrink:0}}/>
-                        <span style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#666'}}>
-                          {p.color}{p.talla && p.talla !== 'UNICA' ? ` · ${p.talla}` : ''}
-                        </span>
-                      </div>
-                    </div>
-                    {/* Control de cantidad */}
-                    <div className="qty-ctrl">
-                      <button className="qty-btn" onClick={() => addSku(p.sku, -1)}>−</button>
-                      <input className="qty-input" type="number" min="1" max="999"
-                        value={p.cant}
-                        onChange={e => setSku(p.sku, e.target.value)}/>
-                      <button className="qty-btn" onClick={() => addSku(p.sku, 1)}>+</button>
-                    </div>
-                    <button onClick={() => setSku(p.sku, 0)}
-                      style={{background:'none',border:'none',cursor:'pointer',color:'#bbb',
-                        fontSize:'16px',padding:'2px',lineHeight:1,flexShrink:0}}
-                      title="Eliminar">×</button>
-                  </div>
-                );
-              })
-            )}
-          </div>
-
-          {/* Total y acciones rápidas */}
-          {carritoItems.length > 0 && (
-            <div style={{padding:'10px 12px',borderTop:'1px solid var(--border)',background:'var(--bg2)'}}>
-              <div style={{fontFamily:'DM Mono,monospace',fontSize:'10px',color:'var(--green)',
-                textAlign:'center',marginBottom:'8px'}}>
-                ✓ {totalEtiquetas} etiquetas · {pages.length} hoja{pages.length !== 1 ? 's' : ''} A4
-                {' '}({lay.cols}×{lay.rows})
-              </div>
-              <div style={{display:'flex',gap:'6px',marginBottom:'6px'}}>
-                <button onClick={() => setVista(v => !v)}
-                  style={{flex:1,padding:'8px',background:'var(--ink)',color:'#fff',border:'none',
-                    cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',
-                    fontWeight:600,textTransform:'uppercase',letterSpacing:'.06em',borderRadius:'3px'}}>
-                  {vista ? '⊡ Ocultar' : '⬛ Preview'}
-                </button>
-                <button onClick={() => window.print()}
-                  style={{flex:1,padding:'8px',background:'var(--red)',color:'#fff',border:'none',
-                    cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',
-                    fontWeight:600,textTransform:'uppercase',letterSpacing:'.06em',borderRadius:'3px'}}>
-                  🖨 Imprimir ({totalEtiquetas})
-                </button>
-              </div>
-
-              {/* Nota/Concepto e Importar */}
-              <div style={{marginTop:'10px',borderTop:'1px solid rgba(26,122,60,.15)',paddingTop:'10px'}}>
-                <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'var(--green)',
-                   marginBottom:'4px',textTransform:'uppercase',letterSpacing:'.1em'}}>
-                   Nota para el historial de stock:
-                </div>
-                <input 
-                  value={concepto}
-                  onChange={e => setConcepto(e.target.value)}
-                  placeholder="Ej: Lote #123, Contenedor..."
-                  style={{width:'100%',padding:'6px 10px',border:'1px solid rgba(26,122,60,.3)',
-                    background:'var(--bg)',fontSize:'11px',outline:'none',borderRadius:'3px',marginBottom:'6px'}}
-                />
-                <button onClick={importarAEntradas} disabled={importando}
-                  style={{width:'100%',padding:'8px',background:'var(--green)',
-                    color:'#fff',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',
-                    fontSize:'11px',fontWeight:700,borderRadius:'3px',transition:'all .12s',
-                    opacity: importando ? .6 : 1, display:'flex', alignItems:'center', justifyContent:'center', gap:'6px'}}>
-                  {importando ? 'Registrando...' : `📥 Importar ${totalEtiquetas} uds al almacén`}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* ── COL 3: Opciones de impresión ── */}
-        <div style={{minWidth:'220px',border:'1px solid var(--border)',background:'var(--surface)',
-          overflow:'hidden',borderRadius:'3px'}}>
-          <div style={{padding:'10px 12px',borderBottom:'1px solid var(--border)',background:'var(--bg2)',
-            fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#555',
-            letterSpacing:'.14em',textTransform:'uppercase'}}>
-            Opciones de impresión
-          </div>
-          <div style={{padding:'12px'}}>
-            <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#888',
-              marginBottom:'6px',letterSpacing:'.1em'}}>Layout A4</div>
-            <div style={{display:'flex',flexDirection:'column',gap:'5px',marginBottom:'14px'}}>
-              {Object.entries(LAYOUTS).map(([k, v]) => (
-                <button key={k} className={`layout-btn${layout === k ? ' active' : ''}`}
-                  onClick={() => setLayout(k)}>
-                  <span style={{fontFamily:'DM Mono,monospace',fontSize:'12px',fontWeight:700}}>
-                    {v.label}
-                  </span>
-                  <span style={{fontFamily:'DM Mono,monospace',fontSize:'10px',opacity:.8}}>
-                    {v.sub}
-                  </span>
-                </button>
-              ))}
-            </div>
-            <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#888',
-              marginBottom:'6px',letterSpacing:'.1em'}}>Precio en etiqueta</div>
-            <select value={precio} onChange={e => setPrecio(e.target.value)}
-              style={{width:'100%',padding:'8px 10px',background:'var(--bg2)',
-                border:'1px solid var(--border)',fontFamily:'Poppins,sans-serif',
-                fontSize:'12px',outline:'none',borderRadius:'3px'}}>
-              <option value="ninguno">Sin precio</option>
-              <option value="detal">Precio Detal</option>
-              <option value="mayor">Precio Mayor</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Vista previa ── */}
-      {vista && items.length > 0 && (
-        <div className="no-print" style={{marginTop:'18px'}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'10px'}}>
-            <div style={{fontFamily:'Poppins,sans-serif',fontSize:'13px',fontWeight:700}}>
-              Vista Previa — {items.length} etiqueta{items.length !== 1 ? 's' : ''} · {pages.length} hoja{pages.length !== 1 ? 's' : ''}
-            </div>
-            <div style={{fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#666'}}>
-              Celda: {lay.cw.toFixed(1)}×{lay.ch.toFixed(1)}mm
-            </div>
-          </div>
-          {pages.map((page, pi) => (
-            <div key={pi} style={{
-              background:'#fff',border:'1px solid #bbb',marginBottom:'14px',padding:'3mm',
-              boxSizing:'border-box',display:'grid',gap:0,
-              gridTemplateColumns:`repeat(${lay.cols},1fr)`,
-              gridTemplateRows:`repeat(${lay.rows},1fr)`,
-              width:'100%',aspectRatio:`${210/297}`,boxShadow:'0 2px 12px rgba(0,0,0,.1)',
-            }}>
-              {page.map((p, i) => <Etiqueta key={i} p={p} lay={lay} precio={precio}/>)}
-              {Array.from({length: perPage - page.length}).map((_, i) => (
-                <div key={`e${i}`} style={{border:'0.3px solid transparent'}}/>
-              ))}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* ── Print area ── */}
-      <div className="print-area">
-        {pages.map((page, pi) => (
-          <div key={pi} className="sheet-page" style={{
-            gridTemplateColumns:`repeat(${lay.cols},${lay.cw}mm)`,
-            gridTemplateRows:`repeat(${lay.rows},${lay.ch}mm)`,
-            gap:0,
-          }}>
-            {page.map((p, i) => <Etiqueta key={i} p={p} lay={lay} precio={precio} forPrint={true}/>)}
-            {Array.from({length: perPage - page.length}).map((_, i) => (
-              <div key={`e${i}`} style={{width:`${lay.cw}mm`,height:`${lay.ch}mm`}}/>
-            ))}
-          </div>
-        ))}
-      </div>
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      ` }} />
     </Shell>
   );
 }

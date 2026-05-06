@@ -4,16 +4,19 @@ import { generarSku as genSku } from '@/utils/generarSku';
 import { NextResponse } from 'next/server';
 
 // GET /api/productos
-// Antes: leía de tabla `inventario.stock` (campo ambiguo, diferente al dashboard).
-// Ahora: lee `inventario.stock_disponible` → fuente única de verdad, igual que el dashboard.
+// Antes: leía de tabla `inventario.stock` o `inventario`.
+// Ahora: lee `vw_inventario_real` → fuente única de verdad con stock comprometido.
 export async function GET() {
   try {
     const [{ data: prods, error: errP }, { data: inv, error: errI }] = await Promise.all([
       supabase.from('productos').select('*').order('categoria').order('modelo'),
-      supabase.from('inventario').select('sku,stock_total'),
+      supabase.from('vw_inventario_real').select('sku,stock_fisico,stock_comprometido,stock_disponible'),
     ]);
 
     if (errP) return NextResponse.json({ ok: false, error: errP.message }, { status: 500 });
+
+    // Si errI falla (ej. si la vista aún no está creada en DB), tratar de no romper el backend
+    // pero idealmente se debe correr el script SQL proporcionado.
 
     // Mapear inventario por SKU
     const stockMap = {};
@@ -31,14 +34,16 @@ export async function GET() {
       stockInicial: p.stock_inicial || 0,
       tela:         p.tela || '',
       activo:       p.activo,
+      alias:        p.alias || '',
 
       // ✅ Reglas de precio mayorista configurables por modelo
       minMayorista:        p.min_mayorista        ?? 6,
       modelosMinMayorista: p.modelos_min_mayorista ?? 3,
 
-      // ✅ Fuente única: inventario.stock_disponible (mismo que el dashboard)
-      disponible:      stockMap[p.sku]?.stock_total    ?? p.stock_inicial ?? 0,
-      stockTotal:      stockMap[p.sku]?.stock_total    ?? p.stock_inicial ?? 0,
+      // ✅ Fuente única: vw_inventario_real
+      disponible:        stockMap[p.sku]?.stock_disponible  ?? p.stock_inicial ?? 0,
+      stockTotal:        stockMap[p.sku]?.stock_fisico      ?? p.stock_inicial ?? 0,
+      stockComprometido: stockMap[p.sku]?.stock_comprometido ?? 0,
 
       // Estos campos se calculan en el dashboard; aquí son 0 para no duplicar queries
       entradas: 0,
@@ -61,7 +66,7 @@ export async function GET() {
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { categoria, modelo, talla, precioDetal, precioMayor, precioCosto, colores } = body;
+    const { categoria, modelo, talla, precioDetal, precioMayor, precioCosto, colores, alias } = body;
 
     if (!categoria) return NextResponse.json({ ok: false, error: 'Categoría requerida' }, { status: 400 });
     if (!modelo)    return NextResponse.json({ ok: false, error: 'Modelo requerido' },    { status: 400 });
@@ -95,6 +100,7 @@ export async function POST(request) {
         precio_mayor: parseFloat(precioMayor) || 0,
         precio_costo: parseFloat(precioCosto) || 0,
         stock_inicial: stockIni,
+        alias:        (alias || '').toUpperCase().trim(),
       });
       if (errProd) continue;
 

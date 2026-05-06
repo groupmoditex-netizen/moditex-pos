@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import Link from 'next/link';
 import CatalogoExplorer from '@/components/CatalogoExplorer';
 import ScannerInput from '@/components/ScannerInput';
 import ModalPromo from '@/components/ModalPromo';
@@ -42,6 +43,13 @@ function ModalNueva({ clientes, productos, onClose, onSave, initialDraft = null,
   const [items,    setItems]   = useState(initialDraft?.items || []);
   const [catalogo, setCatalogo]= useState(false);
   const [promoModal, setPromoModal] = useState(false);
+  const [tasa, setTasa] = useState(0);
+
+  useEffect(() => {
+    fetch('/api/tasa').then(r=>r.json()).then(d=>{
+      if(d.ok && d.tasa_bs_eur) setTasa(d.tasa_bs_eur);
+    }).catch(()=>{});
+  }, []);
 
   /* ── Borrador (En espera) — sistema multi-draft ─────── */
   const DRAFTS_KEY = 'moditex_comandas_espera';
@@ -97,7 +105,7 @@ function ModalNueva({ clientes, productos, onClose, onSave, initialDraft = null,
     setItems(prev=>{
       const ex=prev.find(x=>x.sku===p.sku);
       if(ex) return prev.map(x=>x.sku===p.sku?{...x,qty:x.qty+qty,tipo_precio:tv}:x);
-      return[...prev,{...p,qty,tipo_precio:tv}];
+      return [{...p,qty,tipo_precio:tv}, ...prev];
     });
   }
 
@@ -132,7 +140,7 @@ function ModalNueva({ clientes, productos, onClose, onSave, initialDraft = null,
     setItems(prev => {
       const ex = prev.find(x => x.sku === prod.sku);
       if (ex) return prev.map(x => x.sku === prod.sku ? {...x, qty: x.qty + 1} : x);
-      return [...prev, {...prod, qty: 1, tipo_precio: 'AUTO'}];
+      return [{...prod, qty: 1, tipo_precio: 'AUTO'}, ...prev];
     });
     setSkuMsg({ t: 'ok', m: `✓ ${prod.modelo} — ${prod.color}` });
     setTimeout(() => setSkuMsg(null), 2500);
@@ -364,8 +372,8 @@ function ModalNueva({ clientes, productos, onClose, onSave, initialDraft = null,
       </div>
     )}
 
-    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:200,display:'flex',alignItems:'flex-end',justifyContent:'center',padding:'0',overflowY:'auto'}} className="modal-wrap">
-      <div className="modal-fullscreen" style={{background:'var(--bg)',border:'1px solid var(--border-strong)',width:'100%',maxWidth:'620px',borderTop:'3px solid #f59e0b',maxHeight:'calc(100dvh - 10px)',display:'flex',flexDirection:'column'}}>
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:200,display:'flex',alignItems:'stretch',justifyContent:'stretch',padding:'0',overflow:'hidden'}} className="modal-wrap">
+      <div className="modal-content" onClick={e=>e.stopPropagation()} style={{background:'var(--bg)',width:'100%',height:'100%',borderRadius:'0',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'none'}}>
 
         {/* ── Cabecera ─────────────────────────────────────────── */}
         <div style={{padding:'13px 18px',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0}}>
@@ -535,7 +543,7 @@ function ModalNueva({ clientes, productos, onClose, onSave, initialDraft = null,
                     </button>
                   </div>
 
-                  {[...itemsEnriquecidos].reverse().map(item=>{
+                  {itemsEnriquecidos.map(item=>{
                     const precio=item.precio_aplicado; const dot=colorHex(item.color);
                     const dispItem = item.disponible ?? null;
                     const sobreStock = dispItem !== null && item.qty > dispItem;
@@ -588,10 +596,35 @@ function ModalNueva({ clientes, productos, onClose, onSave, initialDraft = null,
 
                   {/* Total fijo al pie de la lista */}
                   <div style={{padding:'9px 14px',background:'var(--bg3)',borderTop:'2px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                    <span style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#666',textTransform:'uppercase',letterSpacing:'.1em'}}>
-                      Total · {items.reduce((a,it)=>a+it.qty,0)} uds
+                    <span style={{display:'flex', flexDirection:'column', alignItems:'flex-start'}}>
+                      <span style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#666',textTransform:'uppercase',letterSpacing:'.1em'}}>
+                        Total · {items.reduce((a,it)=>a+it.qty,0)} uds
+                      </span>
+                      {tasa > 0 && (
+                        <Link href="/tasa" style={{
+                          fontFamily:'DM Mono,monospace',
+                          fontSize:'10px',
+                          color:'var(--blue)',
+                          fontWeight:800,
+                          marginTop:'3px',
+                          background:'var(--blue-soft)',
+                          padding:'1px 6px',
+                          borderRadius:'4px',
+                          textDecoration:'none',
+                          cursor:'pointer'
+                        }}>
+                          TASA: {tasa.toFixed(2)} Bs
+                        </Link>
+                      )}
                     </span>
-                    <span style={{fontFamily:'Playfair Display,serif',fontSize:'17px',fontWeight:700,color:'var(--red)'}}>€ {totalCalc.toFixed(2)}</span>
+                    <div style={{textAlign:'right'}}>
+                      <div style={{fontFamily:'Playfair Display,serif',fontSize:'17px',fontWeight:700,color:'var(--red)'}}>€ {totalCalc.toFixed(2)}</div>
+                      {tasa > 0 && (
+                        <div style={{fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#888',marginTop:'2px',fontWeight:700}}>
+                          ≈ Bs. {new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2 }).format(totalCalc * tasa)}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}

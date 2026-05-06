@@ -63,6 +63,13 @@ export default function ModalGestion({ cmd, onClose, onSave, isAdmin, usuario, u
   const [showCatalogo, setShowCatalogo] = useState(false);
 
   useEffect(() => {
+    // Bloquear el scroll del fondo mientras el modal está abierto
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = originalOverflow; };
+  }, []);
+
+  useEffect(() => {
     fetch(`/api/pagos?comanda_id=${cmd.id}`).then(r => r.json()).then(d => { if (d.ok) setPagos(d.pagos); setLoadP(false); });
     fetch(`/api/comentarios?comanda_id=${cmd.id}`).then(r => r.json()).then(d => { if (d.ok) setComsLocal(d.comentarios); });
     
@@ -139,9 +146,24 @@ export default function ModalGestion({ cmd, onClose, onSave, isAdmin, usuario, u
 
   return (
     <div className="modal-overlay" onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',backdropFilter:'blur(8px)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,animation:'fadeIn .2s ease'}}>
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media (max-width: 767px) {
+          .mg-header { padding: 10px 12px !important; }
+          .mg-header h3 { font-size: 14px !important; }
+          .mg-header span { font-size: 9px !important; padding: 2px 6px !important; }
+          .mg-header button { width: 28px !important; height: 28px !important; font-size: 14px !important; }
+          .mg-body { padding: 12px !important; gap: 12px !important; }
+          .mg-body h4 { font-size: 13px !important; }
+          .mg-prod-row { padding: 6px 10px !important; gap: 8px !important; }
+          .mg-prod-row .prod-name { font-size: 11px !important; }
+          .mg-btn { padding: 10px !important; font-size: 10px !important; border-radius: 8px !important; }
+          .mg-footer { padding: 10px 12px !important; }
+          .mg-footer button { padding: 8px 12px !important; font-size: 11px !important; border-radius: 8px !important; }
+        }
+      ` }} />
       <div className="modal-content" onClick={e=>e.stopPropagation()} style={{background:'var(--bg)',width:'100%',maxWidth:'600px',maxHeight:'92vh',borderRadius:'24px',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'0 25px 50px -12px rgba(0,0,0,0.25)',border:'1px solid rgba(255,255,255,0.1)'}}>
         
-        <div style={{padding:'20px 24px',background:'var(--surface)',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0}}>
+        <div className="mg-header" style={{padding:'20px 24px',background:'var(--surface)',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0}}>
           <div>
             <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
               <h3 style={{margin:0,fontFamily:'Playfair Display,serif',fontSize:'20px',fontWeight:700}}>Comanda #{cmd.id}</h3>
@@ -152,13 +174,13 @@ export default function ModalGestion({ cmd, onClose, onSave, isAdmin, usuario, u
           <button onClick={onClose} style={{background:'var(--bg2)',border:'none',width:'36px',height:'36px',borderRadius:'50%',cursor:'pointer',fontSize:'18px',display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
         </div>
 
-        <div style={{flex:1,overflowY:'auto',padding:'24px',display:'flex',flexDirection:'column',gap:'20px'}}>
+        <div className="mg-body" style={{flex:1,overflowY:'auto',padding:'24px',display:'flex',flexDirection:'column',gap:'20px'}}>
           {err && <div style={{padding:'12px',background:'var(--red-soft)',color:'var(--red)',fontSize:'13px',borderRadius:'8px',border:'1px solid rgba(217,30,30,0.1)'}}>⚠️ {err}</div>}
 
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'15px'}}>
             <h4 style={{margin:0,fontFamily:'Playfair Display,serif',fontSize:'16px'}}>Resumen de Pedido</h4>
-            {isAdmin && !editMode && <button onClick={()=>setEditMode(true)} style={{padding:'6px 12px',background:'none',border:'1px solid var(--border)',borderRadius:'12px',fontSize:'11px',cursor:'pointer',color:'#777'}}>✏️ Editar Items</button>}
-            {isAdmin && editMode && <button onClick={()=>setShowCatalogo(!showCatalogo)} style={{padding:'6px 12px',background:'var(--blue)',color:'#fff',border:'none',borderRadius:'12px',fontSize:'11px',cursor:'pointer',fontWeight:700}}>{showCatalogo ? '✕ Cerrar Catálogo' : '➕ Añadir Prenda'}</button>}
+            {isAdmin && !editMode && <button className="mg-btn" onClick={()=>setEditMode(true)} style={{padding:'6px 12px',background:'none',border:'1px solid var(--border)',borderRadius:'12px',fontSize:'11px',cursor:'pointer',color:'#777'}}>✏️ Editar Items</button>}
+            {isAdmin && editMode && <button className="mg-btn" onClick={()=>setShowCatalogo(!showCatalogo)} style={{padding:'6px 12px',background:'var(--blue)',color:'#fff',border:'none',borderRadius:'12px',fontSize:'11px',cursor:'pointer',fontWeight:700}}>{showCatalogo ? '✕ Cerrar Catálogo' : '➕ Añadir Prenda'}</button>}
           </div>
 
           {editMode && showCatalogo && (
@@ -185,7 +207,7 @@ export default function ModalGestion({ cmd, onClose, onSave, isAdmin, usuario, u
             </div>
           )}
 
-          <div style={{background:'var(--surface)',borderRadius:'16px',border:'1px solid var(--border)',overflow:'hidden'}}>
+          <div style={{background:'var(--surface)',borderRadius:'16px',border:'1px solid var(--border)',overflowY:'auto',maxHeight:'40vh'}}>
             {loadingItems ? (
               <div style={{padding:'30px',textAlign:'center',color:'#888',fontSize:'12px'}}>Cargando productos...</div>
             ) : prods.length === 0 ? (
@@ -193,11 +215,11 @@ export default function ModalGestion({ cmd, onClose, onSave, isAdmin, usuario, u
             ) : prods.map((p,i)=>{
               const dot=colorHex(p.color);
               return(
-                <div key={i} style={{padding:'12px 16px',borderBottom:i===prods.length-1?'none':'1px solid var(--border-soft)',display:'flex',alignItems:'center',gap:'15px'}}>
+                <div key={i} className="mg-prod-row" style={{padding:'12px 16px',borderBottom:i===prods.length-1?'none':'1px solid var(--border-soft)',display:'flex',alignItems:'center',gap:'15px'}}>
                    <div style={{display:'flex',alignItems:'center',gap:'10px',flex:1}}>
                      <span style={{width:'8px',height:'8px',borderRadius:'50%',background:dot,border:'1px solid rgba(0,0,0,0.1)'}}/>
                      <div>
-                       <div style={{fontSize:'13px',fontWeight:600}}>{p.modelo||p.sku}</div>
+                       <div className="prod-name" style={{fontSize:'13px',fontWeight:600}}>{p.modelo||p.sku}</div>
                        <div style={{fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#888'}}>{p.sku}</div>
                      </div>
                    </div>
@@ -221,17 +243,17 @@ export default function ModalGestion({ cmd, onClose, onSave, isAdmin, usuario, u
             <>
               <div style={{display:'flex',gap:'12px',flexWrap:'wrap'}}>
                 {sigStatus && (
-                  <button onClick={()=>cambiarStatus(sigStatus)} disabled={saving} style={{flex:2,padding:'14px',background:S[sigStatus].border,color:'#fff',border:'none',borderRadius:'12px',cursor:'pointer',fontSize:'14px',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',gap:'8px',opacity:saving?.6:1}}>
+                  <button className="mg-btn" onClick={()=>cambiarStatus(sigStatus)} disabled={saving} style={{flex:2,padding:'14px',background:S[sigStatus].border,color:'#fff',border:'none',borderRadius:'12px',cursor:'pointer',fontSize:'14px',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',gap:'8px',opacity:saving?.6:1}}>
                     {S[sigStatus].icon} Avanzar a {S[sigStatus].label}
                   </button>
                 )}
-                <button onClick={()=>cambiarStatus('cancelado')} disabled={saving} style={{flex:1,padding:'14px',background:'var(--bg2)',color:'var(--red)',border:'1px solid var(--red)',borderRadius:'12px',cursor:'pointer',fontSize:'12px',fontWeight:600}}>❌ Cancelar</button>
+                <button className="mg-btn" onClick={()=>cambiarStatus('cancelado')} disabled={saving} style={{flex:1,padding:'14px',background:'var(--bg2)',color:'var(--red)',border:'1px solid var(--red)',borderRadius:'12px',cursor:'pointer',fontSize:'12px',fontWeight:600}}>❌ Cancelar</button>
               </div>
 
               {saldo > 0.01 && (
                 <div>
                    {!showPago ? (
-                     <button onClick={()=>setShowPago(true)} style={{width:'100%',padding:'14px',background:'var(--green)',color:'#fff',border:'none',borderRadius:'12px',fontWeight:700,fontSize:'14px',cursor:'pointer'}}>💰 Registrar Pago (€ {fmtNum(saldo)} pendiente)</button>
+                     <button className="mg-btn" onClick={()=>setShowPago(true)} style={{width:'100%',padding:'14px',background:'var(--green)',color:'#fff',border:'none',borderRadius:'12px',fontWeight:700,fontSize:'14px',cursor:'pointer'}}>💰 Registrar Pago (€ {fmtNum(saldo)} pendiente)</button>
                    ):(
                      <div style={{position:'relative'}}>
                         <button onClick={()=>setShowPago(false)} style={{position:'absolute',right:'12px',top:'12px',zIndex:10,background:'none',border:'none',cursor:'pointer',fontSize:'14px',opacity:.5}}>✕</button>
@@ -278,7 +300,7 @@ export default function ModalGestion({ cmd, onClose, onSave, isAdmin, usuario, u
                   <div style={{display:'flex',flexDirection:'column',gap:'15px'}}>
                      <div style={{display:'flex',gap:'8px'}}>
                         <textarea value={nuevoCom} onChange={e=>setNuevoCom(e.target.value)} placeholder="Agrega un comentario..." style={{...inp,flex:1,borderRadius:'12px',minHeight:'60px'}}/>
-                        <button onClick={enviarComentario} disabled={saving||!nuevoCom.trim()} style={{width:'50px',background:'var(--ink)',color:'#fff',border:'none',borderRadius:'12px',cursor:'pointer',fontSize:'20px'}}>➤</button>
+                        <button className="mg-btn" onClick={enviarComentario} disabled={saving||!nuevoCom.trim()} style={{width:'50px',background:'var(--ink)',color:'#fff',border:'none',borderRadius:'12px',cursor:'pointer',fontSize:'20px'}}>➤</button>
                      </div>
                      <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
                        {comsLocal.map((c,i)=>(
@@ -303,16 +325,16 @@ export default function ModalGestion({ cmd, onClose, onSave, isAdmin, usuario, u
           )}
         </div>
 
-        <div style={{padding:'16px 24px',background:'var(--bg2)',borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between'}}>
-          {isAdmin && !editMode && <button onClick={eliminarComanda} disabled={deleting} style={{background:'none',border:'1px solid var(--red)',color:'var(--red)',padding:'8px 15px',borderRadius:'8px',fontSize:'11px',fontWeight:700,cursor:'pointer'}}>{deleting?'⏳':'🗑 ELIMINAR'}</button>}
+        <div className="mg-footer" style={{padding:'16px 24px',background:'var(--bg2)',borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between'}}>
+          {isAdmin && !editMode && <button className="mg-btn" onClick={eliminarComanda} disabled={deleting} style={{background:'none',border:'1px solid var(--red)',color:'var(--red)',padding:'8px 15px',borderRadius:'8px',fontSize:'11px',fontWeight:700,cursor:'pointer'}}>{deleting?'⏳':'🗑 ELIMINAR'}</button>}
           <div style={{display:'flex',gap:'10px',marginLeft:'auto'}}>
             {editMode ? (
               <>
-                <button onClick={()=>{setEditMode(false);setShowCatalogo(false);}} style={{background:'none',border:'1px solid var(--border)',padding:'10px 16px',borderRadius:'12px',fontSize:'13px',cursor:'pointer'}}>Cancelar</button>
-                <button onClick={guardarEdicion} disabled={saving} style={{background:'var(--warn)',color:'#000',border:'none',padding:'10px 20px',borderRadius:'12px',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>💾 Guardar Cambios</button>
+                <button className="mg-btn" onClick={()=>{setEditMode(false);setShowCatalogo(false);}} style={{background:'none',border:'1px solid var(--border)',padding:'10px 16px',borderRadius:'12px',fontSize:'13px',cursor:'pointer'}}>Cancelar</button>
+                <button className="mg-btn" onClick={guardarEdicion} disabled={saving} style={{background:'var(--warn)',color:'#000',border:'none',padding:'10px 20px',borderRadius:'12px',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>💾 Guardar Cambios</button>
               </>
             ):(
-              <button onClick={onClose} style={{background:'var(--ink)',color:'#fff',border:'none',padding:'10px 24px',borderRadius:'12px',fontSize:'14px',fontWeight:700,cursor:'pointer'}}>Cerrar</button>
+              <button className="mg-btn" onClick={onClose} style={{background:'var(--ink)',color:'#fff',border:'none',padding:'10px 24px',borderRadius:'12px',fontSize:'14px',fontWeight:700,cursor:'pointer'}}>Cerrar</button>
             )}
           </div>
         </div>

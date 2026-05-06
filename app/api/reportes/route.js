@@ -21,13 +21,13 @@ export async function GET(request) {
     const { data: movs, error } = await q;
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
-    // Traer productos para enriquecer con modelo/categoría
+    // Traer productos para enriquecer con modelo/categoría/color/talla/tela
     const skusUnicos = [...new Set((movs || []).map(m => m.sku))];
     let prodMap = {};
     if (skusUnicos.length > 0) {
       const { data: prods } = await supabase
         .from('productos')
-        .select('sku, modelo, categoria, precio_costo')
+        .select('sku, modelo, categoria, precio_costo, color, talla, tela')
         .in('sku', skusUnicos);
       (prods || []).forEach(p => { prodMap[p.sku] = p; });
     }
@@ -76,8 +76,25 @@ export async function GET(request) {
       catMap[cat].unidades += m.cantidad;
       catMap[cat].ventas   += (m.precio_venta || 0) * m.cantidad;
     });
-    const topCategorias = Object.values(catMap)
-      .sort((a, b) => b.ventas - a.ventas);
+    const topCategorias = Object.values(catMap).sort((a, b) => b.ventas - a.ventas);
+
+    // ── Top colores ──────────────────────────────────────────────────
+    const colorMap = {};
+    lista.forEach(m => {
+      const color = prodMap[m.sku]?.color || 'Desconocido';
+      if (!colorMap[color]) colorMap[color] = { color, unidades: 0 };
+      colorMap[color].unidades += m.cantidad;
+    });
+    const topColores = Object.values(colorMap).sort((a, b) => b.unidades - a.unidades).slice(0, 8);
+
+    // ── Top telas ────────────────────────────────────────────────────
+    const telaMap = {};
+    lista.forEach(m => {
+      const tela = prodMap[m.sku]?.tela || 'Sin tela';
+      if (!telaMap[tela]) telaMap[tela] = { tela, unidades: 0 };
+      telaMap[tela].unidades += m.cantidad;
+    });
+    const topTelas = Object.values(telaMap).sort((a, b) => b.unidades - a.unidades).slice(0, 8);
 
     // ── Top clientes ──────────────────────────────────────────────────
     const cliMap = {};
@@ -87,9 +104,7 @@ export async function GET(request) {
       cliMap[ref].unidades += m.cantidad;
       cliMap[ref].ventas   += (m.precio_venta || 0) * m.cantidad;
     });
-    const topClientes = Object.values(cliMap)
-      .sort((a, b) => b.ventas - a.ventas)
-      .slice(0, 10);
+    const topClientes = Object.values(cliMap).sort((a, b) => b.ventas - a.ventas).slice(0, 10);
 
     // ── Ventas por día (para gráfica de tendencia) ────────────────────
     const diaMap = {};
@@ -113,6 +128,8 @@ export async function GET(request) {
       },
       topModelos,
       topCategorias,
+      topColores,
+      topTelas,
       topClientes,
       porDia,
       periodo: { desde: desde || null, hasta: hasta || null },

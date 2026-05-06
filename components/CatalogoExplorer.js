@@ -25,6 +25,7 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
   const [buscar,  setBuscar] = useState('');
   const [qtyMap,  setQtyMap]   = useState({});
   const [tvMap,   setTvMap]    = useState({});
+  const [quickPick, setQuickPick] = useState(null); // {modelo, categoria, vars}
 
   // ── Mapeo de lo que ya está en la cesta ───────────────────────────
   const cestaMap = useMemo(() => {
@@ -95,9 +96,24 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
 
   const resultadosBusq = useMemo(()=>{
     if(buscar.length<2) return [];
-    const q=buscar.toLowerCase();
-    return productos.filter(p=>`${p.sku} ${p.modelo} ${p.color} ${p.categoria}`.toLowerCase().includes(q))
-      .sort((a,b)=>b.disponible-a.disponible).slice(0,20);
+    const q = buscar.toLowerCase();
+    const words = q.split(' ').filter(w => w.length > 0);
+    const matches = productos.filter(p => {
+      const target = `${p.sku} ${p.modelo} ${p.color} ${p.categoria} ${p.alias || ''}`.toLowerCase();
+      const targetWords = target.split(/[\s\-_/.]+/);
+      return words.every(word => targetWords.some(tw => tw.startsWith(word)));
+    });
+
+    // Agrupar por modelo
+    const map={};
+    matches.forEach(p=>{
+      const key = `${p.categoria}__${p.modelo}`;
+      if(!map[key]) map[key]={modelo:p.modelo, categoria:p.categoria, vars:[], stock:0};
+      map[key].vars.push(p);
+      map[key].stock += p.disponible;
+    });
+
+    return Object.values(map).sort((a,b)=>b.stock-a.stock).slice(0, 40);
   },[productos,buscar]);
 
   function irCategoria(cat){ resetScroll(); setCatSel(cat); setModSel(''); setVista('modelos'); setBuscar(''); }
@@ -127,9 +143,9 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
 
   const estilo = {
     overlay: compact ? {display:'flex',flexDirection:'column',flex:1, height:'100%'} : {position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:'16px',backdropFilter:'blur(3px)'},
-    box:     compact ? {background:'var(--bg)',border:'none',borderRadius:'0',display:'flex',flexDirection:'column',overflow:'hidden',height:'100%'} : {background:'var(--bg)',border:'1px solid var(--border-strong)',borderTop:'3px solid var(--red)',width:'100%',maxWidth:'900px',maxHeight:'92vh',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'0 20px 60px rgba(0,0,0,.2)'},
-    hdr:     {display:'flex',alignItems:'center',gap:'12px',padding:compact?'12px 0':'14px 20px',borderBottom:compact?'none':'1px solid var(--border)',background:compact?'transparent':'var(--bg2)',flexShrink:0},
-    body:    {flex:1,overflowY:'auto',padding:compact?'0':'16px 20px'},
+    box:     compact ? {background:'var(--bg)',border:'none',borderRadius:'0',display:'flex',flexDirection:'column',overflow:'visible',height:'100%'} : {background:'var(--bg)',border:'1px solid var(--border-strong)',borderTop:'3px solid var(--red)',width:'100%',maxWidth:'900px',maxHeight:'92vh',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'0 20px 60px rgba(0,0,0,.2)'},
+    hdr:     {display:'flex',alignItems:'center',gap:'12px',padding:compact?'12px 20px':'14px 20px',borderBottom:compact?'none':'1px solid var(--border)',background:compact?'transparent':'var(--bg2)',flexShrink:0},
+    body:    {flex:1,overflowY:compact?'visible':'auto',padding:compact?'15px 20px':'16px 20px'},
     secLbl:  {fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888',letterSpacing:'.15em',textTransform:'uppercase',marginBottom:'15px',fontWeight:700},
   };
 
@@ -142,16 +158,32 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
           : <span style={{color:'var(--ink)',fontWeight:700}}>{catSel}</span>
         }</>}
         {vista==='busqueda' && <><span>›</span><span style={{color:'var(--ink)',fontWeight:700}}>Búsqueda: "{buscar}"</span></>}
+        {quickPick && <span style={{marginLeft:'auto', color:'var(--warn)', fontWeight:700, animation:'pulse 1.5s infinite'}}>← Selecciona un color</span>}
       </div>
     );
   }
 
   function ProdCard({ p }) {
-    const noStock = modo==='salida' && p.disponible<=0;
-    const dot     = colorHex(p.color);
-    const sc      = p.disponible>3?'var(--green)':p.disponible>0?'var(--warn)':'var(--red)';
     const inPending = cestaMap[p.sku] > 0;
     const pendQty   = cestaMap[p.sku] || 0;
+    const dot       = colorHex(p.color);
+
+    let trafficColor = 'var(--green)';
+    let trafficText = `${p.disponible} uds`;
+    let warningMsg = null;
+
+    if (p.disponible <= 0) {
+      trafficColor = 'var(--red)';
+      trafficText = p.stockTotal > 0 ? 'Agotado (Reservado)' : '🏭 Sin stock';
+      if (p.stockTotal > 0) warningMsg = 'Inventario agotado (Reservado para pedidos)';
+    } else if (p.stockComprometido > 0 && p.disponible <= 10) {
+      trafficColor = 'var(--warn)';
+      trafficText = `${p.disponible} uds`;
+      warningMsg = `Atención: ${p.stockComprometido} uds comprometidas. Quedan ${p.disponible} uds de ${p.tela || 'esta tela'} libres.`;
+    } else if (p.disponible <= 3) {
+      trafficColor = 'var(--warn)';
+      trafficText = `¡Solo ${p.disponible} uds!`;
+    }
 
     return (
       <div style={{background:'var(--surface)',border:`1px solid ${inPending?'var(--green)':'var(--border)'}`,borderRadius:'10px',padding:'10px',display:'flex',flexDirection:'column',gap:'6px',position:'relative',transition:'all 0.2s',boxShadow:inPending?'0 4px 12px rgba(34,197,94,0.1)':'none'}}>
@@ -172,13 +204,19 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
           {p.color}{p.talla&&p.talla!=='UNICA'?` · T:${p.talla}`:''}
         </div>
         
+        {warningMsg && (
+          <div style={{fontSize:'8px', color:trafficColor, fontFamily:'DM Mono,monospace', lineHeight:'1.2', marginTop:'2px', padding:'4px 6px', background: p.disponible<=0 ? 'var(--red-soft)' : 'var(--warn-soft)', borderRadius:'4px'}}>
+            {warningMsg}
+          </div>
+        )}
+
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:'4px'}}>
-          <span style={{fontFamily:'DM Mono,monospace',fontSize:'10px',fontWeight:700,color:sc}}>
-            {p.disponible>0?`${p.disponible} uds`:'🏭 Sin stock'}
+          <span style={{fontFamily:'DM Mono,monospace',fontSize:'10px',fontWeight:700,color:trafficColor}}>
+            {trafficText}
           </span>
           {inPending && (
             <button onClick={()=>handleRemove(p)} style={{background:'none',border:'none',color:'var(--red)',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'8px',padding:'2px 0',fontWeight:700}}>
-              ✕ Borrar todo
+              ✕ Borrar
             </button>
           )}
         </div>
@@ -191,7 +229,7 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
             cursor:'pointer',
             fontFamily:'DM Mono,monospace',fontSize:'10px',fontWeight:900,letterSpacing:'.05em',textTransform:'uppercase',
             transition:'all .2s'}}>
-          {inPending ? `✓ CARGADO` : (p.disponible<=0 ? '+ SOLICITAR' : '+ AÑADIR')}
+          {inPending ? `✓ CARGADO` : (p.disponible<=0 ? '+ FORZAR' : '+ AÑADIR')}
         </button>
       </div>
     );
@@ -216,7 +254,7 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
         </div>
 
         {/* Search bar */}
-        <div style={{padding:compact?'10px 0':'10px 20px',borderBottom:compact?'none':'1px solid var(--border)',background:'transparent',flexShrink:0}}>
+        <div style={{padding:compact?'10px 20px':'10px 20px',borderBottom:compact?'none':'1px solid var(--border)',background:'transparent',flexShrink:0}}>
           <div style={{display:'flex',alignItems:'center',gap:'8px',background:'var(--bg2)',border:compact?'none':'1px solid var(--border)',borderRadius:compact?'12px':'0',padding:'10px 14px',boxShadow:compact?'inset 0 2px 4px rgba(0,0,0,0.03)':'none'}}>
             <span style={{color:'#666',fontSize:'14px'}}>🔍</span>
             <input value={buscar}
@@ -251,17 +289,84 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
           {vista==='modelos'&&(
             <>
               <div style={estilo.secLbl}>{catSel} — {modelos.length} modelos</div>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:'9px'}}>
-                {modelos.map(({modelo,stock,conStock,vars})=>(
-                  <button key={modelo} onClick={()=>irModelo(modelo)}
-                    style={{background:'var(--surface)',border:`1px solid var(--border)`,borderLeft:`3px solid ${stock>0?'var(--green)':'var(--border)'}`,padding:'12px 14px',cursor:'pointer',textAlign:'left',transition:'all .14s'}}
-                    onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--red)';}}
-                    onMouseLeave={e=>{e.currentTarget.style.borderLeft=`3px solid ${stock>0?'var(--green)':'var(--border)'}`;e.currentTarget.style.borderColor='var(--border)';}}>
-                    <div style={{fontFamily:'Poppins,sans-serif',fontSize:'13px',fontWeight:700,marginBottom:'4px'}}>{modelo}</div>
-                    <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#666'}}>
-                      {vars.length} variantes · <span style={{color:stock>0?'var(--green)':'var(--red)',fontWeight:700}}>{stock>0?`${stock} uds`:'Sin stock'}</span>
-                    </div>
-                  </button>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:'12px', position:'relative', paddingTop:'10px'}}>
+                {modelos.map((m)=>(
+                  <div key={m.modelo} style={{position:'relative', zIndex: quickPick?.modelo === m.modelo ? 2000 : 1}}>
+                    <button onClick={(e)=>{ 
+                      const isClosing = quickPick?.modelo === m.modelo;
+                      const target = e.currentTarget;
+                      const openUp = (target.offsetTop - bodyRef.current.scrollTop) > 220;
+                      setQuickPick(isClosing ? null : {...m, categoria: catSel, openUp}); 
+                      if(!isClosing) {
+                        setTimeout(() => {
+                          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }, 100);
+                      }
+                    }}
+                      style={{width:'100%', background:'var(--surface)',border:`1px solid ${quickPick?.modelo===m.modelo?'var(--warn)':'var(--border)'}`,borderLeft:`3px solid ${m.stock>0?'var(--green)':'var(--border)'}`,padding:'8px 12px',cursor:'pointer',textAlign:'left',transition:'all .14s', borderRadius:'8px', boxShadow:quickPick?.modelo===m.modelo?'0 0 0 2px var(--warn-soft)':'none'}}
+                      onMouseEnter={e=>e.currentTarget.style.borderColor='var(--red)'}
+                      onMouseLeave={e=>e.currentTarget.style.borderColor=quickPick?.modelo===m.modelo?'var(--warn)':'var(--border)'}>
+                      <div style={{fontFamily:'Poppins,sans-serif',fontSize:'12px',fontWeight:700,marginBottom:'2px',lineHeight:'1.2'}}>{m.modelo}</div>
+                      <div style={{fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#666'}}>
+                         {m.vars.length} colores · <span style={{color:m.stock>0?'var(--green)':'var(--red)',fontWeight:700}}>{m.stock>0?`${m.stock} uds`:'Sin stock'}</span>
+                      </div>
+                    </button>
+                    
+                    {/* Quick Pick "Reacciones" - Estilo Premium Popover Inteligente */}
+                    {quickPick?.modelo === m.modelo && (
+                      <div style={{
+                        position:'absolute', 
+                        // Si el índice es mayor a 2 (filas de abajo), lo mandamos hacia arriba
+                        bottom: quickPick.openUp ? 'calc(100% + 5px)' : 'auto',
+                        top: !quickPick.openUp ? 'calc(100% + 5px)' : 'auto',
+                        left:0, width:'240px', zIndex:2000, 
+                        background:'rgba(255,255,255,0.98)', border:'1px solid var(--border-strong)', borderRadius:'14px', 
+                        padding:'10px', boxShadow:'0 15px 35px rgba(0,0,0,0.2)', 
+                        animation:'popIn 0.2s ease-out',
+                        transformOrigin: 'center'
+                      }}>
+                        {/* Flechita del popover (ajustable) */}
+                        <div style={{
+                          position:'absolute', 
+                          bottom: modelos.indexOf(m) > 1 ? '-5px' : 'auto',
+                          top: modelos.indexOf(m) <= 1 ? '-5px' : 'auto',
+                          left:'15px', width:'10px', height:'10px', 
+                          background:'var(--surface)', 
+                          borderLeft:'1px solid var(--border-strong)', 
+                          borderTop: modelos.indexOf(m) <= 1 ? '1px solid var(--border-strong)' : 'none',
+                          borderBottom: modelos.indexOf(m) > 1 ? '1px solid var(--border-strong)' : 'none',
+                          borderRight: modelos.indexOf(m) > 1 ? '1px solid var(--border-strong)' : 'none',
+                          transform:'rotate(45deg)'
+                        }}/>
+                        
+                        <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(32px, 1fr))', gap:'8px', justifyContent:'items-center'}}>
+                          {m.vars.map((v, idx) => {
+                            const inP = cestaMap[v.sku] > 0;
+                            return (
+                              <button key={v.sku} onClick={() => { handleAdd(v); }}
+                                style={{
+                                  width:'32px', height:'32px', borderRadius:'10px', background:colorHex(v.color), 
+                                  border:`2.5px solid ${inP?'var(--green)':'#fff'}`, cursor:'pointer', 
+                                  boxShadow:'0 3px 6px rgba(0,0,0,.15)', position:'relative',
+                                  animation:`popIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) ${idx*0.02}s both`,
+                                  display:'flex', alignItems:'center', justifyContent:'center',
+                                  transition:'transform 0.1s'
+                                }}
+                                onMouseDown={e=>e.currentTarget.style.transform='scale(0.9)'}
+                                onMouseUp={e=>e.currentTarget.style.transform='scale(1)'}
+                                title={`${v.color} - ${v.disponible}uds`}>
+                                {inP && <span style={{fontSize:'12px', color:'#fff', textShadow:'0 1px 3px rgba(0,0,0,.6)'}}>✓</span>}
+                                {v.disponible <= 0 && <span style={{fontSize:'12px', color:'#fff', textShadow:'0 1px 3px rgba(0,0,0,.6)'}}>🏭</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div style={{textAlign:'center', marginTop:'12px', fontFamily:'DM Mono,monospace', fontSize:'9px', color:'var(--blue)', fontWeight:800, textTransform:'uppercase', letterSpacing:'.05em'}}>
+                           {m.modelo} · {m.vars.length} Colores
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
             </>
@@ -278,13 +383,98 @@ export default function CatalogoExplorer({ productos, modo, tipoVenta: tipoVenta
 
           {vista==='busqueda'&&(
             <>
-              <div style={estilo.secLbl}>{resultadosBusq.length} resultado{resultadosBusq.length!==1?'s':''}</div>
+              <div style={estilo.secLbl}>{resultadosBusq.length} modelo{resultadosBusq.length!==1?'s':''} encontrado{resultadosBusq.length!==1?'s':''}</div>
               {resultadosBusq.length===0
                 ? <div style={{textAlign:'center',padding:'40px',fontFamily:'DM Mono,monospace',fontSize:'11px',color:'#666'}}>Sin resultados para "{buscar}"</div>
-                : <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:'10px'}}>
-                    {resultadosBusq.map(p=><ProdCard key={p.sku} p={p}/>)}
+                : <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:'12px', position:'relative'}}>
+                    {resultadosBusq.map((m)=>(
+                      <div key={`${m.categoria}_${m.modelo}`} style={{position:'relative', zIndex: quickPick?.modelo === m.modelo ? 2000 : 1}}>
+                        <button onClick={(e)=>{ 
+                          const isClosing = quickPick?.modelo === m.modelo;
+                          const target = e.currentTarget;
+                          const openUp = (target.offsetTop - bodyRef.current.scrollTop) > 220;
+                          setQuickPick(isClosing ? null : {...m, openUp}); 
+                          if(!isClosing) {
+                            setTimeout(() => {
+                              target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }, 100);
+                          }
+                        }}
+                          style={{width:'100%', background:'var(--surface)',border:`1px solid ${quickPick?.modelo===m.modelo?'var(--warn)':'var(--border)'}`,borderLeft:`3px solid ${m.stock>0?'var(--green)':'var(--border)'}`,padding:'12px 14px',cursor:'pointer',textAlign:'left',transition:'all .14s', borderRadius:'8px', boxShadow:quickPick?.modelo===m.modelo?'0 0 0 2px var(--warn-soft)':'none'}}
+                          onMouseEnter={e=>e.currentTarget.style.borderColor='var(--red)'}
+                          onMouseLeave={e=>e.currentTarget.style.borderColor=quickPick?.modelo===m.modelo?'var(--warn)':'var(--border)'}>
+                          <div style={{fontFamily:'Poppins,sans-serif',fontSize:'13px',fontWeight:700,marginBottom:'4px'}}>{m.modelo}</div>
+                          <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#666'}}>
+                            {m.categoria} · {m.vars.length} colores · <span style={{color:m.stock>0?'var(--green)':'var(--red)',fontWeight:700}}>{m.stock>0?`${m.stock} uds`:'Sin stock'}</span>
+                          </div>
+                        </button>
+                        
+                        {/* Quick Pick "Reacciones" - Estilo Premium Popover Inteligente */}
+                        {quickPick?.modelo === m.modelo && (
+                          <div style={{
+                            bottom: quickPick.openUp ? 'calc(100% + 5px)' : 'auto',
+                            top: !quickPick.openUp ? 'calc(100% + 5px)' : 'auto',
+                            left:0, width:'240px', zIndex:2000, 
+                            background:'rgba(255,255,255,0.98)', border:'1px solid var(--border-strong)', borderRadius:'14px', 
+                            padding:'10px', boxShadow:'0 15px 35px rgba(0,0,0,0.2)', 
+                            animation:'popIn 0.2s ease-out',
+                            transformOrigin: 'center'
+                          }}>
+                            {/* Flechita del popover (ajustable) */}
+                            <div style={{
+                              position:'absolute', 
+                              bottom: resultadosBusq.indexOf(m) > 1 ? '-6px' : 'auto',
+                              top: resultadosBusq.indexOf(m) <= 1 ? '-6px' : 'auto',
+                              left:'20px', width:'12px', height:'12px', 
+                              background:'var(--surface)', 
+                              borderLeft:'1px solid var(--border-strong)', 
+                              borderTop: resultadosBusq.indexOf(m) <= 1 ? '1px solid var(--border-strong)' : 'none',
+                              borderBottom: resultadosBusq.indexOf(m) > 1 ? '1px solid var(--border-strong)' : 'none',
+                              borderRight: resultadosBusq.indexOf(m) > 1 ? '1px solid var(--border-strong)' : 'none',
+                              transform:'rotate(45deg)'
+                            }}/>
+                            
+                            <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(40px, 1fr))', gap:'10px', justifyContent:'items-center'}}>
+                              {m.vars.map((v, idx) => {
+                                const inP = cestaMap[v.sku] > 0;
+                                return (
+                                <button key={v.sku} onClick={() => { handleAdd(v); }}
+                                  style={{
+                                    width:'40px', height:'40px', borderRadius:'12px', background:colorHex(v.color), 
+                                    border:`2.5px solid ${inP?'var(--green)':'#fff'}`, cursor:'pointer', 
+                                    boxShadow:'0 4px 8px rgba(0,0,0,.15)', position:'relative',
+                                    animation:`popIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) ${idx*0.02}s both`,
+                                    display:'flex', alignItems:'center', justifyContent:'center',
+                                    transition:'transform 0.1s'
+                                  }}
+                                  onMouseDown={e=>e.currentTarget.style.transform='scale(0.9)'}
+                                  onMouseUp={e=>e.currentTarget.style.transform='scale(1)'}
+                                  title={`${v.color} - ${v.disponible}uds`}>
+                                  {inP && <span style={{fontSize:'12px', color:'#fff', textShadow:'0 1px 3px rgba(0,0,0,.6)'}}>✓</span>}
+                                  {v.disponible <= 0 && <span style={{fontSize:'12px', color:'#fff', textShadow:'0 1px 3px rgba(0,0,0,.6)'}}>🏭</span>}
+                                </button>
+                                );
+                              })}
+                            </div>
+                            <div style={{textAlign:'center', marginTop:'12px', fontFamily:'DM Mono,monospace', fontSize:'9px', color:'var(--blue)', fontWeight:800, textTransform:'uppercase', letterSpacing:'.05em'}}>
+                               {m.modelo} · {m.vars.length} Colores
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
               }
+              <style>{`
+                @keyframes popIn {
+                  0% { transform: scale(0.5); opacity: 0; }
+                  100% { transform: scale(1); opacity: 1; }
+                }
+                @keyframes pulse {
+                  0%, 100% { opacity: 1; }
+                  50% { opacity: 0.5; }
+                }
+              `}</style>
             </>
           )}
         </div>

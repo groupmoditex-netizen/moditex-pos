@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useMemo, useEffect } from 'react';
+import Link from 'next/link';
 import BarcodeScanner from '@/components/BarcodeScanner';
 import CatalogoExplorer from '@/components/CatalogoExplorer';
 import ModalPromo from '@/components/ModalPromo';
@@ -23,12 +24,28 @@ const lbl = {fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.16em'
 function fmtNum(n){return Number(n||0).toLocaleString('es-VE',{minimumFractionDigits:2,maximumFractionDigits:2});}
 // Eliminamos precioItem ya que usaremos el motor de precios enricher
 function colorHex(n){
-  const CM={BLANCO:'#d0d0d0',NEGRO:'#1a1a1a',AZUL:'#3b6fd4',ROJO:'#d63b3b',VERDE:'#2d9e4a',ROSA:'#f07aa0',GRIS:'#6b7280',AMARILLO:'#f5c842',NARANJA:'#f5c842',MORADO:'#7c4fd4',VINOTINTO:'#8b2035',BEIGE:'#d4b896',CORAL:'#f26e5b',CELESTE:'#7ec8e3'};
-  const k=(n||'').toUpperCase().trim();return CM[k]||CM[k.split(' ')[0]]||'#9ca3af';
+  const CM={
+    'BLANCO':'#ffffff', 'NEGRO':'#1a1a1a', 'GRIS':'#9ca3af', 'GRIS OSCURO':'#4b5563', 'GRIS CLARO':'#e5e7eb',
+    'AZUL':'#3b82f6', 'AZUL MARINO':'#1e1b4b', 'AZUL CLARO':'#93c5fd', 'AZUL REY':'#1d4ed8', 'AZUL TURQUESA':'#06b6d4', 'CELESTE':'#7dd3fc',
+    'ROJO':'#ef4444', 'VINOTINTO':'#7f1d1d', 'BORGOÑA':'#4c0519', 'ROSA':'#f472b6', 'ROSA PALO':'#dbadad', 'FUCSIA':'#d946ef',
+    'VERDE':'#22c55e', 'VERDE MILITAR':'#3f6212', 'VERDE MENTA':'#86efac', 'OLIVA':'#65a30d',
+    'AMARILLO':'#eab308', 'NARANJA':'#f97316', 'MORADO':'#a855f7', 'LILA':'#d8b4fe',
+    'BEIGE':'#f5f5dc', 'BEIGE OSCURO':'#d2b48c', 'MARRON':'#78350f', 'MARRON CLARO':'#a16207', 'CAFE':'#451a03',
+    'CREMA':'#fffdd0', 'CORAL':'#fb7185', 'SALMON':'#fda4af', 'MOSTAZA':'#ca8a04', 'TURQUESA':'#2dd4bf'
+  };
+  const k=(n||'').toUpperCase().trim();
+  if(CM[k]) return CM[k];
+  // Probar con la última palabra (ej: "AZUL MARINO" -> "MARINO" si no hay match completo)
+  // O simplemente match parcial
+  const found = Object.keys(CM).find(color => k.includes(color));
+  if(found) return CM[found];
+  return CM[k.split(' ')[0]] || '#9ca3af';
 }
 
 export default function ModalNueva({ onClose, onSave, clientes=[], productos=[], initialDraft=null, isAdmin, usuariosDB=[] }) {
   const [fase, setFase] = useState(1);
+  const RECOVERY_KEY = 'moditex_nueva_comanda_autosave';
+  const DRAFTS_KEY = 'moditex_comandas_espera';
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
   
@@ -60,19 +77,68 @@ export default function ModalNueva({ onClose, onSave, clientes=[], productos=[],
   const [pagosLista, setPagosLista] = useState([]);
   const [globalTasa, setGlobalTasa] = useState(1);
 
-  // Draft loading
+  const [activeDraftId, setActiveDraftId] = useState(null);
+  const [borradoresEnEspera, setBorradoresEnEspera] = useState([]);
+
+  // Cargar borradores en espera (los de la lista persistente)
+  const cargarBorradoresPersistentes = () => {
+    const list = JSON.parse(localStorage.getItem(DRAFTS_KEY) || '[]');
+    setBorradoresEnEspera(list);
+  };
+
+  useEffect(() => {
+    cargarBorradoresPersistentes();
+  }, []);
+
+  // Carga de borradores (Oficiales o de Emergencia)
   useEffect(() => {
     if (initialDraft) {
+      if (initialDraft.id) setActiveDraftId(initialDraft.id); // Guardar el ID del borrador activo
       if (initialDraft.cliente) {
         setCliente_tipo('existente');
         setCliente_id(initialDraft.cliente.id || '');
         setCliente_nombre(initialDraft.cliente.nombre || '');
+        setCliente_cedula(initialDraft.cliente.cedula || '');
+        setCliente_telefono(initialDraft.cliente.telefono || '');
+      } else {
+        setCliente_nombre(initialDraft.cliente_nombre || initialDraft.cliQuery || '');
+        setCliente_cedula(initialDraft.cliente_cedula || '');
       }
       if (initialDraft.items) setItems(initialDraft.items);
       if (initialDraft.notas) setNotas(initialDraft.notas);
       setFase(initialDraft.items?.length ? 2 : 1);
+    } else {
+      const saved = localStorage.getItem(RECOVERY_KEY);
+      if (saved) {
+        try {
+          const d = JSON.parse(saved);
+          if (d.id) setActiveDraftId(d.id);
+          if (d.items?.length) setItems(d.items);
+          if (d.cliente_id) setCliente_id(d.cliente_id);
+          if (d.cliente_tipo) setCliente_tipo(d.cliente_tipo);
+          if (d.cliente_nombre) setCliente_nombre(d.cliente_nombre);
+          if (d.cliente_cedula) setCliente_cedula(d.cliente_cedula);
+          if (d.cliente_telefono) setCliente_telefono(d.cliente_telefono);
+          if (d.cliente_email) setCliente_email(d.cliente_email);
+          if (d.cliente_ciudad) setCliente_ciudad(d.cliente_ciudad);
+          if (d.notas) setNotas(d.notas);
+          if (d.fase) setFase(d.fase);
+        } catch (e) {}
+      }
     }
   }, [initialDraft]);
+
+  // Auto-guardado
+  useEffect(() => {
+    if (items.length > 0 || cliente_id || cliente_nombre) {
+      const draft = { 
+        id: activeDraftId,
+        items, cliente_id, cliente_tipo, cliente_nombre, cliente_cedula, cliente_telefono, cliente_email, cliente_ciudad, notas, fase,
+        timestamp: Date.now() 
+      };
+      localStorage.setItem(RECOVERY_KEY, JSON.stringify(draft));
+    }
+  }, [items, cliente_id, cliente_tipo, cliente_nombre, cliente_cedula, cliente_telefono, cliente_email, cliente_ciudad, notas, fase, activeDraftId]);
 
   // Fetch Tasa actual
   useEffect(() => {
@@ -122,6 +188,20 @@ export default function ModalNueva({ onClose, onSave, clientes=[], productos=[],
     })));
   }, [items]);
 
+  const itemsAgrupados = useMemo(() => {
+    const grupos = [];
+    const map = {};
+    itemsEnriquecidos.forEach((it, idx) => {
+      const mod = it.modelo || 'Sin Modelo';
+      if (!map[mod]) {
+        map[mod] = { modelo: mod, items: [] };
+        grupos.push(map[mod]);
+      }
+      map[mod].items.push({ ...it, originalIdx: idx });
+    });
+    return grupos;
+  }, [itemsEnriquecidos]);
+
   const totalComanda = itemsEnriquecidos.reduce((a, b) => a + (b.subtotal || 0), 0);
   const totalPagado = pagosLista.reduce((a, b) => a + (b.divisa === 'BS' ? b.monto / (b.tasa || globalTasa || 1) : b.monto), 0);
   const resta = totalComanda - totalPagado;
@@ -153,12 +233,31 @@ export default function ModalNueva({ onClose, onSave, clientes=[], productos=[],
     setItems(prev => prev.filter(x => x.sku !== sku));
   };
 
-  const guardarBorrador = () => {
-    const list = JSON.parse(localStorage.getItem('moditex_comandas_espera') || '[]');
-    const clientName = cliente_tipo === 'existente' ? clientes.find(c => c.id === parseInt(cliente_id))?.nombre : cliente_nombre;
-    const nuevo = { id: Date.now(), cliente: { id: cliente_id, nombre: clientName || 'Sin Nombre' }, items, notas, fecha: new Date().toISOString() };
-    localStorage.setItem('moditex_comandas_espera', JSON.stringify([nuevo, ...list]));
+   const guardarBorrador = () => {
+    const list = JSON.parse(localStorage.getItem(DRAFTS_KEY) || '[]');
+    const clientName = cliente_nombre || (cliente_tipo === 'existente' ? clientes.find(c => c.id == cliente_id)?.nombre : '');
+    const nuevo = { 
+      id: activeDraftId || Date.now(), 
+      cliente: { id: cliente_id, nombre: clientName || '', cedula: cliente_cedula, telefono: cliente_telefono }, 
+      items, 
+      notas, 
+      fecha: new Date().toISOString() 
+    };
+    localStorage.setItem(DRAFTS_KEY, JSON.stringify([nuevo, ...list]));
+    localStorage.removeItem(RECOVERY_KEY); // IMPORTANTE: Limpiar el autosave al poner en espera
     onClose();
+  };
+
+  const limpiarYNueva = () => {
+    if (items.length > 0 && !window.confirm('¿Seguro que quieres descartar este borrador actual y empezar uno nuevo?')) return;
+    localStorage.removeItem(RECOVERY_KEY);
+    setItems([]);
+    setCliente_id('');
+    setCliente_nombre('');
+    setCliente_cedula('');
+    setCliente_telefono('');
+    setNotas('');
+    setFase(1);
   };
 
   const toggleTipoVenta = (idx) => {
@@ -231,11 +330,12 @@ export default function ModalNueva({ onClose, onSave, clientes=[], productos=[],
 
     setSaving(true);
     setErr('');
+    const finalName = cliente_nombre || (cliente_tipo === 'existente' ? clientes.find(c => c.id == cliente_id)?.nombre : '');
     const payload = {
-      cliente_nombre: cliente_tipo === 'nuevo' ? cliente_nombre : clientes.find(c => c.id === parseInt(cliente_id))?.nombre,
-      cliente_cedula: cliente_tipo === 'nuevo' ? cliente_cedula : clientes.find(c => c.id === parseInt(cliente_id))?.cedula,
-      cliente_email: cliente_tipo === 'nuevo' ? cliente_email : clientes.find(c => c.id === parseInt(cliente_id))?.email,
-      cliente_ciudad: cliente_tipo === 'nuevo' ? cliente_ciudad : clientes.find(c => c.id === parseInt(cliente_id))?.ciudad,
+      cliente_nombre: finalName || 'Sin Nombre',
+      cliente_cedula: cliente_cedula || (cliente_tipo === 'existente' ? clientes.find(c => c.id == cliente_id)?.cedula : '') || 'S/C',
+      cliente_email: cliente_email || (cliente_tipo === 'existente' ? clientes.find(c => c.id == cliente_id)?.email : ''),
+      cliente_ciudad: cliente_ciudad || (cliente_tipo === 'existente' ? clientes.find(c => c.id == cliente_id)?.ciudad : ''),
       cliente_id: cliente_tipo === 'existente' ? parseInt(cliente_id) : null,
       telefono: cliente_telefono,
       items: itemsEnriquecidos.map(it => ({ 
@@ -266,7 +366,20 @@ export default function ModalNueva({ onClose, onSave, clientes=[], productos=[],
       body: JSON.stringify(payload) 
     }).then(r => r.json());
 
-    if (res.ok) { onSave(); onClose(); } else { setErr(res.error); setSaving(false); }
+    if (res.ok) { 
+      // 1. Limpiar el auto-guardado
+      localStorage.removeItem(RECOVERY_KEY);
+      
+      // 2. Si venía de la lista de espera, eliminarlo de allí también
+      if (activeDraftId) {
+        const list = JSON.parse(localStorage.getItem(DRAFTS_KEY) || '[]');
+        const next = list.filter(d => d.id !== activeDraftId);
+        localStorage.setItem(DRAFTS_KEY, JSON.stringify(next));
+      }
+      
+      onSave(); 
+      onClose(); 
+    } else { setErr(res.error); setSaving(false); }
   };
 
   const agregarPagoALista = () => {
@@ -292,14 +405,14 @@ export default function ModalNueva({ onClose, onSave, clientes=[], productos=[],
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',backdropFilter:'blur(5px)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}}>
-      <div className="modal-content" onClick={e=>e.stopPropagation()} style={{background:'var(--bg)',width:'100%',maxWidth:'900px',height:'90vh',borderRadius:'20px',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'0 20px 40px rgba(0,0,0,0.3)'}}>
+    <div className="modal-overlay" onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',backdropFilter:'blur(8px)',display:'flex',alignItems:'stretch',justifyContent:'stretch',zIndex:1000, overflow:'hidden', overscrollBehavior:'contain'}}>
+      <div className="modal-content" onClick={e=>e.stopPropagation()} style={{background:'var(--bg)',width:'100%',height:'100%',borderRadius:'0',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'none'}}>
         
         {/* HEADER */}
-        <div className="modal-header-responsive" style={{padding:'20px 30px',background:'var(--surface)',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-          <div style={{flex:1}}>
-            <h3 className="modal-title-responsive" style={{margin:0,fontFamily:'Playfair Display,serif',fontSize:'22px'}}>Nueva Comanda</h3>
-            <div className="phases-container-responsive" style={{display:'flex',gap:'15px',marginTop:'8px',overflowX:'auto',paddingBottom:'5px'}}>
+        <div className="modal-header-responsive" style={{padding:'10px 20px',background:'var(--surface)',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0}}>
+          <div style={{display:'flex', alignItems:'center', gap:'20px'}}>
+            <h3 className="modal-title-responsive" style={{margin:0,fontFamily:'Playfair Display,serif',fontSize:'18px'}}>Nueva Comanda</h3>
+            <div className="phases-container-responsive" style={{display:'flex',gap:'12px',overflowX:'auto'}}>
                {[1,2,3].map(n => (
                  <div key={n} style={{display:'flex',alignItems:'center',gap:'6px',opacity:fase===n?1:0.4,flexShrink:0}}>
                    <span style={{width:'20px',height:'20px',borderRadius:'50%',background:fase>=n?'var(--ink)':'#ccc',color:'#fff',fontSize:'10px',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700}}>{n}</span>
@@ -312,17 +425,78 @@ export default function ModalNueva({ onClose, onSave, clientes=[], productos=[],
         </div>
 
         {/* BODY */}
-        <div style={{flex:1,overflowY:'auto',padding:'20px 25px',display:'flex',flexDirection:'column',gap:'15px'}}>
+        <div style={{flex:1,overflowY:fase===2?'hidden':'auto',padding:fase===2?'0':'20px 25px',display:'flex',flexDirection:'column',gap:fase===2?'0':'15px', minHeight:0}}>
           {err && <div style={{padding:'12px',background:'var(--red-soft)',color:'var(--red)',borderRadius:'8px',fontSize:'13px',border:'1px solid var(--red)'}}>⚠️ {err}</div>}
 
           {fase === 1 && (
             <div style={{maxWidth:'600px',margin:'0 auto',width:'100%',display:'flex',flexDirection:'column',gap:'20px',animation:'fadeIn 0.3s ease-out'}}>
-              <div>
-                <label style={lbl}>Tipo de Cliente</label>
-                <div style={{display:'flex',gap:'10px'}}>
-                  <button onClick={()=>setCliente_tipo('nuevo')} style={{flex:1,padding:'12px',borderRadius:'10px',border:`1.5px solid ${cliente_tipo==='nuevo'?'var(--ink)':'var(--border)'}`,background:cliente_tipo==='nuevo'?'var(--ink)':'#fff',color:cliente_tipo==='nuevo'?'#fff':'#333',transition:'all 0.2s',cursor:'pointer',fontWeight:700,fontSize:'12px'}}>👤 Cliente Nuevo</button>
-                  <button onClick={()=>setCliente_tipo('existente')} style={{flex:1,padding:'12px',borderRadius:'10px',border:`1.5px solid ${cliente_tipo==='existente'?'var(--ink)':'var(--border)'}`,background:cliente_tipo==='existente'?'var(--ink)':'#fff',color:cliente_tipo==='existente'?'#fff':'#333',transition:'all 0.2s',cursor:'pointer',fontWeight:700,fontSize:'12px'}}>📂 Lista de Clientes</button>
+              
+              {/* LISTA DE BORRADORES EN ESPERA (SI HAY) */}
+              {borradoresEnEspera.length > 0 && (
+                <div style={{background:'rgba(245,158,11,0.05)', border:'1.5px dashed #f59e0b', borderRadius:'16px', padding:'15px', display:'flex', flexDirection:'column', gap:'10px'}}>
+                   <div style={{...lbl, color:'#f59e0b', fontWeight:900, display:'flex', justifyContent:'space-between'}}>
+                      <span>⏸ COMANDAS EN ESPERA ({borradoresEnEspera.length})</span>
+                      <span style={{fontSize:'7px'}}>RECUÉRALAS PARA CONTINUAR</span>
+                   </div>
+                   <div style={{display:'flex', gap:'10px', overflowX:'auto', paddingBottom:'8px', paddingTop:'5px'}} className="custom-scrollbar">
+                      {borradoresEnEspera.map(b => {
+                        const date = new Date(b.id);
+                        const isToday = date.toDateString() === new Date().toDateString();
+                        const dateStr = isToday ? date.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : date.toLocaleDateString([], {day:'2-digit', month:'2-digit'});
+                        
+                        return (
+                          <div key={b.id} style={{position:'relative', minWidth:'180px', flexShrink:0}}>
+                             <div onClick={() => {
+                                setActiveDraftId(b.id);
+                                setItems(b.items || []);
+                                setCliente_id(b.cliente?.id || '');
+                                setCliente_nombre(b.cliente?.nombre || '');
+                                setCliente_cedula(b.cliente?.cedula || '');
+                                setCliente_telefono(b.cliente?.telefono || '');
+                                setNotas(b.notas || '');
+                                setFase(b.items?.length ? 2 : 1);
+                             }} style={{
+                                background:'#fff', border:'1px solid var(--border)', borderRadius:'12px', padding:'12px', cursor:'pointer', boxShadow:'0 4px 12px rgba(0,0,0,0.06)', transition:'all 0.2s', borderLeft:'4px solid #f59e0b'
+                             }} onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.borderColor='#f59e0b';}} onMouseLeave={e=>{e.currentTarget.style.transform='translateY(0)'; e.currentTarget.style.borderColor='var(--border)';}}>
+                                <div style={{fontSize:'12px', fontWeight:900, color:b.cliente?.nombre ? 'var(--ink)' : '#aaa', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', marginBottom:'4px'}}>{b.cliente?.nombre || 'Sin Nombre'}</div>
+                                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                                   <div style={{fontSize:'10px', color:'var(--blue)', fontWeight:700, background:'var(--blue-soft)', padding:'1px 6px', borderRadius:'4px'}}>📦 {b.items?.length || 0} ítems</div>
+                                   <div style={{fontSize:'9px', color:'#999', fontFamily:'DM Mono,monospace', fontWeight:600}}>🕒 {dateStr}</div>
+                                </div>
+                             </div>
+                             <button 
+                               onClick={(e) => {
+                                  e.stopPropagation();
+                                  if(confirm('¿Eliminar este borrador?')) {
+                                     const next = borradoresEnEspera.filter(x => x.id !== b.id);
+                                     localStorage.setItem(DRAFTS_KEY, JSON.stringify(next));
+                                     setBorradoresEnEspera(next);
+                                     if(activeDraftId === b.id) setActiveDraftId(null);
+                                  }
+                               }}
+                               style={{position:'absolute', top:'-6px', right:'-6px', width:'22px', height:'22px', borderRadius:'50%', background:'#ef4444', color:'#fff', border:'2px solid #fff', fontSize:'10px', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 2px 6px rgba(239,68,68,0.4)', zIndex:10}}
+                               title="Eliminar borrador"
+                             >✕</button>
+                          </div>
+                        );
+                      })}
+                   </div>
                 </div>
+              )}
+
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-end'}}>
+                <div style={{flex:1}}>
+                  <label style={lbl}>Tipo de Cliente</label>
+                  <div style={{display:'flex',gap:'10px'}}>
+                    <button onClick={()=>setCliente_tipo('nuevo')} style={{flex:1,padding:'12px',borderRadius:'10px',border:`1.5px solid ${cliente_tipo==='nuevo'?'var(--ink)':'var(--border)'}`,background:cliente_tipo==='nuevo'?'var(--ink)':'#fff',color:cliente_tipo==='nuevo'?'#fff':'#333',transition:'all 0.2s',cursor:'pointer',fontWeight:700,fontSize:'12px'}}>👤 Cliente Nuevo</button>
+                    <button onClick={()=>setCliente_tipo('existente')} style={{flex:1,padding:'12px',borderRadius:'10px',border:`1.5px solid ${cliente_tipo==='existente'?'var(--ink)':'var(--border)'}`,background:cliente_tipo==='existente'?'var(--ink)':'#fff',color:cliente_tipo==='existente'?'#fff':'#333',transition:'all 0.2s',cursor:'pointer',fontWeight:700,fontSize:'12px'}}>📂 Lista de Clientes</button>
+                  </div>
+                </div>
+                {(items.length > 0 || cliente_nombre) && (
+                  <button onClick={limpiarYNueva} style={{marginBottom:'2px', marginLeft:'15px', padding:'10px 15px', borderRadius:'10px', background:'var(--red-soft)', color:'var(--red)', border:'1px solid var(--red)', fontSize:'10px', fontWeight:800, cursor:'pointer'}}>
+                    ✨ LIMPIAR FORMULARIO
+                  </button>
+                )}
               </div>
 
               <div style={{background:'var(--surface)',padding:'24px',borderRadius:'16px',border:'1px solid var(--border)',boxShadow:'0 4px 15px rgba(0,0,0,0.03)'}}>
@@ -413,26 +587,26 @@ export default function ModalNueva({ onClose, onSave, clientes=[], productos=[],
                     }}>
                       {(busqueda.length > 0 ? clientesFiltrados : clientes.slice(0, 50)).map(c => (
                         <div 
-                          key={c.id} 
-                          onClick={() => seleccionarCliente(c)}
-                          style={{
-                            padding:'12px 15px',
-                            cursor:'pointer', 
-                            borderBottom:'1px solid var(--border-soft)',
-                            background: cliente_id === c.id ? 'rgba(59,111,212,0.08)' : 'transparent',
-                            display:'flex',
-                            justifyContent:'space-between',
-                            alignItems:'center'
-                          }}
-                          className="search-result-item"
-                        >
-                          <div>
-                            <div style={{fontSize:'13px', fontWeight:700}}>{c.nombre}</div>
-                            <div style={{fontSize:'10px', color:'#888', fontFamily:'DM Mono,monospace', marginTop:'2px'}}>
-                              {c.cedula || '---'} · {c.telefono || '---'}
-                            </div>
-                          </div>
-                          {cliente_id === c.id && <span style={{color:'var(--blue)',fontWeight:700,fontSize:'14px'}}>✓</span>}
+                           key={c.id} 
+                           onClick={() => seleccionarCliente(c)}
+                           style={{
+                             padding:'12px 15px',
+                             cursor:'pointer', 
+                             borderBottom:'1px solid var(--border-soft)',
+                             background: cliente_id === c.id ? 'rgba(59,111,212,0.08)' : 'transparent',
+                             display:'flex',
+                             justifyContent:'space-between',
+                             alignItems:'center'
+                           }}
+                           className="search-result-item"
+                         >
+                           <div>
+                             <div style={{fontSize:'13px', fontWeight:700}}>{c.nombre}</div>
+                             <div style={{fontSize:'10px', color:'#888', fontFamily:'DM Mono,monospace', marginTop:'2px'}}>
+                               {c.cedula || '---'} · {c.telefono || '---'}
+                             </div>
+                           </div>
+                           {cliente_id === c.id && <span style={{color:'var(--blue)',fontWeight:700,fontSize:'14px'}}>✓</span>}
                         </div>
                       ))}
                     </div>
@@ -454,17 +628,18 @@ export default function ModalNueva({ onClose, onSave, clientes=[], productos=[],
           )}
 
           {fase === 2 && (
-            <div className="phase-2-grid-responsive" style={{display:'grid',gridTemplateColumns:'1fr 320px',gap:'20px',height:'100%',animation:'fadeIn 0.4s ease-out'}}>
-               <div style={{display:'flex',flexDirection:'column',gap:'20px'}}>
-                  {/* SCANNER POS (USB + CAMARA + MULTIPLICADOR) */}
-                  <div style={{background:'var(--surface)', padding:'15px', borderRadius:'16px', border:'1px solid var(--border)', boxShadow:'0 10px 25px rgba(0,0,0,0.05)'}}>
+             <div className="phase-2-grid-responsive" style={{display:'flex', gap:'20px', height:'100%', width:'100%', animation:'fadeIn 0.4s ease-out', overflow:'hidden', minHeight:0}}>
+               {/* COLUMNA CATALOGO */}
+               <div style={{flex:1, display:'flex', flexDirection:'column', gap:'20px', overflowY:'auto', padding:'20px', height:'100%', minHeight:0, minWidth:0}}>
+                  {/* SCANNER POS (USB + CAMARA + MULTIPLICADOR) - STICKY */}
+                  <div style={{position:'sticky', top:0, zIndex:100, background:'var(--bg)', padding:'8px 12px', borderRadius:'12px', border:'1.5px solid var(--border)', boxShadow:'0 5px 15px rgba(0,0,0,0.05)', marginBottom:'10px', flexShrink:0}}>
                     <BarcodeScanner 
                       productos={productos} 
                       onAdd={(p, qty) => agregarItem({ ...p, cant: qty })} 
                     />
                   </div>
 
-                  <div style={{flex:1, minHeight:0, display:'flex', flexDirection:'column'}}>
+                  <div style={{display:'flex', flexDirection:'column', flex:1, minHeight:0}}>
                     <CatalogoExplorer 
                       onAdd={(p, qty, tv) => agregarItem({ ...p, cant: qty, tipoVenta: tv })} 
                       onRemove={quitarTodosPorSku}
@@ -476,118 +651,167 @@ export default function ModalNueva({ onClose, onSave, clientes=[], productos=[],
                     />
                   </div>
                   
-                  <div style={{borderTop:'1px solid var(--border)',paddingTop:'15px',opacity:0.6}}>
+                  <div style={{borderTop:'1px solid var(--border)',paddingTop:'15px',opacity:0.6, flexShrink:0}}>
                     <div style={{...lbl,fontSize:'9px',textAlign:'center'}}>El escáner arriba gestiona tanto entradas por cámara como por lector USB/Bluetooth.</div>
                   </div>
                </div>
                
-               <div style={{background:'var(--surface)',borderRadius:'24px',border:'1px solid var(--border)',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'0 20px 50px rgba(0,0,0,0.12)'}}>
-                  <div style={{padding:'20px 25px',background:'var(--ink)',color:'#fff',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                    <span style={{fontSize:'11px',fontWeight:800,letterSpacing:'.15em',textTransform:'uppercase'}}>Resumen de Venta</span>
-                    <span style={{background:'rgba(255,255,255,0.15)',padding:'4px 10px',borderRadius:'6px',fontSize:'10px',fontWeight:800,fontFamily:'DM Mono,monospace'}}>{items.length} SKU{items.length!==1?'S':''}</span>
-                  </div>
-
-                  {/* TOTALES POS PREMIUM */}
-                  <div style={{padding:'15px 20px', background:'var(--bg2)', borderBottom:'1px solid var(--border)', display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
-                    <div style={{textAlign:'center', padding:'10px', background:'#fff', borderRadius:'12px', border:'1.5px solid var(--border)', boxShadow:'0 2px 4px rgba(0,0,0,0.02)'}}>
-                      <div style={{...lbl,marginBottom:'0px'}}>Prendas</div>
-                      <div style={{fontSize:'22px', fontWeight:900, color:'var(--ink)', fontFamily:'Inter,sans-serif'}}>{items.reduce((a,b)=>a+(b.cant||1),0)}</div>
-                    </div>
-                    <div style={{textAlign:'center', padding:'10px', background:'#fff', borderRadius:'12px', border:'1.5px solid var(--border)', boxShadow:'0 2px 4px rgba(0,0,0,0.02)'}}>
-                      <div style={{...lbl,marginBottom:'0px'}}>Total Venta</div>
-                      <div style={{fontSize:'22px', fontWeight:900, color:'var(--green)', fontFamily:'Inter,sans-serif'}}>€{fmtNum(totalComanda)}</div>
-                    </div>
-                  </div>
-
-                  <div style={{flex:1,overflowY:'auto',padding:'20px',display:'flex',flexDirection:'column',gap:'10px'}}>
-                    {items.length === 0 ? (
-                      <div style={{textAlign:'center',padding:'80px 20px',opacity:0.6}}>
-                        <div style={{fontSize:'48px', marginBottom:'15px'}}>🛍️</div>
-                        <div style={{fontSize:'14px', fontWeight:600, color:'#888'}}>La cesta está vacía</div>
-                        <div style={{fontSize:'10px', color:'#aaa', marginTop:'5px', textTransform:'uppercase', letterSpacing:'.05em'}}>Escanea o utiliza el catálogo</div>
+               {/* COLUMNA CARRITO */}
+               <div style={{width:'380px', height:'100%', padding:'20px', display:'flex', flexDirection:'column', background:'var(--bg2)', borderLeft:'1px solid var(--border)', minHeight:0, flexShrink:0}}>
+                  <div style={{flex:1, background:'var(--surface)',borderRadius:'20px',border:'1px solid var(--border)',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'0 15px 35px rgba(0,0,0,0.1)', minHeight:0}}>
+                    <div style={{padding:'12px 20px',background:'var(--ink)',color:'#fff',display:'flex',justifyContent:'space-between',alignItems:'center', flexShrink:0}}>
+                      <div style={{display:'flex', flexDirection:'column'}}>
+                        <span style={{fontSize:'10px',fontWeight:800,letterSpacing:'.12em',textTransform:'uppercase'}}>Resumen de Venta</span>
+                        {globalTasa > 0 && (
+                          <Link href="/tasa" style={{
+                            fontSize:'11px', 
+                            color:'#fbbf24', 
+                            fontFamily:'DM Mono,monospace', 
+                            marginTop:'2px', 
+                            fontWeight:900, 
+                            letterSpacing:'.02em',
+                            textDecoration:'none',
+                            cursor:'pointer'
+                          }}>
+                            TASA: {globalTasa.toFixed(2)} Bs/€
+                          </Link>
+                        )}
                       </div>
-                    ) : (
-                      itemsEnriquecidos.map((it,idx)=>(
-                        <div key={idx} style={{display:'flex',flexDirection:'column',gap:'4px',padding:'10px 12px',background:'#fff',borderRadius:'12px',border:'1px solid var(--border-soft)',boxShadow:'0 2px 5px rgba(0,0,0,0.02)',transition:'all 0.2s',animation:'fadeInSlide 0.3s ease-out'}}>
-                           <div style={{display:'flex',alignItems:'flex-start',gap:'10px'}}>
-                              <div style={{width:'32px',height:'32px',borderRadius:'8px',background:'var(--bg2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'15px',position:'relative',marginTop:'2px'}}>
-                                 {it.modelo?.slice(0,1)}
-                                 <span style={{position:'absolute',top:'-3px',left:'-3px',width:'11px',height:'11px',borderRadius:'50%',background:colorHex(it.color),border:'1.5px solid #fff',boxShadow:'0 2px 4px rgba(0,0,0,0.1)'}}/>
-                              </div>
-                              <div style={{flex:1, minWidth:0}}>
-                                <div style={{fontSize:'13px',fontWeight:800,color:'var(--ink)',lineHeight:'1.2',marginBottom:'2px'}}>{it.modelo}</div>
-                                <div style={{fontSize:'10px',color:'#888',fontWeight:500}}>{it.talla} · {it.color} · €{fmtNum(it.precio_aplicado)}</div>
-                              </div>
-                               <div style={{display:'flex',alignItems:'center',gap:'6px',background:'var(--bg2)',padding:'4px',borderRadius:'10px'}}>
-                                <button onClick={()=>quitarItem(idx)} style={{width:'26px',height:'26px',borderRadius:'8px',border:'none',background:'#fff',cursor:'pointer',fontSize:'16px',fontWeight:900,boxShadow:'0 2px 4px rgba(0,0,0,0.05)'}}>–</button>
-                                <input 
-                                  type="number" 
-                                  value={it.cant} 
-                                  onChange={e => setCantItem(it.sku, e.target.value)}
-                                  style={{width:'40px', textAlign:'center', border:'none', background:'none', fontFamily:'Inter,sans-serif', fontWeight:900, fontSize:'14px', outline:'none'}}
-                                />
-                                <button onClick={()=>agregarItem(it, 1)} style={{width:'26px',height:'26px',borderRadius:'8px',border:'none',background:'#fff',cursor:'pointer',fontSize:'16px',fontWeight:900,boxShadow:'0 2px 4px rgba(0,0,0,0.05)'}}>+</button>
-                              </div>
-                           </div>
-                           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:'5px',paddingTop:'10px',borderTop:'1px dashed var(--border-soft)'}}>
-                              <div style={{display:'flex',gap:'5px',alignItems:'center'}}>
-                                 <button 
-                                  onClick={()=>toggleTipoVenta(idx)} 
-                                  title="Haz clic para forzar precio Mayor o Detal"
-                                  style={{
-                                    padding:'4px 10px',
-                                    borderRadius:'6px',
-                                    border:'none',
-                                    background: it.tipo_precio_resultado.includes('MAYOR') ? 'var(--blue-soft)' : 'var(--bg2)',
-                                    color: it.tipo_precio_resultado.includes('MAYOR') ? 'var(--blue)' : '#666',
-                                    fontSize:'9px',
-                                    fontWeight:800,
-                                    cursor:'pointer',
-                                    textTransform:'uppercase',
-                                    letterSpacing:'.05em'
-                                  }}>
-                                  {it.tipo_precio_resultado === 'MAYOR' && '🏢 Mayor (Regla)'}
-                                  {it.tipo_precio_resultado === 'DETAL' && '👤 Detal (Regla)'}
-                                  {it.tipo_precio_resultado === 'MAYOR_FORZADO' && '🏢 Mayor (Forzado)'}
-                                  {it.tipo_precio_resultado === 'DETAL_FORZADO' && '👤 Detal (Forzado)'}
-                                 </button>
-                                 {it.tipoVenta === 'AUTO' && (
-                                   <div style={{fontSize:'8px', color:'#aaa', fontWeight:500}}>
-                                     Regla: {it._debug.minMay} tot. / {it._debug.minMod} mod.
-                                   </div>
-                                 )}
-                                 {it.ahorro_unitario > 0 && (
-                                   <span style={{fontSize:'9px', color:'var(--green)', fontWeight:700}}>Ahorras: €{fmtNum(it.ahorro_unitario)}/ud</span>
-                                 )}
-                              </div>
-                              <div style={{fontSize:'12px',fontWeight:900,color:'var(--ink)'}}>€{fmtNum(it.subtotal)}</div>
-                           </div>
+                      <span style={{background:'rgba(255,255,255,0.15)',padding:'3px 8px',borderRadius:'5px',fontSize:'9px',fontWeight:800,fontFamily:'DM Mono,monospace'}}>{items.length} SKUS</span>
+                    </div>
+
+                    {/* TOTALES POS PREMIUM */}
+                    <div style={{padding:'10px 15px', background:'var(--bg2)', borderBottom:'1px solid var(--border)', display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px', flexShrink:0}}>
+                      <div style={{textAlign:'center', padding:'6px', background:'#fff', borderRadius:'10px', border:'1.5px solid var(--border)', boxShadow:'0 2px 4px rgba(0,0,0,0.02)'}}>
+                        <div style={{...lbl,fontSize:'7px',marginBottom:'0px'}}>Prendas</div>
+                        <div style={{fontSize:'18px', fontWeight:900, color:'var(--ink)', fontFamily:'Inter,sans-serif'}}>{items.reduce((a,b)=>a+(b.cant||1),0)}</div>
+                      </div>
+                      <div style={{textAlign:'center', padding:'6px', background:'#fff', borderRadius:'10px', border:'1.5px solid var(--border)', boxShadow:'0 2px 4px rgba(0,0,0,0.02)'}}>
+                        <div style={{...lbl,fontSize:'7px',marginBottom:'0px'}}>Total Venta</div>
+                        <div style={{fontSize:'18px', fontWeight:900, color:'var(--green)', fontFamily:'Inter,sans-serif'}}>€{fmtNum(totalComanda)}</div>
+                        {globalTasa > 0 && <div style={{fontSize:'9px', fontWeight:700, color:'#888', fontFamily:'DM Mono,monospace', marginTop:'1px'}}>≈ Bs. {fmtNum(totalComanda * globalTasa)}</div>}
+                      </div>
+                    </div>
+
+                    {/* LISTA DE ITEMS CON SCROLL INDEPENDIENTE */}
+                    <div style={{flex:1, overflowY:'auto', padding:'15px', display:'flex', flexDirection:'column', gap:'10px', minHeight:0}}>
+                      {items.length === 0 ? (
+                        <div style={{textAlign:'center',padding:'80px 20px',opacity:0.6, flex:1, display:'flex', flexDirection:'column', justifyContent:'center'}}>
+                          <div style={{fontSize:'48px', marginBottom:'15px'}}>🛍️</div>
+                          <div style={{fontSize:'14px', fontWeight:600, color:'#888'}}>La cesta está vacía</div>
                         </div>
-                      ))
-                    )}
+                      ) : (
+                        itemsAgrupados.map((grupo, gIdx) => (
+                          <div key={gIdx} style={{background:'#fff', borderRadius:'14px', border:'1px solid var(--border-soft)', overflow:'hidden', marginBottom:'4px', boxShadow:'0 4px 12px rgba(0,0,0,0.03)', flexShrink:0}}>
+                             {/* HEADER DEL MODELO */}
+                             <div style={{padding:'8px 12px', background:'var(--bg2)', borderBottom:'1px solid var(--border-soft)', display:'flex', alignItems:'center', gap:'8px'}}>
+                                <div style={{width:'24px',height:'24px',borderRadius:'6px',background:'var(--ink)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'12px',fontWeight:900}}>
+                                   {grupo.modelo?.slice(0,1)}
+                                </div>
+                                <div style={{fontSize:'11px', fontWeight:800, color:'var(--ink)', textTransform:'uppercase', letterSpacing:'.05em'}}>{grupo.modelo}</div>
+                             </div>
+
+                             {/* VARIANTES (HIJOS) */}
+                             <div style={{display:'flex', flexDirection:'column'}}>
+                                {grupo.items.map((it, iIdx) => (
+                                  <div key={iIdx} style={{padding:'10px 12px', borderBottom:iIdx === grupo.items.length - 1 ? 'none' : '1px solid var(--border-soft)', display:'flex', flexDirection:'column', gap:'6px'}}>
+                                     <div style={{display:'flex', alignItems:'center', gap:'12px'}}>
+                                        <div style={{width:'12px', height:'12px', borderRadius:'50%', background:colorHex(it.color), border:'1px solid rgba(0,0,0,0.1)', flexShrink:0}} />
+                                        <div style={{flex:1, minWidth:0}}>
+                                           <div style={{fontSize:'11px', fontWeight:800, color:'var(--ink)', textTransform:'uppercase', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{it.color} {it.talla && `· T:${it.talla}`}</div>
+                                           <div style={{fontSize:'10px', color:'var(--blue)', fontWeight:700, marginTop:'1px'}}>€{fmtNum(it.precio_aplicado)}/ud</div>
+                                        </div>
+                                        
+                                        <div style={{display:'flex', alignItems:'center', gap:'2px', background:'var(--bg3)', padding:'3px', borderRadius:'8px', flexShrink:0, border:'1px solid var(--border)'}}>
+                                           <button onClick={()=>quitarItem(it.originalIdx)} style={{width:'24px',height:'24px',borderRadius:'6px',border:'none',background:'#fff',cursor:'pointer',fontSize:'12px',fontWeight:900,boxShadow:'0 2px 4px rgba(0,0,0,0.05)'}}>–</button>
+                                           <input 
+                                             type="number" 
+                                             value={it.cant} 
+                                             onChange={e => setCantItem(it.sku, e.target.value)}
+                                             style={{width:'32px', textAlign:'center', border:'none', background:'none', fontFamily:'DM Mono,monospace', fontWeight:900, fontSize:'12px', outline:'none'}}
+                                           />
+                                           <button onClick={()=>agregarItem(it, 1)} style={{width:'24px',height:'24px',borderRadius:'6px',border:'none',background:'#fff',cursor:'pointer',fontSize:'12px',fontWeight:900,boxShadow:'0 2px 4px rgba(0,0,0,0.05)'}}>+</button>
+                                        </div>
+                                        
+                                        <div style={{fontSize:'12px', fontWeight:900, color:'var(--ink)', minWidth:'55px', textAlign:'right', fontFamily:'DM Mono,monospace'}}>€{fmtNum(it.subtotal)}</div>
+                                     </div>
+                                     
+                                     {/* REGLA DE PRECIO POR VARIANTE */}
+                                     <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                                        <button onClick={()=>toggleTipoVenta(it.originalIdx)} style={{
+                                           background:'var(--surface)',
+                                           border:'1px solid var(--border-strong)',
+                                           padding:'1px 5px',
+                                           borderRadius:'4px',
+                                           fontSize:'8px',
+                                           fontWeight:800,
+                                           cursor:'pointer',
+                                           textTransform:'uppercase'
+                                        }}>
+                                           {it.tipo_precio_resultado === 'MAYOR' && '🏢 Mayor'}
+                                           {it.tipo_precio_resultado === 'DETAL' && '👤 Detal'}
+                                           {it.tipo_precio_resultado === 'MAYOR_FORZADO' && '🏢 Mayor (F)'}
+                                           {it.tipo_precio_resultado === 'DETAL_FORZADO' && '👤 Detal (F)'}
+                                        </button>
+                                        {it.ahorro_unitario > 0 && (
+                                           <span style={{fontSize:'8px', color:'var(--green)', fontWeight:800, background:'var(--green-soft)', padding:'1px 5px', borderRadius:'4px'}}>Ahorras: €{fmtNum(it.ahorro_unitario)}</span>
+                                        )}
+                                     </div>
+                                  </div>
+                                ))}
+                             </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
                </div>
-            </div>
+             </div>
           )}
 
           {fase === 3 && (
             <div style={{maxWidth:'700px',margin:'0 auto',width:'100%',display:'flex',flexDirection:'column',gap:'15px',animation:'fadeIn 0.4s'}}>
                <div className="phase-3-top-grid-responsive" style={{background:'var(--surface)',padding:'18px',borderRadius:'16px',border:'1px solid var(--border)',display:'grid',gridTemplateColumns:'1fr 1fr',gap:'15px'}}>
                   <div>
-                    <label style={{...lbl,marginBottom:'6px'}}>Agencia / Entrega</label>
-                    <select value={agencia_envio} onChange={e=>setAgencia_envio(e.target.value)} style={{...inp,borderRadius:'10px',height:'38px'}}>
-                      <option value="">(Retiro en Tienda)</option>
-                      <option value="MRW">MRW</option>
-                      <option value="ZOOM">Grupo ZOOM</option>
-                      <option value="TEALCA">Tealca</option>
-                      <option value="DOMESA">Domesa</option>
-                      <option value="MOTORIZADO">Delivery</option>
-                      <option value="OTRO">Otro</option>
-                    </select>
+                    <label style={{...lbl,marginBottom:'10px'}}>Agencia / Entrega</label>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'8px'}}>
+                      {[
+                        {val:'',      icon:'🏠', label:'Retiro'},
+                        {val:'MRW',   icon:'📦', label:'MRW'},
+                        {val:'ZOOM',  icon:'🚚', label:'Zoom'},
+                        {val:'TEALCA',icon:'🚢', label:'Tealca'},
+                        {val:'MOTORIZADO',icon:'🛵', label:'Delivery'},
+                        {val:'OTRO',  icon:'📝', label:'Otro'},
+                      ].map(op => (
+                        <button
+                          key={op.val}
+                          onClick={() => setAgencia_envio(op.val)}
+                          style={{
+                            padding:'8px 4px',
+                            borderRadius:'10px',
+                            border:`1.5px solid ${agencia_envio===op.val?'var(--ink)':'var(--border)'}`,
+                            background:agencia_envio===op.val?'var(--ink)':'#fff',
+                            color:agencia_envio===op.val?'#fff':'#333',
+                            cursor:'pointer',
+                            fontSize:'9px',
+                            fontWeight:700,
+                            textAlign:'center',
+                            transition:'all 0.15s',
+                            display:'flex',
+                            flexDirection:'column',
+                            alignItems:'center',
+                            gap:'3px',
+                          }}
+                        >
+                          <span style={{fontSize:'18px'}}>{op.icon}</span>
+                          <span>{op.label}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <div>
                     <label style={{...lbl,marginBottom:'6px'}}>Notas de Preparación</label>
-                    <input value={notas} onChange={e=>setNotas(e.target.value)} style={{...inp,borderRadius:'10px',height:'38px'}} placeholder="Ej: Embalar con cuidado..."/>
+                    <textarea value={notas} onChange={e=>setNotas(e.target.value)} style={{...inp,borderRadius:'10px',height:'108px',resize:'none',paddingTop:'10px'}} placeholder="Ej: Embalar con cuidado..."/>
                   </div>
                </div>
 
@@ -624,60 +848,84 @@ export default function ModalNueva({ onClose, onSave, clientes=[], productos=[],
                   )}
 
                   {/* Formulario para agregar nuevo pago */}
-                  <div style={{background:'var(--bg2)',padding:'12px',borderRadius:'12px',border:'1px dashed var(--border-strong)'}}>
-                     <div className="pago-form-grid-responsive" style={{display:'grid',gridTemplateColumns:'1.5fr 1fr auto',gap:'10px',alignItems:'flex-end'}}>
-                        <div>
-                          <label style={lbl}>Método y Monto</label>
-                          <div style={{display:'flex',gap:'4px'}}>
-                            <select value={pago_metodo} onChange={e=>{
-                              const val = e.target.value;
-                              setPago_metodo(val);
-                              const cfg = METODOS.find(m=>m.id===val);
-                              if(cfg) setPago_divisa(cfg.divisa);
-                            }} style={{...inp,borderRadius:'8px',height:'36px',flex:1, minWidth:'140px'}}>
-                              <option value="">Método...</option>
-                              {METODOS.map(m => <option key={m.id} value={m.id}>{m.icon} {m.label}</option>)}
-                            </select>
-                            <select value={pago_divisa} onChange={e=>setPago_divisa(e.target.value)} style={{...inp,width:'65px',borderRadius:'8px',height:'36px'}}><option>EUR</option><option>USD</option><option>BS</option></select>
-                            <input type="number" value={pago_monto} onChange={e=>setPago_monto(e.target.value)} style={{...inp,width:'85px',borderRadius:'8px',height:'36px'}} placeholder="0.00"/>
-                          </div>
-                        </div>
-                        <div className="pago-form-second-row-responsive">
-                          <label style={lbl}>Ref / Tasa</label>
-                          <div style={{display:'flex',gap:'4px'}}>
-                            <input value={pago_referencia} onChange={e=>setPago_referencia(e.target.value)} style={{...inp,borderRadius:'8px',height:'36px',flex:1}} placeholder="Ref..."/>
-                            <input type="number" value={pago_tasa} onChange={e=>setPago_tasa(e.target.value)} disabled={pago_divisa!=='BS'} style={{...inp,width:'85px',borderRadius:'8px',height:'36px',opacity:pago_divisa!=='BS'?.5:1}} placeholder="Tasa"/>
-                          </div>
-                        </div>
-                        <button className="pago-form-button-responsive" onClick={agregarPagoALista} disabled={!pago_metodo || !pago_monto} style={{height:'36px',background:'var(--blue)',color:'#fff',border:'none',padding:'0 15px',borderRadius:'8px',fontWeight:700,cursor:'pointer',opacity:(!pago_metodo||!pago_monto)?0.5:1,fontSize:'12px'}}>
-                           + Añadir
+                  <div style={{background:'var(--bg2)',padding:'15px',borderRadius:'12px',border:'1px dashed var(--border-strong)'}}>
+                    {/* REJILLA DE METODOS - Estilo Venta Directa */}
+                    <label style={{...lbl,marginBottom:'10px'}}>Método de Pago</label>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'8px',marginBottom:'15px'}}>
+                      {METODOS.map(m => (
+                        <button
+                          key={m.id}
+                          onClick={() => { setPago_metodo(m.id); setPago_divisa(m.divisa); setPago_tasa(globalTasa); }}
+                          style={{
+                            padding:'10px 4px',
+                            border:`1.5px solid ${pago_metodo===m.id?'var(--ink)':'var(--border)'}`,
+                            background:pago_metodo===m.id?'var(--ink)':'#fff',
+                            color:pago_metodo===m.id?'#fff':'#333',
+                            borderRadius:'10px',
+                            cursor:'pointer',
+                            fontSize:'9px',
+                            fontWeight:700,
+                            textAlign:'center',
+                            transition:'all 0.15s',
+                            display:'flex',
+                            flexDirection:'column',
+                            alignItems:'center',
+                            gap:'3px',
+                          }}
+                        >
+                          <span style={{fontSize:'20px'}}>{m.icon}</span>
+                          <span>{m.label}</span>
                         </button>
-                     </div>
+                      ))}
+                    </div>
+
+                    {/* CAMPOS MONTO / REF / TASA / BOTON - sin cambios logicos */}
+                    <div className="pago-form-grid-responsive" style={{display:'grid',gridTemplateColumns:'1fr 1fr auto',gap:'10px',alignItems:'flex-end'}}>
+                      <div>
+                        <label style={lbl}>Monto ({pago_divisa})</label>
+                        <div style={{display:'flex',gap:'4px'}}>
+                          <select value={pago_divisa} onChange={e=>setPago_divisa(e.target.value)} style={{...inp,width:'65px',borderRadius:'8px',height:'36px'}}><option>EUR</option><option>USD</option><option>BS</option></select>
+                          <input type="number" value={pago_monto} onChange={e=>setPago_monto(e.target.value)} style={{...inp,borderRadius:'8px',height:'36px'}} placeholder="0.00"/>
+                        </div>
+                      </div>
+                      <div className="pago-form-second-row-responsive">
+                        <label style={lbl}>Ref / Tasa</label>
+                        <div style={{display:'flex',gap:'4px'}}>
+                          <input value={pago_referencia} onChange={e=>setPago_referencia(e.target.value)} style={{...inp,borderRadius:'8px',height:'36px',flex:1}} placeholder="Ref..."/>
+                          <input type="number" value={pago_tasa} onChange={e=>setPago_tasa(e.target.value)} disabled={pago_divisa!=='BS'} style={{...inp,width:'72px',borderRadius:'8px',height:'36px',opacity:pago_divisa!=='BS'?.4:1}} placeholder="Tasa"/>
+                        </div>
+                      </div>
+                      <button className="pago-form-button-responsive" onClick={agregarPagoALista} disabled={!pago_metodo || !pago_monto} style={{height:'36px',background:'var(--ink)',color:'#fff',border:'none',padding:'0 18px',borderRadius:'8px',fontWeight:800,cursor:'pointer',opacity:(!pago_metodo||!pago_monto)?0.4:1,fontSize:'12px',transition:'opacity 0.2s'}}>
+                        + Añadir
+                      </button>
+                    </div>
                   </div>
 
-                  {/* RESUMEN DE SALDOS POS PREMIUM */}
+                  {/* RESUMEN DE SALDOS */}
                   <div className="saldos-grid-responsive" style={{marginTop:'15px', display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'10px'}}>
-                     <div style={{background:'var(--surface)', padding:'10px', borderRadius:'12px', border:'1.5px solid var(--border)', textAlign:'center', boxShadow:'0 2px 4px rgba(0,0,0,0.02)'}}>
+                     <div style={{background:'var(--surface)', padding:'12px 10px', borderRadius:'14px', border:'1.5px solid var(--border)', textAlign:'center', boxShadow:'0 4px 12px rgba(0,0,0,0.04)'}}>
                         <div style={lbl}>Total Orden</div>
                         <div style={{fontSize:'16px', fontWeight:900, color:'var(--ink)', fontFamily:'Inter,sans-serif'}}>€{fmtNum(totalComanda)}</div>
+                        {globalTasa > 0 && <div style={{fontSize:'8px', color:'#888', fontWeight:700, marginTop:'2px'}}>Bs. {fmtNum(totalComanda * globalTasa)}</div>}
                      </div>
-                     <div style={{background:'var(--surface)', padding:'10px', borderRadius:'12px', border:'1.5px solid var(--border)', textAlign:'center', boxShadow:'0 2px 4px rgba(0,0,0,0.02)'}}>
+                     <div style={{background:'var(--green-soft)', padding:'12px 10px', borderRadius:'14px', border:'1.5px solid var(--green)', textAlign:'center', boxShadow:'0 4px 12px rgba(26,122,60,0.08)'}}>
                         <div style={lbl}>Total Pagado</div>
                         <div style={{fontSize:'16px', fontWeight:900, color:'var(--green)', fontFamily:'Inter,sans-serif'}}>€{fmtNum(totalPagado)}</div>
                      </div>
                      <div style={{
-                        background: resta > 0.01 ? 'rgba(245,158,11,0.05)' : (resta < -0.01 ? 'rgba(16,185,129,0.05)' : 'var(--bg2)'), 
-                        padding:'10px', 
-                        borderRadius:'12px', 
+                        background: resta > 0.01 ? 'rgba(245,158,11,0.07)' : (resta < -0.01 ? 'rgba(16,185,129,0.07)' : 'var(--bg2)'), 
+                        padding:'12px 10px', 
+                        borderRadius:'14px', 
                         border:`1.5px solid ${resta > 0.01 ? '#f59e0b' : (resta < -0.01 ? '#10b981' : 'var(--border)')}`, 
                         textAlign:'center',
-                        boxShadow:'0 2px 8px rgba(0,0,0,0.04)',
+                        boxShadow: resta > 0.01 ? '0 4px 12px rgba(245,158,11,0.12)' : '0 4px 12px rgba(0,0,0,0.04)',
                         transition:'all 0.3s'
                      }}>
-                        <div className="lbl-saldo-responsive" style={lbl}>{resta > 0.01 ? 'Falta por Pagar' : (resta < -0.01 ? 'Vuelto / Excedente' : 'Saldada')}</div>
-                        <div style={{fontSize:'16px', fontWeight:900, color: resta > 0.01 ? '#f59e0b' : (resta < -0.01 ? '#10b981' : 'var(--ink)'), fontFamily:'Inter,sans-serif'}}>
+                        <div className="lbl-saldo-responsive" style={lbl}>{resta > 0.01 ? 'Falta por Pagar' : (resta < -0.01 ? 'Vuelto / Excedente' : 'Saldada ✓')}</div>
+                        <div style={{fontSize:'16px', fontWeight:900, color: resta > 0.01 ? '#f59e0b' : (resta < -0.01 ? '#10b981' : 'var(--green)'), fontFamily:'Inter,sans-serif'}}>
                            {resta === 0 ? '✓' : `€${fmtNum(Math.abs(resta))}`}
                         </div>
+                        {resta > 0.01 && globalTasa > 0 && <div style={{fontSize:'8px',color:'#a16207',fontWeight:700,marginTop:'2px'}}>Bs. {fmtNum(resta * globalTasa)}</div>}
                      </div>
                   </div>
                </div>
@@ -722,19 +970,22 @@ export default function ModalNueva({ onClose, onSave, clientes=[], productos=[],
         )}
 
         {/* FOOTER */}
-        <div className="modal-footer-responsive" style={{padding:'20px 30px',background:'var(--surface)',borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between'}}>
-          <button className="footer-btn-borrador-responsive" onClick={guardarBorrador} style={{background:'none',border:'1px solid var(--border)',padding:'12px 20px',borderRadius:'10px',fontSize:'13px',fontWeight:600,cursor:'pointer'}}>Guardar en Espera</button>
+        <div className="modal-footer-responsive" style={{padding:'10px 20px',background:'var(--surface)',borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between', flexShrink:0}}>
+          <div style={{display:'flex', gap:'8px'}}>
+            <button className="footer-btn-borrador-responsive" onClick={guardarBorrador} style={{background:'none',border:'1px solid var(--border)',padding:'8px 15px',borderRadius:'8px',fontSize:'12px',fontWeight:600,cursor:'pointer'}}>En Espera</button>
+            <button onClick={()=>{ if(confirm('¿Descartar esta comanda?')){ localStorage.removeItem('moditex_comanda_recuperacion'); onClose(); } }} style={{background:'none',border:'1px solid var(--red)',color:'var(--red)',padding:'8px 15px',borderRadius:'8px',fontSize:'11px',fontWeight:700,cursor:'pointer'}}>Descartar</button>
+          </div>
           
-          <div className="footer-btns-right-responsive" style={{display:'flex',gap:'12px'}}>
-            {fase > 1 && <button className="footer-btn-prev-responsive" onClick={()=>setFase(fase-1)} style={{background:'none',border:'1px solid var(--border)',padding:'12px 25px',borderRadius:'10px',fontSize:'13px',fontWeight:600,cursor:'pointer'}}>Anterior</button>}
+          <div className="footer-btns-right-responsive" style={{display:'flex',gap:'10px'}}>
+            {fase > 1 && <button className="footer-btn-prev-responsive" onClick={()=>setFase(fase-1)} style={{background:'none',border:'1px solid var(--border)',padding:'8px 20px',borderRadius:'8px',fontSize:'12px',fontWeight:600,cursor:'pointer'}}>Anterior</button>}
             {fase < 3 ? (
-              <button className="footer-btn-next-responsive" onClick={avanzarFase} style={{background:'var(--ink)',color:'#fff',border:'none',padding:'12px 30px',borderRadius:'10px',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>Siguiente</button>
+              <button className="footer-btn-next-responsive" onClick={avanzarFase} style={{background:'var(--ink)',color:'#fff',border:'none',padding:'8px 25px',borderRadius:'8px',fontSize:'12px',fontWeight:700,cursor:'pointer'}}>Siguiente</button>
             ) : (
-              <div className="footer-final-btns-responsive" style={{display:'flex',gap:'10px'}}>
-                <button className="footer-btn-empacar-responsive" onClick={()=>crearComanda(true)} disabled={saving} style={{background:'var(--green-soft)',color:'var(--green)',border:'1px solid var(--green)',padding:'12px 25px',borderRadius:'10px',fontSize:'13px',fontWeight:800,cursor:'pointer',opacity:saving?0.5:1}}>
+              <div className="footer-final-btns-responsive" style={{display:'flex',gap:'8px'}}>
+                <button className="footer-btn-empacar-responsive" onClick={()=>crearComanda(true)} disabled={saving} style={{background:'var(--green-soft)',color:'var(--green)',border:'1px solid var(--green)',padding:'8px 20px',borderRadius:'8px',fontSize:'12px',fontWeight:800,cursor:'pointer',opacity:saving?0.5:1}}>
                    + EMPACAR
                 </button>
-                <button className="footer-btn-finalizar-responsive" onClick={()=>crearComanda(false)} disabled={saving} style={{background:'var(--green)',color:'#fff',border:'none',padding:'12px 30px',borderRadius:'10px',fontSize:'13px',fontWeight:900,cursor:'pointer',opacity:saving?0.5:1}}>
+                <button className="footer-btn-finalizar-responsive" onClick={()=>crearComanda(false)} disabled={saving} style={{background:'var(--green)',color:'#fff',border:'none',padding:'8px 25px',borderRadius:'8px',fontSize:'12px',fontWeight:900,cursor:'pointer',opacity:saving?0.5:1}}>
                    FINALIZAR
                 </button>
               </div>
@@ -775,8 +1026,8 @@ export default function ModalNueva({ onClose, onSave, clientes=[], productos=[],
             .pago-form-grid-responsive > div {
               width: 100% !important;
             }
-            .pago-form-second-row-responsive { width: 100% !important; }
-            .pago-form-button-responsive { width: 100% !important; height: 45px !important; margin-top: 5px; }
+            .pago-form-second-row-responsive { width: 100% !important; display: flex !important; flex-direction: column !important; gap: 10px !important; }
+            .pago-form-button-responsive { width: 100% !important; height: 50px !important; margin-top: 5px; font-size: 14px !important; }
             
             .saldos-grid-responsive {
               grid-template-columns: 1fr 1fr !important;

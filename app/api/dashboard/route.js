@@ -12,7 +12,7 @@ export async function GET() {
     const [rProductos, rInventario, rMovimientos, rClientes, rComandas, rComentarios] = await Promise.all([
       supabase
         .from('productos')
-        .select('sku,categoria,modelo,talla,color,precio_detal,precio_mayor,precio_costo,stock_inicial,tela')
+        .select('sku,categoria,modelo,talla,color,precio_detal,precio_mayor,precio_costo,stock_inicial,tela,alias')
         .order('categoria')
         .order('modelo'),
 
@@ -73,6 +73,7 @@ export async function GET() {
       precioCosto:    p.precio_costo || 0,
       stockInicial:   p.stock_inicial || 0,
       tela:           p.tela || '',
+      alias:          p.alias || '',
 
       // ✅ Fuente única de verdad: inventario.stock_disponible
       disponible:     invMap[p.sku]?.stock_total     ?? p.stock_inicial ?? 0,

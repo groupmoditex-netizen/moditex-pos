@@ -13,30 +13,54 @@ function fmtF(d) {
   return (p[2] || '') + '/' + (p[1] || '') + '/' + (p[0] || '');
 }
 
+function fmtNum(n) {
+  return Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
+const inpStyle = {
+  padding: '10px 14px',
+  background: 'rgba(255, 255, 255, 0.05)',
+  border: '1px solid rgba(0, 0, 0, 0.1)',
+  borderRadius: '12px',
+  fontFamily: 'Poppins, sans-serif',
+  fontSize: '13px',
+  outline: 'none',
+  transition: 'all 0.2s ease'
+};
+
+const lblStyle = {
+  fontFamily: 'DM Mono, monospace',
+  fontSize: '8px',
+  letterSpacing: '.12em',
+  textTransform: 'uppercase',
+  color: 'var(--ink-muted)',
+  display: 'block',
+  marginBottom: '6px',
+  fontWeight: '600'
+};
+
 export default function HistorialPage() {
-  const ctx      = useAppData() || {};
+  const ctx = useAppData() || {};
   const ctxProds = ctx.data?.productos || [];
 
-  const [productos,   setProductos]   = useState(ctxProds);
+  const [productos, setProductos] = useState(ctxProds);
   const [movimientos, setMovimientos] = useState([]);
-  const [cargando,    setCargando]    = useState(true);
-  const [total,       setTotal]       = useState(0);
-  const [pagina,      setPagina]      = useState(1);
-  const [totalPags,   setTotalPags]   = useState(1);
+  const [cargando, setCargando] = useState(true);
+  const [total, setTotal] = useState(0);
+  const [pagina, setPagina] = useState(1);
+  const [totalPags, setTotalPags] = useState(1);
 
   const [buscar, setBuscar] = useState('');
-  const [tipo,   setTipo]   = useState('');
-  const [cat,    setCat]    = useState('');
-  const [desde,  setDesde]  = useState('');
-  const [hasta,  setHasta]  = useState('');
+  const [tipo, setTipo] = useState('');
+  const [cat, setCat] = useState('');
+  const [desde, setDesde] = useState('');
+  const [hasta, setHasta] = useState('');
 
-  // ── Edición inline ────────────────────────────────────────────────
-  const [editando,   setEditando]  = useState(null); // { id, sku, cantidad, concepto, fecha, tipo }
-  const [guardandoE, setGuardandoE]= useState(false);
-  const [msgE,       setMsgE]      = useState(null);
-  const [skuBuscar,  setSkuBuscar] = useState('');   // búsqueda de nuevo SKU al editar
+  const [editando, setEditando] = useState(null);
+  const [guardandoE, setGuardandoE] = useState(false);
+  const [msgE, setMsgE] = useState(null);
+  const [skuBuscar, setSkuBuscar] = useState('');
 
-  // Productos filtrados para el buscador de SKU en el modal de edición
   const skuResultados = useMemo(() => {
     if (!skuBuscar || skuBuscar.length < 2) return [];
     const q = skuBuscar.toLowerCase();
@@ -66,7 +90,7 @@ export default function HistorialPage() {
       } else {
         setMsgE({ t: 'err', m: res.error || 'Error al guardar' });
       }
-    } catch(e) { setMsgE({ t: 'err', m: 'Error de conexión' }); }
+    } catch (e) { setMsgE({ t: 'err', m: 'Error de conexión' }); }
     setGuardandoE(false);
     setTimeout(() => setMsgE(null), 3500);
   }
@@ -76,12 +100,12 @@ export default function HistorialPage() {
     try {
       const res = await fetch(`/api/movimientos?id=${id}`, { method: 'DELETE' }).then(r => r.json());
       if (res.ok) {
-        setMsgE({ t: 'ok', m: `✓ Movimiento ${id} eliminado. Inventario recalculado.` });
+        setMsgE({ t: 'ok', m: `✓ Movimiento ${id} eliminado.` });
         cargarMovimientos(pagina);
       } else {
         setMsgE({ t: 'err', m: res.error || 'Error al eliminar' });
       }
-    } catch(e) { setMsgE({ t: 'err', m: 'Error de conexión' }); }
+    } catch (e) { setMsgE({ t: 'err', m: 'Error de conexión' }); }
     setTimeout(() => setMsgE(null), 4000);
   }
 
@@ -91,9 +115,11 @@ export default function HistorialPage() {
     setCargando(true);
     try {
       const params = new URLSearchParams({ page: String(pag), limit: String(LIMIT) });
-      if (tipo)  params.set('tipo',  tipo);
+      if (tipo) params.set('tipo', tipo);
       if (desde) params.set('desde', desde);
       if (hasta) params.set('hasta', hasta);
+      if (buscar) params.set('search', buscar);
+      if (cat) params.set('categoria', cat);
 
       const res = await fetchApi(`/api/movimientos?${params}`).then(r => r.json());
 
@@ -108,264 +134,237 @@ export default function HistorialPage() {
         setTotal(res.total || 0);
         setTotalPags(res.pages || 1);
       }
-    } catch (e) {
-      console.warn('[Historial] Error:', e.message);
-    }
+    } catch (e) { console.warn('[Historial] Error:', e.message); }
     setCargando(false);
-  }, [tipo, desde, hasta]);
+  }, [tipo, desde, hasta, buscar, cat]);
 
-  useEffect(() => { setPagina(1); cargarMovimientos(1); }, [cargarMovimientos]);
+  useEffect(() => { setPagina(1); cargarMovimientos(1); }, [tipo, desde, hasta, buscar, cat]);
   useEffect(() => { cargarMovimientos(pagina); }, [pagina]);
   useEffect(() => { if (ctxProds.length > 0) setProductos(ctxProds); }, [ctxProds.length]);
-  useEffect(() => {
-    if (ctxProds.length === 0 && productos.length === 0) {
-      fetchApi('/api/productos').then(r => r.json())
-        .then(d => { if (Array.isArray(d)) setProductos(d); }).catch(() => {});
-    }
-  }, []);
 
   const categorias = useMemo(() =>
     [...new Set(productos.map(p => p.categoria))].filter(Boolean).sort(), [productos]);
 
-  const filtrados = useMemo(() => {
-    const q = buscar.toLowerCase();
-    return movimientos.filter(m => {
-      const p = productos.find(x => x.sku === m.sku);
-      if (q && !`${m.sku} ${m.concepto} ${m.contacto} ${p?.modelo||''} ${p?.color||''}`.toLowerCase().includes(q)) return false;
-      if (cat && p?.categoria !== cat) return false;
-      return true;
-    });
-  }, [movimientos, productos, buscar, cat]);
-
   function exportCSV() {
-    const hdr = ['ID','Fecha','SKU','Categoría','Modelo','Color','Tipo','Tipo Venta','Cantidad','Precio €','Concepto','Cliente'];
-    const rows = filtrados.map(m => {
+    const hdr = ['ID', 'Fecha', 'SKU', 'Categoría', 'Modelo', 'Color', 'Tipo', 'Tipo Venta', 'Cantidad', 'Precio €', 'Concepto', 'Cliente'];
+    const rows = movimientos.map(m => {
       const p = productos.find(x => x.sku === m.sku);
-      return [m.id, m.fecha, m.sku, p?.categoria||'', p?.modelo||'', p?.color||'',
-        m.tipo, m.tipoVenta, m.cantidad, m.precioVenta||0, m.concepto, m.contacto];
+      return [m.id, m.fecha, m.sku, p?.categoria || '', p?.modelo || '', p?.color || '',
+      m.tipo, m.tipoVenta, m.cantidad, m.precioVenta || 0, m.concepto, m.contacto];
     });
-    const csv = [hdr, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const csv = [hdr, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'}));
+    a.href = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' }));
     a.download = `movimientos_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
   }
 
-  const inp = {padding:'7px 10px',background:'var(--bg2)',border:'1px solid var(--border)',fontFamily:'Poppins,sans-serif',fontSize:'12px',color:'#111',outline:'none'};
-
   return (
-    <Shell title="Historial de Movimientos">
-
-      {/* ── Modal edición de movimiento ───────────────────────────── */}
-      {editando && (() => {
-        const prodActual = productos.find(p => p.sku === editando.sku);
-        return (
-        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:300,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}
-          onClick={e=>{if(e.target===e.currentTarget){setEditando(null);setSkuBuscar('');}}}>
-          <div style={{background:'var(--bg)',border:'1px solid var(--border-strong)',width:'100%',maxWidth:'500px',borderTop:'3px solid #f59e0b'}}>
-            <div style={{padding:'14px 18px',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+    <Shell title="Historial Maestro">
+      
+      {/* Modal Edición Styled */}
+      {editando && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
+             onClick={e => e.target === e.currentTarget && setEditando(null)}>
+          <div style={{ background: '#fff', borderRadius: '24px', width: '100%', maxWidth: '500px', boxShadow: '0 30px 60px rgba(0,0,0,0.2)', overflow: 'hidden', animation: 'modalIn 0.3s ease', margin: 'auto' }}>
+            <div style={{ padding: '24px 30px', background: 'linear-gradient(135deg, #111 0%, #333 100%)', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <div style={{fontFamily:'Playfair Display,serif',fontSize:'16px',fontWeight:700}}>✏️ Editar Movimiento</div>
-                <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888',marginTop:'2px'}}>{editando.id}</div>
+                <h3 style={{ fontSize: '18px', fontWeight: 800 }}>Modificar Registro</h3>
+                <p style={{ fontSize: '11px', opacity: 0.6 }}>ID: {editando.id}</p>
               </div>
-              <button onClick={()=>{setEditando(null);setSkuBuscar('');}} style={{background:'none',border:'1px solid var(--border)',width:'28px',height:'28px',cursor:'pointer',fontSize:'13px',display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
+              <button onClick={() => setEditando(null)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '20px', cursor: 'pointer' }}>✕</button>
             </div>
-            <div style={{padding:'16px 18px',display:'flex',flexDirection:'column',gap:'12px'}}>
-
-              {/* Producto actual */}
-              <div style={{padding:'11px 13px',background:'var(--bg2)',border:'1px solid var(--border)',display:'flex',alignItems:'center',gap:'12px'}}>
-                {prodActual ? (
-                  <>
-                    <span style={{width:'14px',height:'14px',borderRadius:'50%',background:colorHex(prodActual.color),border:'1px solid rgba(0,0,0,.12)',flexShrink:0}}/>
-                    <div>
-                      <div style={{fontSize:'13px',fontWeight:700}}>{prodActual.modelo} — {prodActual.color}</div>
-                      <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'var(--blue)',marginTop:'1px'}}>{prodActual.sku} · {prodActual.categoria}</div>
-                    </div>
-                  </>
-                ) : (
-                  <div style={{fontFamily:'DM Mono,monospace',fontSize:'11px',color:'#888'}}>SKU: <strong style={{color:'var(--blue)'}}>{editando.sku}</strong></div>
-                )}
+            
+            <div style={{ padding: '30px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div style={{ background: 'rgba(0,0,0,0.02)', padding: '16px', borderRadius: '16px', border: '1px solid var(--border)' }}>
+                <label style={lblStyle}>Producto Seleccionado</label>
+                <div style={{ fontSize: '14px', fontWeight: 700 }}>{editando.sku}</div>
               </div>
 
-              {/* Buscador de SKU — para cambiar producto */}
-              <div style={{position:'relative'}}>
-                <label style={{fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.15em',textTransform:'uppercase',color:'#555',display:'block',marginBottom:'5px',fontWeight:700}}>
-                  Cambiar producto (opcional)
-                </label>
-                <input
-                  value={skuBuscar}
-                  onChange={e => setSkuBuscar(e.target.value)}
-                  placeholder="Buscar por SKU, modelo o color..."
-                  style={{width:'100%',padding:'8px 10px',background:'var(--bg2)',border:'1px solid var(--border)',fontFamily:'Poppins,sans-serif',fontSize:'12px',outline:'none',boxSizing:'border-box'}}
-                />
-                {skuResultados.length > 0 && (
-                  <div style={{position:'absolute',top:'100%',left:0,right:0,background:'var(--surface)',border:'1px solid var(--border-strong)',borderTop:'none',zIndex:99,maxHeight:'180px',overflowY:'auto',boxShadow:'0 8px 24px rgba(0,0,0,.12)'}}>
-                    {skuResultados.map(p => (
-                      <div key={p.sku}
-                        onMouseDown={e => { e.preventDefault(); setEditando(v => ({...v, sku: p.sku})); setSkuBuscar(''); }}
-                        style={{padding:'9px 12px',cursor:'pointer',display:'flex',alignItems:'center',gap:'10px',borderBottom:'1px solid var(--border)'}}
-                        onMouseEnter={e=>e.currentTarget.style.background='var(--bg2)'}
-                        onMouseLeave={e=>e.currentTarget.style.background=''}>
-                        <span style={{width:'10px',height:'10px',borderRadius:'50%',background:colorHex(p.color),border:'1px solid rgba(0,0,0,.12)',flexShrink:0}}/>
-                        <div style={{flex:1}}>
-                          <div style={{fontSize:'12px',fontWeight:600}}>{p.modelo} — {p.color}</div>
-                          <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'var(--blue)'}}>{p.sku}</div>
-                        </div>
-                        <span style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:p.disponible>0?'var(--green)':'#aaa'}}>{p.disponible} uds</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div style={{padding:'9px 12px',background:'#fff8e1',border:'1px solid #f59e0b44',borderLeft:'3px solid #f59e0b',fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#92400e'}}>
-                ⚠️ El inventario del SKU <strong>{editando.sku}</strong> se recalculará automáticamente al guardar.
-              </div>
-
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div>
-                  <label style={{fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.15em',textTransform:'uppercase',color:'#555',display:'block',marginBottom:'5px',fontWeight:700}}>Tipo</label>
-                  <select value={editando.tipo} onChange={e=>setEditando(v=>({...v,tipo:e.target.value}))}
-                    style={{width:'100%',padding:'8px 10px',background:'var(--bg2)',border:'1px solid var(--border)',fontFamily:'Poppins,sans-serif',fontSize:'12px',outline:'none'}}>
-                    <option value="ENTRADA">↑ ENTRADA</option>
-                    <option value="SALIDA">↓ SALIDA</option>
+                  <label style={lblStyle}>Tipo</label>
+                  <select value={editando.tipo} onChange={e => setEditando({ ...editando, tipo: e.target.value })} style={{ ...inpStyle, width: '100%' }}>
+                    <option value="ENTRADA">Entrada</option>
+                    <option value="SALIDA">Salida</option>
                   </select>
                 </div>
                 <div>
-                  <label style={{fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.15em',textTransform:'uppercase',color:'#555',display:'block',marginBottom:'5px',fontWeight:700}}>Cantidad *</label>
-                  <input type="number" min="1" value={editando.cantidad} onChange={e=>setEditando(v=>({...v,cantidad:parseInt(e.target.value)||1}))}
-                    style={{width:'100%',padding:'8px 10px',background:'var(--bg2)',border:'1px solid var(--border)',fontFamily:'DM Mono,monospace',fontSize:'14px',fontWeight:700,outline:'none'}}/>
+                  <label style={lblStyle}>Cantidad</label>
+                  <input type="number" value={editando.cantidad} onChange={e => setEditando({ ...editando, cantidad: parseInt(e.target.value) })} style={{ ...inpStyle, width: '100%' }} />
                 </div>
               </div>
+
               <div>
-                <label style={{fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.15em',textTransform:'uppercase',color:'#555',display:'block',marginBottom:'5px',fontWeight:700}}>Fecha</label>
-                <input type="date" value={editando.fecha} onChange={e=>setEditando(v=>({...v,fecha:e.target.value}))}
-                  style={{width:'100%',padding:'8px 10px',background:'var(--bg2)',border:'1px solid var(--border)',fontFamily:'Poppins,sans-serif',fontSize:'12px',outline:'none'}}/>
-              </div>
-              <div>
-                <label style={{fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.15em',textTransform:'uppercase',color:'#555',display:'block',marginBottom:'5px',fontWeight:700}}>Concepto</label>
-                <input value={editando.concepto||''} onChange={e=>setEditando(v=>({...v,concepto:e.target.value}))}
-                  placeholder="Descripción del movimiento..."
-                  style={{width:'100%',padding:'8px 10px',background:'var(--bg2)',border:'1px solid var(--border)',fontFamily:'Poppins,sans-serif',fontSize:'12px',outline:'none'}}/>
+                <label style={lblStyle}>Concepto / Referencia</label>
+                <input value={editando.concepto} onChange={e => setEditando({ ...editando, concepto: e.target.value })} style={{ ...inpStyle, width: '100%' }} />
               </div>
             </div>
-            <div style={{padding:'12px 18px',borderTop:'1px solid var(--border)',background:'var(--bg2)',display:'flex',justifyContent:'flex-end',gap:'8px'}}>
-              <button onClick={()=>{setEditando(null);setSkuBuscar('');}} style={{padding:'9px 15px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:600}}>Cancelar</button>
-              <button onClick={guardarEdicion} disabled={guardandoE}
-                style={{padding:'9px 20px',background:'#f59e0b',color:'#000',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'12px',fontWeight:700,textTransform:'uppercase',opacity:guardandoE?.6:1}}>
-                {guardandoE?'⏳ Guardando...':'💾 Guardar cambios'}
-              </button>
+
+            <div style={{ padding: '20px 30px', background: 'var(--bg2)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <button onClick={() => setEditando(null)} style={{ padding: '12px 20px', borderRadius: '12px', border: 'none', background: 'none', fontWeight: 600, cursor: 'pointer' }}>Cerrar</button>
+              <button onClick={guardarEdicion} style={{ padding: '12px 24px', borderRadius: '12px', border: 'none', background: '#000', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Guardar Cambios</button>
             </div>
           </div>
-        </div>
-        );
-      })()}
-
-      {/* Banner de resultado */}
-      {msgE&&(
-        <div style={{padding:'10px 14px',marginBottom:'12px',background:msgE.t==='ok'?'var(--green-soft)':'var(--red-soft)',border:`1px solid ${msgE.t==='ok'?'rgba(26,122,60,.3)':'rgba(217,30,30,.3)'}`,color:msgE.t==='ok'?'var(--green)':'var(--red)',fontFamily:'DM Mono,monospace',fontSize:'11px',fontWeight:700}}>
-          {msgE.m}
         </div>
       )}
-      <div style={{display:'flex',gap:'8px',flexWrap:'wrap',marginBottom:'14px',alignItems:'center'}}>
-        <div style={{display:'flex',alignItems:'center',gap:'8px',background:'var(--bg2)',border:'1px solid var(--border)',padding:'7px 12px',flex:1,minWidth:'200px'}}>
-          <span>🔍</span>
-          <input value={buscar} onChange={e=>setBuscar(e.target.value)} placeholder="Buscar SKU, concepto, cliente..."
-            style={{background:'none',border:'none',outline:'none',fontFamily:'Poppins,sans-serif',fontSize:'12px',width:'100%'}}/>
-        </div>
-        <select value={tipo} onChange={e=>setTipo(e.target.value)} style={{...inp,minWidth:'150px'}}>
-          <option value="">Entradas y Salidas</option>
-          <option value="ENTRADA">Solo Entradas</option>
-          <option value="SALIDA">Solo Salidas</option>
-        </select>
-        <select value={cat} onChange={e=>setCat(e.target.value)} style={{...inp,minWidth:'150px'}}>
-          <option value="">Todas las categorías</option>
-          {categorias.map(c=><option key={c}>{c}</option>)}
-        </select>
-        <input type="date" value={desde} onChange={e=>setDesde(e.target.value)} style={inp} title="Desde"/>
-        <input type="date" value={hasta} onChange={e=>setHasta(e.target.value)} style={inp} title="Hasta"/>
-        <button onClick={()=>{setBuscar('');setTipo('');setCat('');setDesde('');setHasta('');setPagina(1);}} style={{...inp,cursor:'pointer'}}>Limpiar</button>
-        <button onClick={exportCSV} style={{...inp,cursor:'pointer',color:'var(--green)',borderColor:'rgba(26,122,60,.3)'}}>⬇ CSV</button>
-        <button onClick={()=>cargarMovimientos(pagina)} style={{...inp,cursor:'pointer'}}>↺</button>
-      </div>
 
-      {cargando&&<div style={{textAlign:'center',padding:'40px',fontFamily:'DM Mono,monospace',fontSize:'12px',color:'#666'}}>⏳ Cargando movimientos...</div>}
-
-      {!cargando&&(
-        <div style={{background:'var(--surface)',border:'1px solid var(--border)',overflow:'hidden'}}>
-          <div style={{padding:'8px 14px',borderBottom:'1px solid var(--border)',background:'var(--bg2)',display:'flex',justifyContent:'space-between',fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#555',letterSpacing:'.1em',textTransform:'uppercase'}}>
-            <span>{filtrados.length} en pantalla · {total} total en BD</span>
-            <span>Página {pagina}/{totalPags}</span>
+      <div style={{ maxWidth: '1200px', margin: '0 auto', animation: 'fadeIn 0.5s ease' }}>
+        
+        {/* Banner Superior */}
+        <div style={{
+          background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
+          padding: '24px 30px',
+          borderRadius: '24px',
+          marginBottom: '24px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          border: '1px solid rgba(0,0,0,0.05)',
+          boxShadow: '0 4px 15px rgba(0,0,0,0.02)'
+        }}>
+          <div>
+            <h1 style={{ fontSize: '24px', fontWeight: 900, color: '#111' }}>Historial de Movimientos</h1>
+            <p style={{ fontSize: '13px', color: '#666', marginTop: '4px' }}>Auditoría completa de entradas, salidas y ajustes de inventario.</p>
           </div>
-          <div style={{overflowX:'auto'}}>
-            <table style={{width:'100%',borderCollapse:'collapse',minWidth:'900px'}}>
-              <thead><tr style={{background:'#efefef'}}>
-                {['ID','Fecha','SKU','Cat.','Modelo','Color','Tipo','Cant.','Precio','Concepto','Cliente','Acciones'].map(h=>(
-                  <th key={h} style={{padding:'7px 11px',textAlign:'left',fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.12em',textTransform:'uppercase',color:'#444',whiteSpace:'nowrap'}}>{h}</th>
-                ))}
-              </tr></thead>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button onClick={exportCSV} style={{ padding: '10px 18px', borderRadius: '12px', border: '1px solid var(--green)', color: 'var(--green)', background: 'transparent', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>⬇ Exportar CSV</button>
+            <button onClick={() => cargarMovimientos(pagina)} style={{ padding: '10px 18px', borderRadius: '12px', border: '1px solid #ccc', background: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>↺ Refrescar</button>
+          </div>
+        </div>
+
+        {/* Barra de Filtros Premium */}
+        <div style={{
+          background: '#fff',
+          padding: '20px 24px',
+          borderRadius: '24px',
+          marginBottom: '24px',
+          boxShadow: '0 10px 30px rgba(0,0,0,0.03)',
+          border: '1px solid rgba(0,0,0,0.05)',
+          display: 'grid',
+          gridTemplateColumns: '1.5fr 1fr 1fr 1fr auto',
+          gap: '12px',
+          alignItems: 'end'
+        }}>
+          <div>
+            <label style={lblStyle}>Búsqueda Inteligente</label>
+            <input value={buscar} onChange={e => setBuscar(e.target.value)} placeholder="SKU, Concepto, Cliente..." style={{ ...inpStyle, width: '100%' }} />
+          </div>
+          <div>
+            <label style={lblStyle}>Tipo de Operación</label>
+            <select value={tipo} onChange={e => setTipo(e.target.value)} style={{ ...inpStyle, width: '100%' }}>
+              <option value="">Todos los Tipos</option>
+              <option value="ENTRADA">Solo Entradas</option>
+              <option value="SALIDA">Solo Salidas</option>
+            </select>
+          </div>
+          <div>
+            <label style={lblStyle}>Categoría</label>
+            <select value={cat} onChange={e => setCat(e.target.value)} style={{ ...inpStyle, width: '100%' }}>
+              <option value="">Todas las Categorías</option>
+              {categorias.map(c => <option key={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={lblStyle}>Rango de Fechas</label>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              <input type="date" value={desde} onChange={e => setDesde(e.target.value)} style={{ ...inpStyle, padding: '8px 10px', flex: 1, fontSize: '11px' }} />
+              <input type="date" value={hasta} onChange={e => setHasta(e.target.value)} style={{ ...inpStyle, padding: '8px 10px', flex: 1, fontSize: '11px' }} />
+            </div>
+          </div>
+          <button onClick={() => { setBuscar(''); setTipo(''); setCat(''); setDesde(''); setHasta(''); }} style={{ padding: '12px 16px', borderRadius: '12px', background: 'var(--bg3)', border: 'none', color: '#666', fontWeight: 600, cursor: 'pointer' }}>Limpiar</button>
+        </div>
+
+        {/* Tabla Refinada */}
+        <div style={{ background: '#fff', borderRadius: '24px', border: '1px solid rgba(0,0,0,0.05)', overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.03)' }}>
+          <div style={{ padding: '16px 24px', background: '#f8f9fa', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '10px', fontWeight: 800, color: '#999', textTransform: 'uppercase', letterSpacing: '1px' }}>Registro Maestro — Página {pagina}</span>
+            <span style={{ fontSize: '11px', fontWeight: 700, color: '#111' }}>{fmtNum(total)} Movimientos Totales</span>
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: '#fff', borderBottom: '2px solid #f1f3f5' }}>
+                  {['Fecha', 'Producto', 'Tipo', 'Cant.', 'Concepto', 'Acciones'].map(h => (
+                    <th key={h} style={{ padding: '16px 24px', textAlign: 'left', fontSize: '9px', textTransform: 'uppercase', color: '#999', fontWeight: 800 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
               <tbody>
-                {filtrados.map((m,i)=>{
-                  const p=productos.find(x=>x.sku===m.sku);
-                  const tvBadge=m.tipoVenta?<span style={{fontFamily:'DM Mono,monospace',fontSize:'7px',padding:'1px 4px',background:m.tipoVenta==='MAYOR'?'var(--warn-soft)':'var(--blue-soft)',color:m.tipoVenta==='MAYOR'?'var(--warn)':'var(--blue)',marginLeft:'4px'}}>{m.tipoVenta}</span>:null;
-                  return(
-                    <tr key={i} style={{borderBottom:'1px solid var(--border)'}}
-                      onMouseEnter={e=>e.currentTarget.style.background='var(--bg2)'}
-                      onMouseLeave={e=>e.currentTarget.style.background=''}>
-                      <td style={{padding:'7px 11px',fontFamily:'DM Mono,monospace',fontSize:'8px',color:'#888'}}>{m.id||'—'}</td>
-                      <td style={{padding:'7px 11px',fontSize:'12px',whiteSpace:'nowrap'}}>{fmtF(m.fecha)}</td>
-                      <td style={{padding:'7px 11px',fontFamily:'DM Mono,monospace',fontSize:'9px',color:'var(--blue)'}}>{m.sku}</td>
-                      <td style={{padding:'7px 11px'}}>{p&&<span style={{background:'var(--bg3)',padding:'2px 5px',fontFamily:'DM Mono,monospace',fontSize:'8px'}}>{p.categoria}</span>}</td>
-                      <td style={{padding:'7px 11px',fontSize:'11px',fontWeight:500}}>{p?.modelo||'—'}</td>
-                      <td style={{padding:'7px 11px',fontSize:'11px'}}>{p&&<><span style={{width:'7px',height:'7px',borderRadius:'50%',background:colorHex(p.color),display:'inline-block',verticalAlign:'middle',marginRight:'3px',border:'1px solid rgba(0,0,0,.1)'}}/>{p.color}</>}</td>
-                      <td style={{padding:'7px 11px'}}>
-                        <span style={{padding:'2px 6px',fontFamily:'DM Mono,monospace',fontSize:'8px',background:m.tipo==='ENTRADA'?'var(--green-soft)':'var(--red-soft)',color:m.tipo==='ENTRADA'?'#155e30':'#a81818'}}>
-                          {m.tipo==='ENTRADA'?'↑':'↓'} {m.tipo}
-                        </span>{tvBadge}
-                      </td>
-                      <td style={{padding:'7px 11px',fontFamily:'DM Mono,monospace',fontWeight:700,color:COLOR_MOV[m.tipo]||'#333'}}>{m.tipo==='ENTRADA'?'+':'-'}{m.cantidad}</td>
-                      <td style={{padding:'7px 11px',fontFamily:'DM Mono,monospace',fontSize:'11px'}}>{m.precioVenta>0?`€ ${m.precioVenta.toFixed(2)}`:'—'}</td>
-                      <td style={{padding:'7px 11px',fontSize:'11px',maxWidth:'160px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.concepto||'—'}</td>
-                      <td style={{padding:'7px 11px',fontSize:'11px'}}>{m.contacto||'—'}</td>
-                      <td style={{padding:'7px 11px',whiteSpace:'nowrap'}}>
-                        <div style={{display:'flex',gap:'5px'}}>
-                          <button
-                            onClick={()=>abrirEdicion(m)}
-                            title="Editar movimiento"
-                            style={{padding:'3px 8px',background:'none',border:'1px solid #f59e0b',color:'#f59e0b',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'9px',fontWeight:700}}>
-                            ✏️
-                          </button>
-                          <button
-                            onClick={()=>eliminarMovimiento(m.id,m.sku,m.tipo,m.cantidad)}
-                            title="Eliminar movimiento"
-                            style={{padding:'3px 8px',background:'none',border:'1px solid var(--red)',color:'var(--red)',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'9px',fontWeight:700}}>
-                            🗑️
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {!filtrados.length&&<tr><td colSpan={12} style={{textAlign:'center',padding:'40px',color:'#666',fontFamily:'DM Mono,monospace',fontSize:'11px'}}>{movimientos.length===0?'Sin movimientos registrados aún':'Sin resultados'}</td></tr>}
+                {cargando ? (
+                  <tr><td colSpan={6} style={{ padding: '100px', textAlign: 'center', color: '#aaa', fontSize: '14px' }}>Cargando datos maestros...</td></tr>
+                ) : movimientos.length === 0 ? (
+                  <tr><td colSpan={6} style={{ padding: '100px', textAlign: 'center', color: '#aaa', fontSize: '14px' }}>No se encontraron registros coincidentes.</td></tr>
+                ) : (
+                  movimientos.map((m, i) => {
+                    const p = productos.find(x => x.sku === m.sku);
+                    return (
+                      <tr key={i} style={{ borderBottom: '1px solid #f8f9fa', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#fcfcfc'} onMouseLeave={e => e.currentTarget.style.background = ''}>
+                        <td style={{ padding: '16px 24px' }}>
+                          <div style={{ fontSize: '13px', fontWeight: 600 }}>{fmtF(m.fecha)}</div>
+                          <div style={{ fontSize: '10px', color: '#aaa' }}>ID: {m.id}</div>
+                        </td>
+                        <td style={{ padding: '16px 24px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: colorHex(p?.color), border: '1px solid rgba(0,0,0,0.1)' }} />
+                            <div>
+                              <div style={{ fontSize: '13px', fontWeight: 700 }}>{p?.modelo || 'Desconocido'}</div>
+                              <div style={{ fontSize: '10px', color: 'var(--blue)', fontWeight: 600 }}>{m.sku}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td style={{ padding: '16px 24px' }}>
+                          <span style={{ 
+                            padding: '6px 12px', 
+                            borderRadius: '20px', 
+                            fontSize: '9px', 
+                            fontWeight: 800, 
+                            background: m.tipo === 'ENTRADA' ? 'rgba(26,122,60,0.1)' : 'rgba(217,30,30,0.1)',
+                            color: m.tipo === 'ENTRADA' ? 'var(--green)' : 'var(--red)'
+                          }}>
+                            {m.tipo}
+                          </span>
+                        </td>
+                        <td style={{ padding: '16px 24px' }}>
+                          <div style={{ fontSize: '14px', fontWeight: 900, fontFamily: 'DM Mono, monospace', color: COLOR_MOV[m.tipo] }}>
+                            {m.tipo === 'ENTRADA' ? '+' : '-'}{m.cantidad}
+                          </div>
+                        </td>
+                        <td style={{ padding: '16px 24px' }}>
+                          <div title={m.concepto} style={{ fontSize: '12px', color: '#555', maxWidth: '280px', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: '1.5' }}>{m.concepto}</div>
+                          <div style={{ fontSize: '10px', color: '#aaa', marginTop: '2px' }}>{m.contacto}</div>
+                        </td>
+                        <td style={{ padding: '16px 24px' }}>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button onClick={() => abrirEdicion(m)} style={{ background: 'none', border: '1px solid #ddd', padding: '6px', borderRadius: '8px', cursor: 'pointer' }}>✏️</button>
+                            <button onClick={() => eliminarMovimiento(m.id, m.sku, m.tipo, m.cantidad)} style={{ background: 'none', border: '1px solid #ddd', padding: '6px', borderRadius: '8px', cursor: 'pointer' }}>🗑️</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
-          {totalPags>1&&(
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'9px 14px',borderTop:'1px solid var(--border)',background:'var(--bg2)'}}>
-              <span style={{fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#666'}}>{total} registros · {LIMIT} por página</span>
-              <div style={{display:'flex',gap:'4px'}}>
-                <button disabled={pagina===1} onClick={()=>setPagina(p=>p-1)} style={{padding:'4px 9px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'11px',opacity:pagina===1?.3:1}}>‹</button>
-                {Array.from({length:Math.min(7,totalPags)},(_,i)=>{
-                  let p=pagina<=4?i+1:pagina>=totalPags-3?totalPags-6+i:pagina-3+i;
-                  if(p<1||p>totalPags) return null;
-                  return <button key={p} onClick={()=>setPagina(p)} style={{padding:'4px 9px',background:pagina===p?'var(--ink)':'none',color:pagina===p?'#fff':'#333',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'11px'}}>{p}</button>;
-                })}
-                <button disabled={pagina===totalPags} onClick={()=>setPagina(p=>p+1)} style={{padding:'4px 9px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'11px',opacity:pagina===totalPags?.3:1}}>›</button>
-              </div>
+
+          {/* Paginación Premium */}
+          <div style={{ padding: '20px 24px', background: '#f8f9fa', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontSize: '12px', color: '#666' }}>Mostrando {movimientos.length} de {fmtNum(total)} registros</div>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button disabled={pagina === 1} onClick={() => setPagina(pagina - 1)} style={{ padding: '10px 14px', borderRadius: '10px', border: '1px solid #ddd', background: '#fff', cursor: 'pointer', opacity: pagina === 1 ? 0.5 : 1 }}>Anterior</button>
+              <div style={{ display: 'flex', alignItems: 'center', px: '10px', fontSize: '13px', fontWeight: 700 }}>{pagina} / {totalPags}</div>
+              <button disabled={pagina === totalPags} onClick={() => setPagina(pagina + 1)} style={{ padding: '10px 14px', borderRadius: '10px', border: '1px solid #ddd', background: '#fff', cursor: 'pointer', opacity: pagina === totalPags ? 0.5 : 1 }}>Siguiente</button>
             </div>
-          )}
+          </div>
         </div>
-      )}
+      </div>
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes modalIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+      ` }} />
     </Shell>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useMemo, useEffect, useCallback, useRef, Suspense, memo } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import Shell from '@/components/Shell';
 import { useAppData } from '@/lib/AppContext';
 import { useAuth } from '@/lib/AuthContext';
@@ -36,7 +37,7 @@ export default function ComandasPage() {
 }
 
 function ComandasInner() {
-  const { data, cargando, recargar, syncStatus, actualizarComandaLocal, mutationApi } = useAppData()||{};
+  const { data, tasa, cargando, recargar, syncStatus, actualizarComandaLocal, mutationApi } = useAppData()||{};
   const { clientes=[], productos=[], comandas=[] } = data||{};
   const { usuario } = useAuth()||{};
   const isAdmin = usuario?.rol === 'admin';
@@ -115,6 +116,8 @@ function ComandasInner() {
   const searchParams = useSearchParams();
   const verRef = useRef(null);
 
+  // Eliminado el auto-abrir para mostrar la lista principal primero
+  /*
   useEffect(() => {
     const saved = localStorage.getItem('moditex_nueva_comanda_autosave');
     if (saved && !modal) {
@@ -127,19 +130,26 @@ function ComandasInner() {
       } catch {}
     }
   }, []);
+  */
 
   useEffect(() => {
     const ver = searchParams?.get('ver');
     if (ver) verRef.current = ver;
   }, [searchParams]);
 
-  useEffect(()=>{
+  useEffect(() => {
     const ver = verRef.current || searchParams?.get('ver');
     if (ver && comandas.length > 0) {
       const cmd = comandas.find(c => c.id === ver);
-      if (cmd) { setModal(cmd); verRef.current = null; }
+      if (cmd) {
+        setBuscar(ver);
+        setExpandedList(prev => prev.includes(ver) ? prev : [...prev, ver]);
+        verRef.current = null;
+        // Limpiar URL
+        window.history.replaceState({}, '', window.location.pathname);
+      }
     }
-  },[searchParams, comandas]);
+  }, [searchParams, comandas]);
 
   useEffect(() => {
     if (searchParams?.get('nueva')) {
@@ -171,10 +181,32 @@ function ComandasInner() {
 
   const filtradas = useMemo(()=>{
     // BÚSQUEDA GLOBAL: Si hay texto en buscar, ignorar el filtro de pestaña
-    let r = (filtro==='todos' || buscar) ? comandas : comandas.filter(c=>c.status===filtro);
+    let r = comandas;
+    if (filtro === 'con_deuda') {
+      r = comandas.filter(c => c.status !== 'cancelado' && ((c.precio || 0) - (c.monto_pagado || 0) > 0.01));
+    } else if (filtro !== 'todos' && !buscar) {
+      r = comandas.filter(c => c.status === filtro);
+    }
+    
     if(buscar){
-      const q=buscar.toLowerCase();
-      r=r.filter(c=> `${c.cliente} ${c.id} ${c.notas||''} ${c.items_resumen||''}`.toLowerCase().includes(q) );
+      const q = buscar.toLowerCase();
+      const words = q.split(' ').filter(w => w.length > 0);
+      
+      r = r.filter(c => {
+        // Texto base: cliente, ID, notas
+        const base = `${c.cliente} ${c.id} ${c.notas || ''} ${c.items_resumen || ''}`.toLowerCase();
+        
+        // Buscar si algún producto de la comanda tiene un alias que coincida
+        const items = parseProd(c);
+        const aliasStr = items.map(it => {
+          const p = productos.find(prod => prod.sku === it.sku);
+          return p?.alias || '';
+        }).join(' ').toLowerCase();
+
+        const target = `${base} ${aliasStr}`.toLowerCase();
+        const targetWords = target.split(/[\s\-_/.]+/);
+        return words.every(word => targetWords.some(tw => tw.startsWith(word)));
+      });
     }
     if(desde) r=r.filter(c=>(c.created_at||'')>=desde);
     if(hasta) r=r.filter(c=>(c.created_at||'')<=hasta+'T99');
@@ -360,21 +392,38 @@ function ComandasInner() {
       {modal&&typeof modal==='object'&&<ModalGestion cmd={modal} productos={productos} isAdmin={isAdmin} usuariosDB={usuariosDB} usuario={usuario} onClose={()=>setModal(null)} onSave={onSave} />}
       {ticketModal&&<ModalTicketEnvio comandas={ticketModal.cmd||ticketModal.cmds} clientes={clientes} onClose={()=>setTicketModal(null)} />}
 
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'14px',flexWrap:'wrap',gap:'10px'}}>
-        <div>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'24px',flexWrap:'wrap',gap:'15px'}}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
-            <div style={{fontFamily:'Playfair Display,serif',fontSize:'16px',fontWeight:700}}>Comandas</div>
-            {syncStatus === 'syncing' && <span style={{fontSize:'10px', color:'#f59e0b', animation:'pulse 1.5s infinite'}}>● Sincronizando...</span>}
-            {syncStatus === 'synced' && <span style={{fontSize:'10px', color:'#22c55e', opacity:0.7}}>● Al día</span>}
+            <div style={{fontFamily:'Poppins,sans-serif',fontSize:'16px',fontWeight:800, textTransform: 'uppercase', letterSpacing: '.05em'}}>Panel de Control</div>
+            {syncStatus === 'syncing' && <span style={{fontSize:'10px', color:'#f59e0b', animation:'pulse 1.5s infinite', background: 'rgba(245,158,11,0.1)', padding: '2px 8px', borderRadius: '10px', fontWeight: 700}}>● Sincronizando...</span>}
+            {syncStatus === 'synced' && <span style={{fontSize:'10px', color:'#22c55e', opacity:0.8, background: 'rgba(34,197,94,0.1)', padding: '2px 8px', borderRadius: '10px', fontWeight: 700}}>● Al día</span>}
           </div>
-          <div style={{fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#555',marginTop:'2px'}}>Stock se descuenta al despachar · Moditex POS Pro</div>
+          <div style={{fontFamily:'DM Mono,monospace',fontSize:'11px',color:'#888'}}>Stock se descuenta al despachar · Moditex POS Pro</div>
         </div>
-        <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
-          {filtradas.length>0&&<button onClick={()=>setTicketModal({cmds:filtradas})} style={{padding:'9px 14px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontSize:'11px',fontWeight:600}}>🖨️ Guías ({filtradas.length})</button>}
-          <button onClick={()=>setModal('nueva')} style={{padding:'9px 18px',background:'#f59e0b',color:'#000',border:'none',cursor:'pointer',fontSize:'12px',fontWeight:700,textTransform:'uppercase'}}>📋 Nueva Comanda</button>
+        <div style={{display:'flex',gap:'12px',alignItems:'center'}}>
+          {tasa > 0 && (
+            <Link href="/tasa" style={{
+              display:'flex',
+              flexDirection:'column',
+              alignItems:'flex-end',
+              background:'linear-gradient(135deg, #111 0%, #222 100%)',
+              padding:'8px 16px',
+              borderRadius:'16px',
+              boxShadow:'0 8px 20px rgba(0,0,0,0.15)',
+              textDecoration:'none',
+              cursor:'pointer',
+              transition: 'transform 0.2s'
+            }} onMouseEnter={e=>e.currentTarget.style.transform='scale(1.02)'} onMouseLeave={e=>e.currentTarget.style.transform='scale(1)'}>
+              <span style={{fontSize:'9px', color:'#aaa', fontWeight:800, textTransform:'uppercase', letterSpacing:'.1em'}}>Tasa Actual</span>
+              <span style={{fontSize:'15px', color:'#fbbf24', fontWeight:900, fontFamily:'DM Mono,monospace'}}>Bs. {tasa.toFixed(2)}</span>
+            </Link>
+          )}
+          {filtradas.length>0&&<button onClick={()=>setTicketModal({cmds:filtradas})} style={{padding:'10px 18px',background:'#fff',border:'1px solid var(--border)',cursor:'pointer',fontSize:'12px',fontWeight:700, borderRadius:'16px', fontFamily: 'Poppins, sans-serif', transition: 'all 0.2s', boxShadow: '0 2px 8px rgba(0,0,0,0.03)'}}>🖨️ Imprimir Guías ({filtradas.length})</button>}
+          <button onClick={()=>setModal('nueva')} style={{padding:'10px 24px',background:'var(--ink)',color:'#fff',border:'none',cursor:'pointer',fontSize:'12px',fontWeight:800,textTransform:'uppercase', borderRadius: '16px', fontFamily: 'Poppins, sans-serif', transition: 'transform 0.2s', boxShadow: '0 4px 15px rgba(0,0,0,0.1)'}}>+ NUEVA COMANDA</button>
           {drafts.length > 0 && (
-            <button onClick={()=>setShowDrafts(v=>!v)} style={{padding:'9px 14px',background:showDrafts?'rgba(245,158,11,.12)':'none',border:'1px solid rgba(245,158,11,.5)',cursor:'pointer',fontSize:'11px',fontWeight:700,color:'#f59e0b',display:'flex',alignItems:'center',gap:'7px'}}>
-              ⏸ En Espera <span style={{background:'#f59e0b',color:'#000',borderRadius:'10px',padding:'1px 7px',fontSize:'10px',fontWeight:800}}>{drafts.length}</span>
+            <button onClick={()=>setShowDrafts(v=>!v)} style={{padding:'10px 18px',background:showDrafts?'rgba(245,158,11,.15)':'#fff',border:'1px solid rgba(245,158,11,.5)',cursor:'pointer',fontSize:'12px',fontWeight:800,color:'#f59e0b',display:'flex',alignItems:'center',gap:'8px', borderRadius: '16px', fontFamily: 'Poppins, sans-serif'}}>
+              ⏸ En Espera <span style={{background:'#f59e0b',color:'#fff',borderRadius:'12px',padding:'2px 8px',fontSize:'10px',fontWeight:900}}>{drafts.length}</span>
             </button>
           )}
         </div>
@@ -395,33 +444,52 @@ function ComandasInner() {
         </div>
       )}
 
-      <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'8px',marginBottom:'14px'}}>
+      <div className="comandas-filters-grid" style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))',gap:'16px',marginBottom:'24px'}}>
         {Object.entries(S).map(([s,cfg])=>(
-          <div key={s} onClick={()=>setFiltro(filtro===s?'todos':s)} style={{background:filtro===s?cfg.bg:'var(--surface)',border:`1px solid ${filtro===s?cfg.border:'var(--border)'}`,borderTop:`3px solid ${cfg.border}`,padding:'10px 12px',cursor:'pointer'}}>
-            <div style={{fontFamily:'DM Mono,monospace',fontSize:'7px',color:cfg.color,textTransform:'uppercase'}}>{cfg.icon} {cfg.label}</div>
-            <div style={{fontFamily:'Playfair Display,serif',fontSize:'26px',fontWeight:700,color:cfg.color}}>{conteos[s]||0}</div>
+          <div key={s} onClick={()=>setFiltro(filtro===s?'todos':s)} className="comandas-filter-card"
+               style={{
+                 background: '#fff',
+                 border: `1px solid ${filtro===s ? cfg.border : 'var(--border)'}`,
+                 borderRadius: '24px',
+                 padding: '20px 24px',
+                 cursor: 'pointer',
+                 boxShadow: filtro===s ? `0 8px 24px ${cfg.bg}` : '0 4px 12px rgba(0,0,0,0.03)',
+                 transition: 'all 0.2s ease',
+                 position: 'relative',
+                 overflow: 'hidden'
+               }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: cfg.color }} />
+            <div className="icon-label" style={{display:'flex', alignItems:'center', gap:'8px', marginBottom:'12px'}}>
+               <span style={{fontSize:'16px'}}>{cfg.icon}</span>
+               <div style={{fontFamily:'Poppins,sans-serif',fontSize:'12px',fontWeight:800,color:'#555',textTransform:'uppercase', letterSpacing:'.05em'}}>{cfg.label}</div>
+            </div>
+            <div className="count" style={{fontFamily:'Poppins,sans-serif',fontSize:'36px',fontWeight:900,color:cfg.color, lineHeight:1}}>{conteos[s]||0}</div>
           </div>
         ))}
       </div>
 
-      <div style={{display:'flex',gap:'8px',marginBottom:'12px',flexWrap:'wrap',alignItems:'center'}}>
-        <div style={{display:'flex',alignItems:'center',gap:'8px',background:'var(--bg2)',border:'1px solid var(--border)',padding:'7px 12px',flex:1,minWidth:'180px'}}>
-          <span>🔍</span>
+      <div className="comandas-search-bar" style={{display:'flex',gap:'12px',marginBottom:'24px',flexWrap:'wrap',alignItems:'center', background:'#fff', padding:'12px 20px', borderRadius:'24px', border:'1px solid var(--border)', boxShadow:'0 4px 15px rgba(0,0,0,0.02)'}}>
+        <div style={{display:'flex',alignItems:'center',gap:'10px',flex:1,minWidth:'150px'}}>
+          <span style={{fontSize:'16px', opacity:0.5}}>🔍</span>
           <input 
             ref={searchRef}
             value={buscar} 
             onChange={e=>{setBuscar(e.target.value); setLimit(20);}} 
-            placeholder="Buscar (Alt+S)..." 
-            style={{background:'none',border:'none',outline:'none',fontSize:'12px',width:'100%'}}
+            placeholder="Buscar..." 
+            style={{background:'none',border:'none',outline:'none',fontSize:'14px',width:'100%', fontFamily:'Poppins,sans-serif'}}
           />
         </div>
-        <div style={{display:'flex',gap:'5px',flexWrap:'wrap'}}>
-          {[['todos','Todas'],['pendiente','Pendiente'],['empacado','Empacado'],['enviado','Enviado']].map(([s,l])=>(
-            <button key={s} onClick={()=>setFiltro(s)} style={{padding:'5px 12px',borderRadius:'20px',border:'none',cursor:'pointer',fontSize:'11px',background:filtro===s?'var(--ink)':'#eee',color:filtro===s?'#fff':'#333'}}>{l}</button>
+        <div style={{width:'1px', height:'24px', background:'var(--border)'}} className="premium-header-row" />
+        <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
+          {[['todos','Todas'],['pendiente','Pendiente'],['empacado','Empacado'],['enviado','Enviado'],['con_deuda','💰 Con Deuda']].map(([s,l])=>(
+            <button key={s} onClick={()=>setFiltro(s)} style={{padding:'8px 16px',borderRadius:'16px',border:filtro===s?'none':'1px solid var(--border)',cursor:'pointer',fontSize:'11px',fontWeight:700,fontFamily:'Poppins,sans-serif',background:filtro===s?'var(--ink)':'none',color:filtro===s?'#fff':'#666', transition:'all .2s'}}>{l}</button>
           ))}
         </div>
-        <input type="date" value={desde} onChange={e=>setDesde(e.target.value)} style={{padding:'6px 9px',background:'var(--bg2)',border:'1px solid var(--border)',fontSize:'12px'}}/>
-        <button onClick={recargar} style={{padding:'6px 10px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontSize:'10px'}}>↺</button>
+        <div style={{width:'1px', height:'24px', background:'var(--border)'}} className="premium-header-row" />
+        <div style={{display:'flex', gap:'8px', alignItems:'center'}}>
+          <input type="date" value={desde} onChange={e=>setDesde(e.target.value)} style={{padding:'8px 12px',background:'#f9f9f9',border:'none',borderRadius:'12px',fontSize:'12px', fontFamily:'DM Mono,monospace', outline:'none'}}/>
+          <button onClick={recargar} style={{padding:'8px',background:'var(--bg2)',border:'none',borderRadius:'12px',cursor:'pointer',fontSize:'14px', width:'34px', height:'34px', display:'flex', alignItems:'center', justifyContent:'center'}} title="Recargar">↻</button>
+        </div>
       </div>
 
       {!cargando && filtradas.length > 0 && (
@@ -444,16 +512,19 @@ function ComandasInner() {
                  <input type="checkbox" checked={selectedIds.includes(cmd.id)} onChange={() => toggleSelection(cmd.id)} style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--ink)' }} />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <ComandaCard 
-                  cmd={cmd} status={cmd.status} usuario={usuario} usuariosDB={usuariosDB||[]} savingGlobal={savingGlobal} buscar={buscar}
-                  expandedItems={expandedItems||{}} partialMode={partialMode} partialItems={partialItems||{}} toggleItems={toggleItems}
-                  setPartialMode={setPartialMode} setPartialItems={setPartialItems} confirmarEntregaParcial={confirmarEntregaParcial}
-                  marcarEmpacadoRapido={marcarEmpacadoRapido} cambiarStatusRapido={cambiarStatusRapido}
-                  setModal={setModal} setTicketModal={setTicketModal} 
-                  marcarTodoEmpacado={marcarTodoEmpacado}
-                  eliminarComanda={eliminarComanda}
-                  onCommentChange={recargar}
-                />
+                <div className={buscar === cmd.id ? 'highlight-comanda' : ''} style={{ borderRadius: '24px', overflow: 'hidden' }}>
+                  <ComandaCard 
+                    cmd={cmd} status={cmd.status} usuario={usuario} usuariosDB={usuariosDB||[]} savingGlobal={savingGlobal} buscar={buscar}
+                    statusColors={S} clientes={clientes}
+                    isExpanded={!!expandedItems[cmd.id]} partialMode={partialMode} partialItems={partialItems||{}} toggleItems={toggleItems}
+                    setPartialMode={setPartialMode} setPartialItems={setPartialItems} confirmarEntregaParcial={confirmarEntregaParcial}
+                    marcarEmpacadoRapido={marcarEmpacadoRapido} cambiarStatusRapido={cambiarStatusRapido}
+                    setModal={setModal} setTicketModal={setTicketModal} 
+                    marcarTodoEmpacado={marcarTodoEmpacado}
+                    eliminarComanda={eliminarComanda}
+                    onCommentChange={recargar}
+                  />
+                </div>
               </div>
             </div>
           ))}
@@ -516,9 +587,69 @@ function ComandasInner() {
       <style dangerouslySetInnerHTML={{ __html: `
         @media (max-width: 767px) {
           .premium-header-row { display: none !important; }
+          .comandas-filters-grid { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+          .comandas-filter-card { padding: 12px 16px !important; border-radius: 16px !important; }
+          .comandas-filter-card .icon-label { margin-bottom: 4px !important; }
+          .comandas-filter-card .count { font-size: 24px !important; }
+          .comandas-search-bar { padding: 10px 14px !important; border-radius: 16px !important; gap: 8px !important; }
+          .comandas-search-bar input { font-size: 13px !important; }
+          .premium-card { border-radius: 16px !important; margin-bottom: 12px !important; }
+          .premium-row-header { 
+            padding: 12px !important; 
+            display: grid !important;
+            grid-template-columns: 1fr auto !important;
+            grid-template-areas: "client status" "id total" "items sync" !important;
+            gap: 6px !important;
+          }
+          .premium-row-header > div { flex: none !important; }
+          .premium-row-header .col-client { grid-area: client; gap: 8px !important; }
+          .premium-row-header .col-client > div:first-child { width: 28px !important; height: 28px !important; font-size: 11px !important; }
+          .premium-row-header .col-client .client-name { font-size: 13px !important; }
+          .premium-row-header .col-status { grid-area: status; text-align: right; }
+          .premium-row-header .col-status span { font-size: 9px !important; padding: 2px 8px !important; }
+          .premium-row-header .col-id { grid-area: id; font-size: 10px !important; }
+          .premium-row-header .col-total { grid-area: total; text-align: right; }
+          .premium-row-header .col-total > div:first-child { font-size: 13px !important; }
+          .premium-row-header .col-items { grid-area: items; text-align: left !important; font-size: 11px !important; }
+          .premium-row-header .col-sync { grid-area: sync; gap: 6px !important; }
+          
+          /* Compact expanded content */
+          .card-expanded-content { padding: 8px !important; gap: 8px !important; }
+          .mobile-tabs-switcher { margin-bottom: 8px !important; gap: 4px !important; }
+          .mobile-tabs-switcher button { padding: 6px !important; font-size: 9px !important; border-radius: 6px !important; }
+          
+          /* Compact order details */
+          .order-details-col h4 { font-size: 11px !important; margin-bottom: 6px !important; }
+          .order-details-col .grid-dates { padding: 4px 6px !important; gap: 2px !important; margin-bottom: 8px !important; border-radius: 4px !important; }
+          .order-details-col .grid-dates > div > div:first-child { font-size: 7px !important; }
+          .order-details-col .grid-dates > div > div:last-child { font-size: 8px !important; }
+          
+          .order-details-col > div:nth-child(4) > div:first-child { padding: 2px 4px !important; font-size: 7px !important; margin-bottom: 4px !important; }
+          .order-details-col .prod-row { padding: 4px 6px !important; }
+          .order-details-col .prod-row > div:first-child > div:first-child { font-size: 10px !important; font-weight: 700 !important; }
+          .order-details-col .prod-row > div:first-child > div:last-child { font-size: 8px !important; }
+          .order-details-col .prod-row > div:nth-child(2) { font-size: 10px !important; width: 24px !important; }
+          .order-details-col .prod-row > div:nth-child(3) { width: 50px !important; }
+          .order-details-col .prod-row input[type="checkbox"] { width: 14px !important; height: 14px !important; }
+          .order-details-col .prod-row > div:nth-child(4) { width: 35px !important; }
+          
+          .action-btns { margin-top: 8px !important; gap: 4px !important; }
+          .action-btns button { padding: 6px !important; font-size: 8px !important; border-radius: 4px !important; }
         }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
+      ` }} />
+      <style dangerouslySetInnerHTML={{ __html: `
+        .highlight-comanda {
+          animation: highlightPulse 2s ease-out;
+          border: 2px solid var(--blue);
+          box-shadow: 0 0 20px rgba(59,130,246,0.3);
+        }
+        @keyframes highlightPulse {
+          0% { transform: scale(1); box-shadow: 0 0 0px rgba(59,130,246,0); }
+          20% { transform: scale(1.01); box-shadow: 0 0 30px rgba(59,130,246,0.5); }
+          100% { transform: scale(1); box-shadow: 0 0 20px rgba(59,130,246,0.3); }
+        }
       ` }} />
     </Shell>
   );

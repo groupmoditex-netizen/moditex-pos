@@ -8,23 +8,32 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
 
-    const sku   = searchParams.get('sku');
-    const tipo  = searchParams.get('tipo');
-    const desde = searchParams.get('desde');
-    const hasta = searchParams.get('hasta');
-    const page  = Math.max(1, parseInt(searchParams.get('page')  || '1'));
-    const limit = Math.min(100, parseInt(searchParams.get('limit') || '25'));
+    const sku    = searchParams.get('sku');
+    const search = searchParams.get('search');
+    const tipo   = searchParams.get('tipo');
+    const cat    = searchParams.get('categoria');
+    const desde  = searchParams.get('desde');
+    const hasta  = searchParams.get('hasta');
+    const page   = Math.max(1, parseInt(searchParams.get('page')  || '1'));
+    const limit  = Math.min(100, parseInt(searchParams.get('limit') || '25'));
     const offset = (page - 1) * limit;
 
+    // Usamos select con join para poder filtrar por categoría de producto si es necesario
     let q = supabase
       .from('movimientos')
-      .select('*', { count: 'exact' })
+      .select('*, productos!inner(categoria)', { count: 'exact' })
       .order('created_at', { ascending: false });
 
-    if (sku)   q = q.eq('sku',  sku.toUpperCase());
-    if (tipo)  q = q.eq('tipo', tipo.toUpperCase());
-    if (desde) q = q.gte('fecha', desde);
-    if (hasta) q = q.lte('fecha', hasta);
+    if (sku)    q = q.eq('sku', sku.toUpperCase());
+    if (tipo)   q = q.eq('tipo', tipo.toUpperCase());
+    if (desde)  q = q.gte('fecha', desde);
+    if (hasta)  q = q.lte('fecha', hasta);
+    if (cat)    q = q.eq('productos.categoria', cat);
+
+    if (search) {
+      const s = `%${search}%`;
+      q = q.or(`sku.ilike.${s},concepto.ilike.${s},contacto.ilike.${s}`);
+    }
 
     q = q.range(offset, offset + limit - 1);
 

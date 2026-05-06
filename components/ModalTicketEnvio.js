@@ -105,6 +105,7 @@ export default function ModalTicketEnvio({ comandas, clientes=[], onClose }) {
   const [vista,        setVista]       = useState('lista');
   const [itemsMap,     setItemsMap]    = useState({});
   const [loading,      setLoading]     = useState(true);
+  const [formato,      setFormato]     = useState('A4'); // 'A4' o '4x6'
   const iframeRef = useRef(null);
 
   useEffect(() => {
@@ -137,59 +138,64 @@ export default function ModalTicketEnvio({ comandas, clientes=[], onClose }) {
 
   // ── Imprimir usando iframe (evita páginas en blanco) ──────────────
   function imprimir() {
-    const fmtF = d=>{if(!d)return'—';const p=(d||'').split('T')[0].split('-');return(p[2]||'')+'/'+(p[1]||'')+'/'+(p[0]||'');};
+    const fmtF = d=>{if(!d)return'—';const p=(d||'').split('T')[0].split('-');return(p[2]||'')+'/'+(p[1]||'')+'/'+(p[0]||'')};
+    const isThermal = formato === '4x6';
 
-    const html = selArr.map((cmd,idx)=>{
-      let prods = itemsMap[cmd.id] || [];
-      if(!Array.isArray(prods))prods=[];
-      const cli=cmd._cliente;
-      const metodo=metodoMap[cmd.id]||'';
-      const destino=destinoMap[cmd.id]||'';
-      const receptor=receptorMap[cmd.id]||'';
+    const html = selArr.map((cmd, idx) => {
+      const prods = itemsMap[cmd.id] || [];
+      const cli = cmd._cliente;
+      const metodo = cmd.metodo_envio;
+      const destino = cmd.destino_envio;
+      const receptor = cmd.receptor_envio;
 
       return `
-        <div style="page-break-inside:avoid;padding:22px 22px 40px;max-width:660px;margin:0 auto;font-family:Arial,sans-serif;font-size:12px;color:#111;${idx<selArr.length-1?'border-bottom:1px dashed #ccc;margin-bottom:20px;':''}">
-          <div style="border-bottom:3px solid #000;padding-bottom:12px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:flex-start;">
+        <div style="page-break-inside:avoid;padding:${isThermal?'10px':'22px 22px 40px'};max-width:${isThermal?'100%':'660px'};margin:0 auto;font-family:Arial,sans-serif;font-size:${isThermal?'14px':'12px'};color:#000;${!isThermal && idx<selArr.length-1 ? 'border-bottom:1px dashed #ccc;margin-bottom:20px;' : ''}">
+          
+          <div style="border-bottom:${isThermal?'4px':'3px'} solid #000;padding-bottom:12px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:flex-start;">
             <div>
-              <div style="font-size:20px;font-weight:900;letter-spacing:.04em;color:#000;">MODITEX GROUP</div>
-              <div style="font-size:9px;color:#555;margin-top:2px;letter-spacing:.12em;">FABRICAMOS TU PROPIA MARCA DE ROPA · BARQUISIMETO</div>
+              <div style="font-size:${isThermal?'24px':'20px'};font-weight:900;letter-spacing:.04em;color:#000;">MODITEX GROUP</div>
+              <div style="font-size:${isThermal?'10px':'9px'};color:#333;margin-top:2px;letter-spacing:.12em;">FABRICAMOS TU PROPIA MARCA DE ROPA · BARQUISIMETO</div>
             </div>
             <div style="text-align:right;">
-              <div style="font-size:8px;font-family:monospace;color:#888;letter-spacing:.1em;text-transform:uppercase;">Guía de Envío</div>
-              <div style="font-size:13px;font-weight:700;font-family:monospace;color:#000;margin-top:2px;">${cmd.id}</div>
-              <div style="font-size:9px;color:#666;margin-top:2px;">${fmtF(cmd.fecha_creacion||cmd.created_at)}</div>
+              <div style="font-size:8px;font-family:monospace;color:#555;letter-spacing:.1em;text-transform:uppercase;">Guía de Envío</div>
+              <div style="font-size:${isThermal?'18px':'13px'};font-weight:700;font-family:monospace;color:#000;margin-top:2px;">${cmd.id}</div>
+              <div style="font-size:10px;color:#333;margin-top:2px;">${fmtF(cmd.fecha_creacion||cmd.created_at)}</div>
             </div>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+
+          <div style="display:grid;grid-template-columns:${isThermal?'1fr':'1fr 1fr'};gap:12px;margin-bottom:16px;">
             <div>
-              <div style="font-size:7px;letter-spacing:.16em;text-transform:uppercase;color:#888;margin-bottom:6px;font-family:monospace;font-weight:700;">Datos del Comprador</div>
-              <div style="border:2px solid #C5A021;padding:10px 12px;background:#fafafa;">
-                <div style="font-weight:900;font-size:15px;margin-bottom:5px;">${cmd.cliente||'—'}</div>
-                ${cli?.cedula?`<div style="font-size:11px;color:#333;margin-bottom:2px;">C.I.: <strong>${cli.cedula}</strong></div>`:''}
-                ${cli?.telefono?`<div style="font-size:11px;color:#333;margin-bottom:2px;">Tel: <strong>${cli.telefono}</strong></div>`:''}
-                ${cli?.ciudad?`<div style="font-size:12px;font-weight:700;color:#C5A021;margin-top:5px;">📍 ${cli.ciudad}</div>`:''}
+              <div style="font-size:8px;letter-spacing:.16em;text-transform:uppercase;color:#555;margin-bottom:6px;font-family:monospace;font-weight:700;">Datos del Comprador</div>
+              <div style="border:${isThermal?'3px':'2px'} solid #000;padding:10px 12px;background:#fff;">
+                <div style="font-weight:900;font-size:${isThermal?'20px':'15px'};margin-bottom:5px;">${cmd.cliente||'—'}</div>
+                ${cli?.cedula?`<div style="font-size:12px;color:#000;margin-bottom:2px;">C.I.: <strong>${cli.cedula}</strong></div>`:''}
+                ${cli?.telefono?`<div style="font-size:14px;color:#000;margin-bottom:2px;">Tel: <strong>${cli.telefono}</strong></div>`:''}
+                ${cli?.ciudad?`<div style="font-size:16px;font-weight:900;color:#000;margin-top:5px;border-top:1px solid #eee;padding-top:5px;">📍 ${cli.ciudad}</div>`:''}
               </div>
             </div>
             <div>
-              <div style="font-size:7px;letter-spacing:.16em;text-transform:uppercase;color:#888;margin-bottom:6px;font-family:monospace;font-weight:700;">Detalles de Envío</div>
-              <div style="border:1px solid #ddd;padding:10px 12px;background:#fafafa;font-size:11px;">
-                <div style="margin-bottom:4px;"><span style="color:#666;">Método: </span><strong>🚚 ${metodo||'—'}</strong></div>
-                ${destino?`<div style="margin-bottom:4px;"><span style="color:#666;">Destino: </span><strong>${destino}</strong></div>`:''}
-                ${receptor?`<div style="background:#fff8e1;border:1px solid #f59e0b44;padding:4px 7px;margin-top:4px;"><span style="color:#92400e;font-weight:700;font-size:10px;">Recibe: </span><strong>${receptor}</strong></div>`:''}
+              <div style="font-size:8px;letter-spacing:.16em;text-transform:uppercase;color:#555;margin-bottom:6px;font-family:monospace;font-weight:700;">Detalles de Envío</div>
+              <div style="border:1px solid #000;padding:10px 12px;background:#fff;font-size:12px;">
+                <div style="margin-bottom:6px;"><span style="color:#333;">Método: </span><strong style="font-size:16px;">🚚 ${metodo||'—'}</strong></div>
+                ${destino?`<div style="margin-bottom:6px;border-top:1px solid #eee;padding-top:4px;"><span style="color:#333;">Destino: </span><strong style="font-size:14px;">${destino}</strong></div>`:''}
+                ${receptor?`<div style="background:#000;color:#fff;padding:6px 9px;margin-top:4px;"><span style="font-weight:700;font-size:10px;text-transform:uppercase;">Recibe: </span><strong style="font-size:13px;">${receptor}</strong></div>`:''}
               </div>
             </div>
           </div>
+
           <div style="margin-bottom:12px;">
-            <div style="font-size:7px;letter-spacing:.16em;text-transform:uppercase;color:#888;margin-bottom:6px;font-family:monospace;font-weight:700;">Contenido — ${prods.length} ítem${prods.length!==1?'s':''}</div>
-            <table style="width:100%;border-collapse:collapse;font-size:11px;">
-              <thead><tr style="background:#000;color:#fff;"><th style="padding:5px 8px;text-align:left;">Producto</th><th style="padding:5px 8px;text-align:center;width:55px;">Cant.</th></tr></thead>
-              <tbody>${prods.map((p,i)=>`<tr style="border-bottom:1px solid #eee;background:${i%2===0?'#fff':'#fafafa'};"><td style="padding:5px 8px;font-weight:600;">${p.modelo||p.sku||'—'}<br><span style="font-family:monospace;font-size:9px;color:#888;">${p.sku||''}</span></td><td style="padding:5px 8px;text-align:center;font-weight:700;font-size:13px;">${p.cant||p.qty||1}</td></tr>`).join('')}</tbody>
+            <div style="font-size:8px;letter-spacing:.16em;text-transform:uppercase;color:#555;margin-bottom:6px;font-family:monospace;font-weight:700;">Contenido — ${prods.length} ítem${prods.length!==1?'s':''}</div>
+            <table style="width:100%;border-collapse:collapse;font-size:${isThermal?'13px':'11px'};border:1px solid #000;">
+              <thead><tr style="background:#000;color:#fff;"><th style="padding:5px 8px;text-align:left;">Producto</th><th style="padding:5px 8px;text-align:center;width:65px;">Cant.</th></tr></thead>
+              <tbody>${prods.map((p,i)=>`<tr style="border-bottom:1px solid #000;"><td style="padding:7px 8px;font-weight:600;">${p.modelo||p.sku||'—'}<br><span style="font-family:monospace;font-size:10px;color:#333;">${p.sku||''}</span></td><td style="padding:7px 8px;text-align:center;font-weight:900;font-size:18px;">${p.cant||p.qty||1}</td></tr>`).join('')}</tbody>
             </table>
           </div>
-          ${cmd.notas?`<div style="background:#fffbeb;border:1px solid #f59e0b44;padding:7px 10px;font-size:10px;color:#666;margin-bottom:10px;"><strong style="color:#92400e;">📝 Notas:</strong> ${cmd.notas}</div>`:''}
-          <div style="border-top:1px dashed #bbb;padding-top:8px;display:flex;justify-content:space-between;font-size:9px;color:#888;">
-            <span>moditex.group — Barquisimeto, Venezuela</span>
-            <span style="font-family:monospace;">ID: ${cmd.id}</span>
+
+          ${cmd.notas?`<div style="background:#eee;border:1px solid #000;padding:8px 12px;font-size:11px;color:#000;margin-bottom:10px;"><strong>📝 Notas:</strong> ${cmd.notas}</div>`:''}
+
+          <div style="border-top:1px dashed #000;padding-top:8px;display:flex;justify-content:space-between;font-size:10px;color:#000;">
+            <span>moditex.group — Barquisimeto</span>
+            <span style="font-family:monospace;font-weight:700;">ID: ${cmd.id}</span>
           </div>
         </div>`;
     }).join('');
@@ -201,7 +207,7 @@ export default function ModalTicketEnvio({ comandas, clientes=[], onClose }) {
     doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body { background: #fff; }
-      @page { margin: 12mm; size: A4; }
+      @page { margin: ${formato==='4x6'?'0':'12mm'}; size: ${formato==='4x6'?'4in 6in':'A4'}; }
       @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
     </style></head><body>${html}</body></html>`);
     doc.close();
@@ -224,6 +230,10 @@ export default function ModalTicketEnvio({ comandas, clientes=[], onClose }) {
             <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:'#888',marginTop:'2px'}}>{selec.size} de {lista.length} seleccionada{selec.size!==1?'s':''}</div>
           </div>
           <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
+            <div style={{display:'flex',background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'4px',padding:'2px',marginRight:'4px'}}>
+              <button onClick={()=>setFormato('A4')} style={{padding:'4px 10px',background:formato==='A4'?'#000':'none',color:formato==='A4'?'#fff':'#888',border:'none',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'10px',borderRadius:'2px',fontWeight:700}}>A4</button>
+              <button onClick={()=>setFormato('4x6')} style={{padding:'4px 10px',background:formato==='4x6'?'#000':'none',color:formato==='4x6'?'#fff':'#888',border:'none',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'10px',borderRadius:'2px',fontWeight:700}}>4x6 🔥</button>
+            </div>
             {!esUnica&&<button onClick={()=>setVista(v=>v==='lista'?'preview':'lista')} style={{padding:'6px 12px',background:'none',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:600,textTransform:'uppercase'}}>{vista==='lista'?'👁 Vista Previa':'← Lista'}</button>}
             <button onClick={imprimir} disabled={selec.size===0} style={{padding:'6px 16px',background:'#000',color:'#fff',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:700,textTransform:'uppercase',opacity:selec.size===0?.4:1}}>🖨️ Imprimir ({selec.size})</button>
             <button onClick={onClose} style={{background:'none',border:'1px solid var(--border)',width:'28px',height:'28px',cursor:'pointer',fontSize:'13px',display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>

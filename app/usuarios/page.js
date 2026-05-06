@@ -192,80 +192,175 @@ export default function UsuariosPage() {
       {modal==='nuevo' && <ModalUsuario modo="crear" onClose={()=>setModal(null)} onSave={onSave} usuarioActual={usuario}/>}
       {modal?.modo==='editar' && <ModalUsuario modo="editar" usuario_edit={modal.user} onClose={()=>setModal(null)} onSave={onSave} usuarioActual={usuario}/>}
 
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px',flexWrap:'wrap',gap:'10px'}}>
-        <div>
-          <div style={{fontFamily:'Playfair Display,serif',fontSize:'16px',fontWeight:700}}>Gestión de Usuarios</div>
-          <div style={{fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#555',marginTop:'2px'}}>Los operadores inician sesión con su usuario único y PIN</div>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'24px',flexWrap:'wrap',gap:'15px'}}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+            <div style={{fontFamily:'Poppins,sans-serif',fontSize:'16px',fontWeight:800, textTransform: 'uppercase', letterSpacing: '.05em'}}>Equipo de Trabajo</div>
+            <span style={{fontSize:'10px', color:'var(--blue)', background: 'rgba(59,130,246,0.1)', padding: '2px 10px', borderRadius: '12px', fontWeight: 800}}>● {usuarios.length} OPERADORES</span>
+          </div>
+          <div style={{fontFamily:'DM Mono,monospace',fontSize:'11px',color:'#888'}}>Control de accesos y permisos por rol · Moditex Security</div>
         </div>
-        <button onClick={()=>setModal('nuevo')} style={{padding:'8px 16px',background:'var(--ink)',color:'#fff',border:'none',cursor:'pointer',fontFamily:'Poppins,sans-serif',fontSize:'11px',fontWeight:700,textTransform:'uppercase',letterSpacing:'.06em'}}>
-          + Nuevo Usuario
+        <button onClick={()=>setModal('nuevo')} style={{padding:'12px 24px',background:'var(--ink)',color:'#fff',border:'none',cursor:'pointer',fontSize:'12px',fontWeight:800,textTransform:'uppercase', borderRadius: '16px', fontFamily: 'Poppins, sans-serif', boxShadow: '0 4px 15px rgba(0,0,0,0.1)'}}>
+          + NUEVO USUARIO
         </button>
       </div>
 
-      {ok&&<div style={{padding:'10px 14px',marginBottom:'14px',background:'var(--green-soft)',color:'var(--green)',fontFamily:'DM Mono,monospace',fontSize:'11px',border:'1px solid rgba(26,122,60,.3)'}}>{ok}</div>}
+      {ok&&<div style={{padding:'12px 18px',marginBottom:'20px',background:'var(--green-soft)',color:'var(--green)',fontFamily:'Poppins,sans-serif',fontSize:'12px',fontWeight:700, borderRadius:'16px', border:'1px solid rgba(26,122,60,.2)', animation:'fadeIn 0.3s ease-out'}}>{ok}</div>}
 
       {/* Roles info */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'10px',marginBottom:'20px'}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))',gap:'16px',marginBottom:'30px'}}>
         {ROLES.map(r=>(
-          <div key={r.id} style={{padding:'12px 14px',background:'var(--surface)',border:'1px solid var(--border)',borderTop:`3px solid ${r.color}`}}>
-            <div style={{fontFamily:'DM Mono,monospace',fontSize:'9px',color:r.color,fontWeight:700,letterSpacing:'.1em',textTransform:'uppercase',marginBottom:'4px'}}>{r.label}</div>
-            <div style={{fontSize:'11px',color:'#555'}}>{r.desc}</div>
+          <div key={r.id} style={{padding:'16px 20px',background:'#fff',border:`1px solid var(--border)`, borderTop:`4px solid ${r.color}`, borderRadius:'20px', boxShadow:'0 4px 12px rgba(0,0,0,0.03)'}}>
+            <div style={{fontFamily:'Poppins,sans-serif',fontSize:'11px',color:r.color,fontWeight:900,letterSpacing:'.1em',textTransform:'uppercase',marginBottom:'6px'}}>{r.label}</div>
+            <div style={{fontSize:'12px',color:'#666', lineHeight:1.4}}>{r.desc}</div>
           </div>
         ))}
       </div>
 
       {loading?(
-        <div style={{textAlign:'center',padding:'40px',fontFamily:'DM Mono,monospace',fontSize:'12px',color:'#666'}}>⏳ Cargando...</div>
+        <div style={{textAlign:'center',padding:'80px',fontFamily:'Poppins,sans-serif',fontSize:'14px',color:'#aaa', fontWeight:600}}>
+          <div style={{fontSize:'24px', marginBottom:'10px'}}>⏳</div>
+          Preparando entorno...
+        </div>
       ):(
-        <div style={{background:'var(--surface)',border:'1px solid var(--border)',overflow:'hidden'}}>
-          <table style={{width:'100%',borderCollapse:'collapse'}}>
-            <thead><tr style={{background:'#efefef'}}>
-              {['Nombre','Usuario','Rol','Último acceso','Estado','Acciones'].map(h=>(
-                <th key={h} style={{padding:'8px 13px',textAlign:'left',fontFamily:'DM Mono,monospace',fontSize:'8px',letterSpacing:'.12em',textTransform:'uppercase',color:'#444'}}>{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>
-              {usuarios.map(u=>(
-                <tr key={u.email} style={{borderBottom:'1px solid var(--border)'}}>
-                  <td style={{padding:'10px 13px',fontSize:'13px',fontWeight:600,display:'flex',alignItems:'center',gap:'10px'}}>
-                    <img src={`https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/avatars/${u.avatar||'1'}.png`} alt="avatar" style={{width:'24px',height:'24px',borderRadius:'50%',objectFit:'cover',flexShrink:0}}/>
-                    {u.nombre||u.email}
-                  </td>
-                  <td style={{padding:'10px 13px',fontFamily:'DM Mono,monospace',fontSize:'11px',color:'var(--blue)',fontWeight:700}}>{u.email}</td>
-                  <td style={{padding:'10px 13px'}}>
-                    <span style={{background:'var(--bg3)',color:rolColor[u.rol]||'#333',fontFamily:'DM Mono,monospace',fontSize:'9px',padding:'2px 9px',fontWeight:700,border:`1px solid ${rolColor[u.rol]||'var(--border)'}44`}}>
-                      {rolLabel[u.rol]||u.rol}
-                    </span>
-                  </td>
-                  <td style={{padding:'10px 13px',fontFamily:'DM Mono,monospace',fontSize:'10px',color:'#888'}}>
-                    {u.ultimo_acceso ? new Date(u.ultimo_acceso).toLocaleString('es-VE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—'}
-                  </td>
-                  <td style={{padding:'10px 13px'}}>
-                    <span style={{fontFamily:'DM Mono,monospace',fontSize:'9px',padding:'2px 8px',background:u.activo?'var(--green-soft)':'var(--red-soft)',color:u.activo?'var(--green)':'var(--red)',fontWeight:700}}>
-                      {u.activo?'✓ Activo':'✗ Inactivo'}
-                    </span>
-                  </td>
-                  <td style={{padding:'10px 13px'}}>
-                    <div style={{display:'flex',gap:'5px'}}>
-                      <button onClick={()=>setModal({modo:'editar',user:u})}
-                        style={{padding:'4px 10px',background:'var(--blue)',color:'#fff',border:'none',cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'9px',fontWeight:700}}>
-                        ✏ Editar
-                      </button>
-                      {u.email !== usuario?.email && (
-                        <button onClick={()=>toggleActivo(u.email,u.activo)}
-                          style={{padding:'4px 10px',background:'none',border:`1px solid ${u.activo?'var(--red)':'var(--green)'}`,cursor:'pointer',fontFamily:'DM Mono,monospace',fontSize:'9px',color:u.activo?'var(--red)':'var(--green)'}}>
-                          {u.activo?'Desactivar':'Activar'}
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {!usuarios.length&&<tr><td colSpan={6} style={{textAlign:'center',padding:'36px',color:'#666',fontFamily:'DM Mono,monospace',fontSize:'11px'}}>Sin usuarios registrados</td></tr>}
-            </tbody>
-          </table>
+        <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:'20px', marginBottom:'40px'}}>
+          {usuarios.map(u=>(
+            <div key={u.email} style={{
+              background:'#fff', 
+              borderRadius:'24px', 
+              border:'1px solid var(--border)', 
+              padding:'24px',
+              display:'flex',
+              flexDirection:'column',
+              alignItems:'center',
+              textAlign:'center',
+              position:'relative',
+              boxShadow:'0 8px 24px rgba(0,0,0,0.04)',
+              transition:'transform 0.2s, box-shadow 0.2s',
+              cursor:'default'
+            }} className="user-card-premium">
+              
+              <div style={{position:'absolute', top:'15px', right:'15px'}}>
+                <span style={{
+                  background: u.activo ? (
+                    (u.ultimo_acceso && (Date.now() - new Date(u.ultimo_acceso).getTime() < 15 * 60 * 1000)) 
+                    ? 'rgba(34,197,94,0.2)' 
+                    : 'rgba(59,130,246,0.1)'
+                  ) : 'rgba(239,68,68,0.1)',
+                  color: u.activo ? (
+                    (u.ultimo_acceso && (Date.now() - new Date(u.ultimo_acceso).getTime() < 15 * 60 * 1000)) 
+                    ? '#16a34a' 
+                    : 'var(--blue)'
+                  ) : 'var(--red)',
+                  fontSize: '8px',
+                  fontWeight: 900,
+                  padding: '3px 10px',
+                  borderRadius: '10px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '.05em',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}>
+                  {u.activo ? (
+                    (u.ultimo_acceso && (Date.now() - new Date(u.ultimo_acceso).getTime() < 15 * 60 * 1000)) 
+                    ? <><span style={{width:'4px', height:'4px', borderRadius:'50%', background:'#16a34a'}}/> EN LÍNEA</> 
+                    : 'ACTIVO'
+                  ) : 'DESACTIVADO'}
+                </span>
+              </div>
+
+              <div style={{width:'84px', height:'84px', borderRadius:'50%', border:`4px solid ${rolColor[u.rol] || '#eee'}`, padding:'3px', marginBottom:'16px', background: '#fff'}}>
+                <img 
+                  src={`https://byoweugcuoeowkfwcnwo.supabase.co/storage/v1/object/public/avatars/${u.avatar||'1'}.png`} 
+                  alt="avatar" 
+                  style={{width:'100%', height:'100%', borderRadius:'50%', objectFit:'cover'}}
+                />
+              </div>
+
+              <div style={{marginBottom:'16px'}}>
+                <div style={{fontFamily:'Poppins,sans-serif', fontSize:'18px', fontWeight:900, color:'var(--ink)', lineHeight:1.2}}>{u.nombre||u.email}</div>
+                <div style={{fontFamily:'DM Mono,monospace', fontSize:'11px', color:'var(--blue)', fontWeight:700, marginTop:'4px'}}>@{u.email}</div>
+              </div>
+
+              <div style={{display:'flex', justifyContent:'center', gap:'8px', marginBottom:'20px'}}>
+                <span style={{
+                  background: 'var(--bg3)', 
+                  color: rolColor[u.rol]||'#333', 
+                  fontFamily: 'Poppins,sans-serif', 
+                  fontSize: '10px', 
+                  padding: '4px 12px', 
+                  fontWeight: 800, 
+                  borderRadius: '12px',
+                  textTransform: 'uppercase'
+                }}>
+                  {rolLabel[u.rol]||u.rol}
+                </span>
+              </div>
+
+              <div style={{width:'100%', borderTop:'1px solid var(--border-soft)', paddingTop:'16px', marginBottom:'20px'}}>
+                <div style={{fontFamily:'DM Mono,monospace', fontSize:'9px', color:'#aaa', textTransform:'uppercase', letterSpacing:'.05em', marginBottom:'4px'}}>Último Acceso</div>
+                <div style={{fontFamily:'DM Mono,monospace', fontSize:'11px', color:'#555', fontWeight:700}}>
+                  {u.ultimo_acceso ? new Date(u.ultimo_acceso).toLocaleString('es-VE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit', hour12:true}) : 'Nunca'}
+                </div>
+              </div>
+
+              <div style={{display:'flex', gap:'8px', width:'100%'}}>
+                <button 
+                  onClick={()=>setModal({modo:'editar',user:u})}
+                  style={{
+                    flex: 1,
+                    padding: '10px',
+                    background: 'var(--ink)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '14px',
+                    fontFamily: 'Poppins,sans-serif',
+                    fontSize: '11px',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}>
+                  EDITAR
+                </button>
+                {u.email !== usuario?.email && (
+                  <button 
+                    onClick={()=>toggleActivo(u.email,u.activo)}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      background: 'none',
+                      border: `1px solid ${u.activo ? 'var(--red)' : 'var(--green)'}`,
+                      color: u.activo ? 'var(--red)' : 'var(--green)',
+                      borderRadius: '14px',
+                      fontFamily: 'Poppins,sans-serif',
+                      fontSize: '10px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}>
+                    {u.activo ? 'DESACTIVAR' : 'ACTIVAR'}
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+          {!usuarios.length && (
+            <div style={{gridColumn:'1/-1', textAlign:'center', padding:'60px', background:'#fff', borderRadius:'24px', border:'1px dashed var(--border)'}}>
+              <div style={{fontSize:'32px', marginBottom:'15px'}}>👥</div>
+              <div style={{fontFamily:'Poppins,sans-serif', fontSize:'14px', color:'#999', fontWeight:600}}>Aún no hay operadores registrados en el sistema</div>
+            </div>
+          )}
         </div>
       )}
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        .user-card-premium:hover {
+          transform: translateY(-5px);
+          box-shadow: 0 12px 30px rgba(0,0,0,0.08);
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      ` }} />
     </Shell>
   );
 }
