@@ -650,10 +650,6 @@ export default function ModalNueva({ onClose, onSave, clientes=[], productos=[],
                       compact 
                     />
                   </div>
-                  
-                  <div style={{borderTop:'1px solid var(--border)',paddingTop:'15px',opacity:0.6, flexShrink:0}}>
-                    <div style={{...lbl,fontSize:'9px',textAlign:'center'}}>El escáner arriba gestiona tanto entradas por cámara como por lector USB/Bluetooth.</div>
-                  </div>
                </div>
                
                {/* COLUMNA CARRITO */}
